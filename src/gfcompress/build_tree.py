@@ -3,33 +3,43 @@
 
 Splitting strategy
 -------------------
-Per CLAUDE.md / PLAN.md, downstream tasks (1.4/1.5) need a *regular-grid*
-structure: same-level boxes have ``<= 3^d`` neighbors and ``<= 6^d``
-interaction-list entries. A binary kd-tree (one axis split per level, two
-children) does not give that directly -- two levels of a kd-tree are needed
-to make a "grid refinement" in 2D, three in 3D, which shifts the regular-grid
-counts to alternating levels.
+This follows the construction in Levitt & Martinsson (2024), §3 (p.5):
+the domain is refined as a **fixed uniform dyadic grid**. Level 0 consists of
+a single box -- the root's bounding box, computed once from all of `mesh`'s
+centroids. The boxes belonging to level `l + 1` are obtained by bisecting
+each box of level `l` along *every* spatial axis at that box's **geometric
+midpoint** (not the median of its points), producing up to `2^d` smaller
+boxes. Boxes that contain no points are omitted. The splitting procedure is
+applied recursively to boxes that contain `>= m` points; a box with `< m`
+points becomes a leaf.
 
-Instead we build a **quadtree (2D) / octree (3D)**: at each internal node we
-split *every* spatial axis simultaneously at its median, producing up to
-``2^d`` child cells arranged on a regular ``2 x ... x 2`` sub-grid of the
-parent's bounding box. This is the "uniform-style partition into ``2^d``
-children" called for in PLAN.md, and it gives every level its own regular
-grid of boxes, which is what the neighbor/interaction-list machinery
-(Tasks 1.4/1.5) and the fixed periodic test patterns (Stage 4) assume.
+Because every split is at the geometric midpoint of the *current cell* (and
+the current cell is itself a dyadic sub-box of the root domain), all boxes
+surviving at level `l` are cells of one common dyadic grid: the root domain
+subdivided into `2^l` equal parts along each axis. This is the regular-grid
+structure that the neighbor list (`<= 3^d` entries, Task 1.4) and interaction
+list (`<= 6^d - 3^d` entries, Task 1.5) machinery -- and the fixed periodic
+test patterns of Stage 4 -- rely on.
 
-Splitting along all ``d`` axes at once requires choosing a median per axis.
-We use the coordinate-wise median of the node's centroids (so each axis is
-split as evenly as possible), assign each centroid to a cell based on which
-side of each per-axis median it falls on, and drop empty cells (so a node
-may have fewer than ``2^d`` children if centroids are degenerate along some
-axis, e.g. all share the same x-coordinate). "Bisecting along the longest
-axis" is realized degenerately when only one axis actually separates the
-points; in the common case all ``d`` axes are split, matching the
-``2^d``-children description.
+Concretely, each node carries its **dyadic cell** `[lo, hi]^d`, derived from
+the root domain box and the node's path in the tree (root cell -> bisect at
+its midpoint -> child cell -> ...). Patch membership in a child cell is
+decided by comparing each patch's centroid coordinate against the cell's
+midpoint along each axis (`< mid` -> lower half, `>= mid` -> upper half).
+The geometry used for splitting is therefore always the dyadic cell, never a
+node's shrink-wrapped centroid bounding box.
 
-Recursion stops -- the node becomes a leaf -- once its patch count is
-``< m``.
+We store this dyadic cell directly as `TreeNode.bounding_box` (overwriting
+the shrink-wrapped centroid bounds that `make_node` initially computes), with
+`center`/`diam` recomputed from the cell. This is the choice called for by
+the design note in Task 1.3: downstream neighbor/interaction-list machinery
+(Tasks 1.4/1.5) needs *congruent, grid-aligned* boxes whose split planes
+coincide across siblings -- a property the dyadic cell guarantees and a
+shrink-wrapped centroid bounding box does not.
+
+Recursion stops -- the node becomes a leaf -- once its patch count is `< m`,
+or if a split would make no progress (all patches fall into a single child
+cell, e.g. coincident centroids), to guarantee termination.
 """
 
 from __future__ import annotations
@@ -46,10 +56,12 @@ from gfcompress.tree import TreeNode, make_node
 def build_tree(mesh: FaultMesh, m: int) -> TreeNode:
     """Build the geometric bisection cluster tree over `mesh`'s patches.
 
-    Recursively splits the patch set by bisecting every spatial axis at its
-    median, producing up to `2^d` children arranged on a regular sub-grid of
-    the parent's bounding box (a quadtree in 2D, an octree in 3D). Recursion
-    stops once a node holds fewer than `m` patches, which becomes a leaf.
+    Implements the fixed uniform dyadic-grid refinement of Levitt &
+    Martinsson (2024), §3: level 0 is a single box (the bounding box of all
+    centroids); level `l + 1` boxes are obtained by bisecting each level-`l`
+    box along every spatial axis at its geometric midpoint, forming up to
+    `2^d` children. Boxes containing no patches are omitted. Recursion stops
+    once a box holds fewer than `m` patches, which becomes a leaf.
 
     Args:
         mesh: The `FaultMesh` providing centroids, `d`, and the
@@ -65,58 +77,132 @@ def build_tree(mesh: FaultMesh, m: int) -> TreeNode:
         raise ValueError(f"m must be >= 1, got {m}")
 
     all_patches = np.arange(mesh.n_patches, dtype=np.intp)
+    root_cell = _root_domain_box(mesh.centroids)
     root = make_node(mesh, all_patches, level=0, parent=None)
-    _split(mesh, root, m)
+    _set_cell_geometry(root, root_cell)
+    _split(mesh, root, m, root_cell)
     return root
 
 
-def _split(mesh: FaultMesh, node: TreeNode, m: int) -> None:
+def _set_cell_geometry(node: TreeNode, cell: NDArray[np.float64]) -> None:
+    """Overwrite `node`'s `bounding_box`/`center`/`diam` with those of its
+    dyadic `cell`, replacing the shrink-wrapped centroid bounds that
+    `make_node` initially computes.
+
+    Args:
+        node: The node to update in place.
+        cell: The node's dyadic cell, shape `(d, 2)`, `cell[i] = (lo_i,
+            hi_i)`.
+    """
+    node.bounding_box = cell
+    node.center = 0.5 * (cell[:, 0] + cell[:, 1])
+    node.diam = float(np.linalg.norm(cell[:, 1] - cell[:, 0]))
+
+
+def _root_domain_box(centroids: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Compute the root domain box `[lo, hi]^d` enclosing all `centroids`.
+
+    The upper edge of each axis is nudged up by a tiny relative amount so
+    that points lying exactly on the global maximum are consistently
+    assigned to the *lower* half-cell at every split (the dyadic split rule
+    used by `_bisect_cell` is `coord < mid` -> lower, `coord >= mid` ->
+    upper), matching the half-open `[lo, hi)` convention for all but the
+    final cell.
+
+    Args:
+        centroids: Centroids of all patches, shape `(N, d)`.
+
+    Returns:
+        Array of shape `(d, 2)`, `box[i] = (lo_i, hi_i)`.
+    """
+    mins = centroids.min(axis=0)
+    maxs = centroids.max(axis=0)
+    span = maxs - mins
+    # Guard against a zero-width axis (all centroids share that coordinate)
+    # by giving it a tiny nonzero width so midpoint splits are well defined.
+    eps = np.where(span > 0, span * 1e-9, 1e-12)
+    return np.stack([mins, maxs + eps], axis=1)
+
+
+def _split(mesh: FaultMesh, node: TreeNode, m: int, cell: NDArray[np.float64]) -> None:
     """Recursively split `node` in place, attaching children until every
-    leaf has `< m` patches."""
+    leaf has `< m` patches.
+
+    Args:
+        mesh: The `FaultMesh` providing centroids and index helpers.
+        node: The node to (possibly) split.
+        m: Leaf stop threshold.
+        cell: This node's dyadic cell, shape `(d, 2)`, `cell[i] = (lo_i,
+            hi_i)`.
+    """
     patch_indices = node.patch_indices
     if patch_indices.shape[0] < m:
         return
 
-    child_partitions = _bisect_patches(mesh.centroids[patch_indices], patch_indices)
+    # A single non-empty sub-cell covering everyone means the dyadic split
+    # at this resolution did not separate the patches. If the cell still has
+    # nonzero width, keep bisecting *in place* (without creating a sibling)
+    # -- this may eventually separate distinct-but-close centroids while
+    # keeping every split plane on the dyadic grid. If a bisection is a
+    # geometric no-op (`child_cell == cell`, i.e. the cell has underflowed
+    # to zero width, e.g. coincident centroids), stop to guarantee
+    # termination.
+    while True:
+        child_partitions = _bisect_cell(mesh.centroids, patch_indices, cell)
+        if len(child_partitions) != 1:
+            break
+        _, only_cell = child_partitions[0]
+        if np.array_equal(only_cell, cell):
+            return
+        cell = only_cell
 
-    # If the split failed to make progress (all centroids identical, so a
-    # single "child" contains every patch), stop: further recursion would
-    # not terminate.
-    if len(child_partitions) <= 1:
-        return
-
-    for child_patches in child_partitions:
+    for child_patches, child_cell in child_partitions:
         child = make_node(mesh, child_patches, level=node.level + 1, parent=node)
+        _set_cell_geometry(child, child_cell)
         node.children.append(child)
-        _split(mesh, child, m)
+        _split(mesh, child, m, child_cell)
 
 
-def _bisect_patches(
-    centroids: NDArray[np.float64], patch_indices: NDArray[np.intp]
-) -> list[NDArray[np.intp]]:
-    """Partition `patch_indices` into up to `2^d` cells by bisecting every
-    axis of `centroids` at its median.
+def _bisect_cell(
+    centroids: NDArray[np.float64],
+    patch_indices: NDArray[np.intp],
+    cell: NDArray[np.float64],
+) -> list[tuple[NDArray[np.intp], NDArray[np.float64]]]:
+    """Bisect `cell` along every axis at its geometric midpoint, partitioning
+    `patch_indices` into the resulting `2^d` sub-cells by centroid.
 
     Args:
-        centroids: Centroids of the patches in `node`, shape `(n, d)`.
-        patch_indices: The corresponding global patch indices, shape `(n,)`.
+        centroids: Centroids of all patches, shape `(N, d)`.
+        patch_indices: Global patch indices covered by `cell`, shape `(n,)`.
+        cell: The cell to bisect, shape `(d, 2)`, `cell[i] = (lo_i, hi_i)`.
 
     Returns:
-        A list of integer arrays (subsets of `patch_indices`), one per
-        non-empty cell of the `2 x ... x 2` (`d` axes) sub-grid. Cells with
-        no centroids are omitted, so the result has between `1` and `2^d`
-        entries.
+        A list of `(child_patch_indices, child_cell)` pairs, one per
+        non-empty sub-cell of the `2 x ... x 2` (`d` axes) dyadic refinement
+        of `cell`. Sub-cells with no centroids are omitted, so the result has
+        between `1` and `2^d` entries.
     """
-    d = centroids.shape[1]
-    medians = np.median(centroids, axis=0)
+    d = cell.shape[0]
+    lo = cell[:, 0]
+    hi = cell[:, 1]
+    mid = 0.5 * (lo + hi)
 
-    # side[:, axis] = 0 if centroid is on the lower (<= median) side of that
-    # axis's median, 1 if on the upper (> median) side.
-    side = (centroids > medians[None, :]).astype(np.intp)
+    pts = centroids[patch_indices]
+    # side[:, axis] = 0 if centroid is on the lower (< mid) side of that
+    # axis's midpoint, 1 if on the upper (>= mid) side.
+    side = (pts >= mid[None, :]).astype(np.intp)
 
-    partitions: list[NDArray[np.intp]] = []
-    for cell in itertools.product((0, 1), repeat=d):
-        mask = np.all(side == np.array(cell, dtype=np.intp)[None, :], axis=1)
-        if np.any(mask):
-            partitions.append(patch_indices[mask])
+    partitions: list[tuple[NDArray[np.intp], NDArray[np.float64]]] = []
+    for half in itertools.product((0, 1), repeat=d):
+        half_arr = np.array(half, dtype=np.intp)
+        mask = np.all(side == half_arr[None, :], axis=1)
+        if not np.any(mask):
+            continue
+        child_cell = np.empty_like(cell)
+        for axis in range(d):
+            if half_arr[axis] == 0:
+                child_cell[axis] = (lo[axis], mid[axis])
+            else:
+                child_cell[axis] = (mid[axis], hi[axis])
+        partitions.append((patch_indices[mask], child_cell))
     return partitions

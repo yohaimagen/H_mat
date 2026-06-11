@@ -85,6 +85,159 @@ def test_internal_nodes_have_up_to_2_pow_d_children() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Grid alignment: split planes lie on the dyadic refinement of the root
+# domain box (paper §3, p.5: bisect each box at its geometric midpoint along
+# every axis -- NOT the median of its points). This is the regression that
+# distinguishes geometric-midpoint bisection from coordinate-wise-median
+# bisection: on a non-uniform mesh, median splits would NOT be dyadic
+# subdivisions of the root box, and sibling cells from different parents
+# would not share grid lines.
+# ---------------------------------------------------------------------------
+
+
+def _assert_dyadic_subdivision(
+    child_lo: float, child_hi: float, root_lo: float, root_hi: float, tol: float = 1e-9
+) -> None:
+    """Assert that `[child_lo, child_hi]` is a dyadic sub-interval of
+    `[root_lo, root_hi]`, i.e. both endpoints are `root_lo + k * width /
+    2**p` for some common non-negative integer `p` and integers `k`."""
+    width = root_hi - root_lo
+    assert width > 0
+    for edge in (child_lo, child_hi):
+        frac = (edge - root_lo) / width
+        # frac must be k / 2**p for some integers k, p >= 0; search small p.
+        for p in range(0, 60):
+            scaled = frac * (2**p)
+            if abs(scaled - round(scaled)) < tol * (2**p):
+                break
+        else:
+            raise AssertionError(
+                f"edge {edge} (frac={frac}) is not a dyadic subdivision of "
+                f"[{root_lo}, {root_hi}]"
+            )
+
+
+def _assert_children_tile_parent_at_midpoint(node: TreeNode) -> None:
+    """Assert that every child's `bounding_box` is obtained by bisecting
+    `node`'s `bounding_box` at its geometric midpoint along every axis (with
+    possibly several such bisections collapsed if intermediate cells were
+    empty along the way -- so each child cell must itself be a dyadic
+    sub-cell of `node`'s cell, on the side of `node`'s midpoint consistent
+    with where its centroids lie)."""
+    parent_box = node.bounding_box
+    d = parent_box.shape[0]
+    parent_mid = 0.5 * (parent_box[:, 0] + parent_box[:, 1])
+
+    for child in node.children:
+        child_box = child.bounding_box
+        for axis in range(d):
+            p_lo, p_hi = parent_box[axis]
+            c_lo, c_hi = child_box[axis]
+            mid = parent_mid[axis]
+            # The child cell must be entirely within the parent's lower half
+            # [p_lo, mid] or entirely within the upper half [mid, p_hi]
+            # (up to floating-point tolerance), i.e. the parent's midpoint is
+            # itself one of the child's bounding edges or outside the child
+            # cell on the appropriate side.
+            tol = 1e-9 * max(p_hi - p_lo, 1.0)
+            in_lower = c_hi <= mid + tol
+            in_upper = c_lo >= mid - tol
+            assert in_lower or in_upper, (
+                f"child cell axis {axis} [{c_lo}, {c_hi}] straddles parent "
+                f"midpoint {mid} of [{p_lo}, {p_hi}]"
+            )
+            # And the child cell must lie within the parent cell.
+            assert c_lo >= p_lo - tol and c_hi <= p_hi + tol
+
+
+def test_split_planes_are_dyadic_subdivisions_of_root_2d() -> None:
+    mesh = _random_mesh(d=2, n=60, seed=21)
+    root = build_tree(mesh, m=4)
+    root_box = root.bounding_box
+
+    def check(node: TreeNode) -> None:
+        for axis in range(root_box.shape[0]):
+            lo, hi = node.bounding_box[axis]
+            _assert_dyadic_subdivision(lo, hi, root_box[axis, 0], root_box[axis, 1])
+        _assert_children_tile_parent_at_midpoint(node)
+        for child in node.children:
+            check(child)
+
+    check(root)
+
+
+def test_split_planes_are_dyadic_subdivisions_of_root_3d() -> None:
+    mesh = _random_mesh(d=3, n=70, seed=22)
+    root = build_tree(mesh, m=5)
+    root_box = root.bounding_box
+
+    def check(node: TreeNode) -> None:
+        for axis in range(root_box.shape[0]):
+            lo, hi = node.bounding_box[axis]
+            _assert_dyadic_subdivision(lo, hi, root_box[axis, 0], root_box[axis, 1])
+        _assert_children_tile_parent_at_midpoint(node)
+        for child in node.children:
+            check(child)
+
+    check(root)
+
+
+def test_sibling_subtrees_share_grid_lines() -> None:
+    """At a given level, the distinct split-plane coordinates per axis must
+    come from one common dyadic grid: cells from different parent subtrees
+    must share grid lines, not just be internally consistent with their own
+    parent."""
+    mesh = _random_mesh(d=2, n=80, seed=23)
+    root = build_tree(mesh, m=3)
+    root_box = root.bounding_box
+    d = root_box.shape[0]
+
+    for level_nodes in root.iter_levels():
+        if len(level_nodes) <= 1:
+            continue
+        for axis in range(d):
+            # Collect the dyadic "k / 2**p" coordinate of each node's lower
+            # edge on this axis, all at a common resolution p_max sufficient
+            # for every node at this level.
+            p_max = 0
+            for node in level_nodes:
+                lo, hi = node.bounding_box[axis]
+                width = hi - lo
+                root_width = root_box[axis, 1] - root_box[axis, 0]
+                ratio = root_width / width
+                p = round(np.log2(ratio))
+                p_max = max(p_max, p)
+
+            scale = 2**p_max
+            root_lo = root_box[axis, 0]
+            root_width = root_box[axis, 1] - root_box[axis, 0]
+            for node in level_nodes:
+                lo, hi = node.bounding_box[axis]
+                for edge in (lo, hi):
+                    k = (edge - root_lo) / root_width * scale
+                    assert abs(k - round(k)) < 1e-6, (
+                        f"edge {edge} on axis {axis} at level {node.level} is "
+                        f"not aligned to the common 1/2**{p_max} grid"
+                    )
+
+
+def test_uniform_grid_produces_perfect_dyadic_grid() -> None:
+    mesh = _grid_mesh_2d(8, 8)
+    root = build_tree(mesh, m=4)
+    root_box = root.bounding_box
+
+    def check(node: TreeNode) -> None:
+        for axis in range(root_box.shape[0]):
+            lo, hi = node.bounding_box[axis]
+            _assert_dyadic_subdivision(lo, hi, root_box[axis, 0], root_box[axis, 1])
+        _assert_children_tile_parent_at_midpoint(node)
+        for child in node.children:
+            check(child)
+
+    check(root)
+
+
+# ---------------------------------------------------------------------------
 # Critical invariant: leaf row/col index sets exactly partition {0..dof*N-1}.
 # ---------------------------------------------------------------------------
 
