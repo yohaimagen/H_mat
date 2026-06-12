@@ -1,5 +1,5 @@
-"""Randomized low-rank primitives: Gaussian sampling and orthonormalization
-(Task 3.1).
+"""Randomized low-rank primitives: Gaussian sampling, orthonormalization, and
+two-sample compression (Tasks 3.1-3.2).
 
 These are the basic building blocks for the randomized SVD machinery used
 throughout Stage 3 and beyond (Algorithm 2.1 two-sample compression, the core
@@ -15,6 +15,11 @@ here -- this module only provides:
 - A rank-`k`-truncated variant of `orth` that returns only the first `k`
   columns of `Q` -- an orthonormal basis for an approximate rank-`k` subspace
   of `range(Y)`.
+- `two_sample_compress` (Algorithm 2.1): given a column sample `Y` (rows of
+  `A @ Omega` restricted to a block's row indices) and a row sample `Z` (rows
+  of `A* @ Psi` restricted to the block's column indices), returns `(U, V) =
+  (qr(Y, k), qr(Z, k))` -- orthonormal bases for the block's column and row
+  spaces.
 """
 
 from __future__ import annotations
@@ -86,3 +91,48 @@ def orth(y: NDArray[np.floating], k: int | None = None) -> NDArray[np.float64]:
 
     truncated: NDArray[np.float64] = q[:, :k]
     return truncated
+
+
+def two_sample_compress(
+    y: NDArray[np.floating], z: NDArray[np.floating], k: int
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Algorithm 2.1 two-sample compression of a single block `A_{alpha,beta}`.
+
+    Given a *column sample* `Y` and a *row sample* `Z` of one block, return
+    orthonormal bases `U = qr(Y, k)` and `V = qr(Z, k)` for the block's
+    (approximate rank-`k`) column and row spaces, respectively. Reuses
+    `orth(., k)` (Task 3.1) -- no QR is reimplemented here.
+
+    Per CLAUDE.md's shape conventions, `A_{alpha,beta}` maps `R^{dof_col *
+    |beta|} -> R^{dof_row * |alpha|}`, so:
+
+    - `Y` is the row-restriction `(A @ Omega)(I_alpha, :)`, shape
+      `(dof_row * |alpha|, k + p)` -- samples the block's column space (the
+      space spanned by its columns, i.e. `range(A_{alpha,beta})`).
+    - `Z` is the column-restriction `(A* @ Psi)(I_beta, :)`, shape
+      `(dof_col * |beta|, k + p)` -- samples the block's row space (`range(
+      A_{alpha,beta}*)`).
+
+    `Y` and `Z` in general have *different* numbers of rows (`Y` has
+    `dof_row * |alpha|` rows, `Z` has `dof_col * |beta|` rows); they are not
+    interchangeable.
+
+    Args:
+        y: Column sample of the block, shape `(dof_row * |alpha|, k + p)`.
+        z: Row sample of the block, shape `(dof_col * |beta|, k + p)`.
+        k: Target rank. Must satisfy `0 <= k <= min(y.shape)` and
+            `0 <= k <= min(z.shape)`.
+
+    Returns:
+        A tuple `(U, V)`:
+            - `U`, shape `(dof_row * |alpha|, k)`, orthonormal basis for the
+              block's (approximate) column space.
+            - `V`, shape `(dof_col * |beta|, k)`, orthonormal basis for the
+              block's (approximate) row space.
+
+    Raises:
+        ValueError: If `k` is out of range for `y` or `z` (see `orth`).
+    """
+    u = orth(y, k)
+    v = orth(z, k)
+    return u, v
