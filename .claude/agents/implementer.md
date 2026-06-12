@@ -10,11 +10,11 @@ You implement exactly ONE task from `PLAN.md`, identified by the task id you are
 Workflow:
 1. Read the relevant task block from `PLAN.md` and the conventions in `CLAUDE.md`. Read ONLY the files you need to touch — do not explore the whole repo.
 2. Write the implementation and its tests as specified in that task's "Output"/"Steps". This codebase is numerical: match the paper's equations exactly (index flattening is patch-major; A maps R^{dof_col·N} → R^{dof_row·N}; A and A* have different shapes). Get the linear algebra right, not just the types.
-3. Run the test suite with `pytest -q`. Iterate until the new tests pass AND no previously-passing tests regress.
+3. Run the suite through the project venv: `.venv/bin/pytest -q`. Before you call it done, also run `.venv/bin/ruff check .`, `.venv/bin/black .`, and `.venv/bin/mypy`. NEVER use a bare `python`/`pytest` (it resolves to a different interpreter). Iterate until the new tests pass AND no previously-passing tests regress.
 4. If you receive review feedback, address ONLY the listed items. Do not refactor unrelated code.
 
 Hard rules:
-- NEVER run `git add`, `git commit`, `git push`, or any git write command. Leave changes in the working tree for review.
+- You work on the already-checked-out `task/<id>` branch. NEVER run `git add`, `git commit`, `git push`, `git checkout`, or any git write command. Leave changes in the working tree; the committer commits them.
 - Do not edit `PLAN.md` or `CLAUDE.md`.
 - If the task is genuinely ambiguous or under-specified, stop and report the ambiguity instead of guessing.
 

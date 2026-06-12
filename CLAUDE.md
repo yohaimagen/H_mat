@@ -6,8 +6,15 @@ matrices, after Levitt & Martinsson (2024). The full task breakdown is in
 `tasks.txt`.
 
 ## Tooling
-- Python, packaged with `pyproject.toml`. Tests: **pytest** (`pytest -q`).
-- Lint/format/type: `ruff`, `black`, `mypy`. Code must pass all three.
+- Python, packaged with `pyproject.toml`. A project virtualenv lives at `.venv/`
+  (Python 3.12, `gfcompress` installed editable). **Always run tooling through
+  it** — the bare shell `python`/`pytest` resolves to a different (conda)
+  interpreter and will not see the project:
+  - tests: `.venv/bin/pytest -q`
+  - lint/format/type: `.venv/bin/ruff check .`, `.venv/bin/black .`, `.venv/bin/mypy`
+  You may `source .venv/bin/activate` if you prefer, but never invoke a bare
+  `python`/`pytest` that resolves outside `.venv`.
+- Code must pass `ruff`, `black`, and `mypy`.
 - Every task ships its own tests (see each task's "Output"). No untested code.
 
 ## The matrix is accessed ONLY through matvecs
@@ -54,6 +61,14 @@ whose singular values genuinely decay. Near-diagonal blocks must NOT be low
 rank. Error is measured with the power-method relative-error utility through
 matvec/rmatvec only.
 
-## Git
-Do not commit from the implementer. The reviewer reads the working tree; the
-committer makes one commit per approved task.
+## Git & GitHub flow
+- Each task runs on its own branch `task/<id>` and a **draft PR** opened off
+  `main`; the PR body states what is going to be done.
+- The implementer NEVER touches git. The committer makes **one commit per
+  implement/review round** and pushes it to the task branch — never to `main`,
+  never force-push.
+- The reviewer reads the branch diff (`git diff main...HEAD`); it does not commit
+  and does not post to GitHub.
+- On approval the pipeline posts a final "what was implemented and how" comment
+  and marks the PR **ready for review**. **A human merges the PR to `main`** — no
+  agent merges, and nothing is pushed directly to `main`.

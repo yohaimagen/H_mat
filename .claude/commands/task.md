@@ -1,22 +1,52 @@
 ---
-description: Run one PLAN.md task through implement → review → fix-loop → commit. Usage: /task 3.2
+description: Run one PLAN.md task autonomously through open-PR → implement → review → fix-loop → finalize, leaving the PR ready for the human to merge. Usage: /task 3.2
 ---
 
-You are the ORCHESTRATOR. Run task **$ARGUMENTS** through the full pipeline. You coordinate only — you do NOT write product code or commit yourself. Keep your own context lean: pass the task id and file paths to subagents, not code.
+You are the ORCHESTRATOR for task **$ARGUMENTS**. You run the ENTIRE pipeline
+autonomously and only surface to the human when the PR is ready for review (or
+when you must stop). You coordinate only — you NEVER write product code, commit,
+or merge yourself. Keep your context lean: pass the task id and file paths to
+subagents, not code.
+
+The human's ONLY manual step is merging the PR. Never merge. Never push to `main`.
+
+Tool permissions are constrained by `.claude/settings.json` (allowed: repo file
+edits, `.venv` tooling, git on task branches, `gh pr create/comment/ready`;
+denied: `gh pr merge`, push/force to `main`, destructive fs, edits to
+PLAN.md/CLAUDE.md/.claude). If a step is blocked by a permission or a subagent
+reports a genuine ambiguity, STOP and surface it — do not work around a safeguard.
 
 Steps:
 
-1. Confirm task **$ARGUMENTS** exists in `PLAN.md` and that its prerequisite tasks appear already done (the relevant files/tests exist and `pytest -q` is currently green). If a prerequisite is missing, stop and report it.
+0. **Preflight.** Confirm task **$ARGUMENTS** exists in `PLAN.md` and its
+   prerequisite tasks appear done. Confirm `git rev-parse --abbrev-ref HEAD` is
+   `main` and `git status --porcelain` is empty (clean tree). Confirm
+   `.venv/bin/pytest -q` is currently green. If any check fails, STOP and report.
 
-2. Delegate to the **implementer** subagent: "Implement task $ARGUMENTS from PLAN.md." Wait for its summary.
+1. **pr-opener** subagent: "Open the branch and draft PR for task $ARGUMENTS."
+   Capture the branch name, PR number, and PR URL.
 
-3. Delegate to the **reviewer** subagent: "Review the working tree for task $ARGUMENTS." Read the final `VERDICT:` line.
+2. **implementer** subagent: "Implement task $ARGUMENTS from PLAN.md on branch
+   task/$ARGUMENTS." Wait for its summary.
 
-4. Loop, at most **3 rounds**:
-   - If `VERDICT: CHANGES REQUESTED` → delegate to the **implementer** again, passing the reviewer's numbered list verbatim and instructing it to address only those items. Then go back to step 3.
-   - If `VERDICT: APPROVED` → break out of the loop.
-   - If still not approved after 3 rounds → STOP, do not commit, and report the outstanding review items to the human. Do not push broken or unreviewed work.
+3. **committer** subagent: "Commit and push this round to branch task/$ARGUMENTS
+   for task $ARGUMENTS."
 
-5. On approval, delegate to the **committer** subagent: "Commit and push the approved tree for task $ARGUMENTS." Report the commit hash back.
+4. **reviewer** subagent: "Review branch task/$ARGUMENTS (git diff main...HEAD)
+   for task $ARGUMENTS." Read the final `VERDICT:` line.
 
-Output a 3-line final summary: task id, rounds taken, commit hash (or why it stopped).
+5. **Fix loop, at most 3 rounds:**
+   - `VERDICT: CHANGES REQUESTED` → **implementer** again, passing the reviewer's
+     numbered list verbatim and instructing it to address ONLY those items →
+     **committer** (fix-round commit) → back to step 4.
+   - `VERDICT: APPROVED` → break out of the loop.
+   - Still not approved after 3 rounds → STOP. Leave the PR as a DRAFT, post a PR
+     comment (`gh pr comment`) listing the outstanding items, and report to the
+     human. Do NOT mark ready, do NOT merge.
+
+6. On approval, **pr-finalizer** subagent: "Post the final summary comment and
+   mark PR <#> ready for review for task $ARGUMENTS."
+
+7. **Surface to the human** (the only time you do so on a successful run): report
+   task id, rounds taken, the PR URL, and that the PR is ready for their review
+   and merge.
