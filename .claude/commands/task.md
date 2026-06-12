@@ -19,9 +19,12 @@ reports a genuine ambiguity, STOP and surface it — do not work around a safegu
 Steps:
 
 0. **Preflight.** Confirm task **$ARGUMENTS** exists in `PLAN.md` and its
-   prerequisite tasks appear done. Confirm `git rev-parse --abbrev-ref HEAD` is
-   `main` and `git status --porcelain` is empty (clean tree). Confirm
-   `.venv/bin/pytest -q` is currently green. If any check fails, STOP and report.
+   prerequisite tasks appear done — a prerequisite counts as done if its line in
+   `tasks.txt` is marked `# done` (written by `pr-finalizer`) OR it already landed
+   on `main` as a `feat(task-<id>)` commit (tasks completed before the marker
+   mechanism have bare lines). Confirm `git rev-parse --abbrev-ref HEAD` is `main`
+   and `git status --porcelain` is empty (clean tree). Confirm `.venv/bin/pytest -q`
+   is currently green. If any check fails, STOP and report.
 
 1. **pr-opener** subagent: "Open the branch and draft PR for task $ARGUMENTS."
    Capture the branch name, PR number, and PR URL.
