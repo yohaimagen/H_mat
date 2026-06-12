@@ -1,17 +1,23 @@
-"""Tests for Gaussian sampling and orthonormalization helpers (Task 3.1).
+"""Tests for Gaussian sampling, orthonormalization, and two-sample
+compression helpers (Tasks 3.1-3.2).
 
 `gaussian(n, k, p, seed)` draws an `n x (k+p)` standard-normal matrix
 (seedable via `numpy.random.default_rng`); `orth(Y)` and `orth(Y, k)` wrap
 `scipy.linalg.qr` to return an orthonormal basis `Q` for `range(Y)` (thin /
-rank-`k`-truncated).
+rank-`k`-truncated). `two_sample_compress(Y, Z, k)` (Algorithm 2.1) returns
+`(U, V) = (qr(Y, k), qr(Z, k))`, orthonormal bases for a single block's
+column and row spaces.
 """
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 
-from gfcompress.randomized import gaussian, orth
+from gfcompress.geometry import FaultMesh
+from gfcompress.mockgf import MockGF
+from gfcompress.randomized import gaussian, orth, two_sample_compress
 
 # ---------------------------------------------------------------------------
 # gaussian
@@ -155,3 +161,128 @@ def test_orth_of_gaussian_sketch_of_low_rank_matrix_recovers_range() -> None:
     np.testing.assert_allclose(q.T @ q, np.eye(r), atol=1e-10)
     # range(Q) should equal range(A) == range(U).
     np.testing.assert_allclose(q @ (q.T @ u), u, atol=1e-8)
+
+
+# ---------------------------------------------------------------------------
+# two_sample_compress (Algorithm 2.1, Task 3.2)
+# ---------------------------------------------------------------------------
+
+
+def _synthetic_rank_k_block(
+    m: int, n: int, r: int, seed: int
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+    """A genuinely rank-`r` block `block = U_true @ S @ V_true.T` of shape
+    `(m, n)`, built from thin orthonormal factors (per CLAUDE.md, not a
+    full-rank random dense matrix).
+
+    Returns `(block, U_true, V_true)`: `U_true` (shape `(m, r)`) spans
+    `range(block)`, `V_true` (shape `(n, r)`) spans `range(block.T)`, both
+    orthonormal.
+    """
+    rng = np.random.default_rng(seed)
+    u_true = orth(rng.standard_normal((m, r)))
+    v_true = orth(rng.standard_normal((n, r)))
+    # Distinct positive singular values -> rank exactly r, no degeneracy.
+    s = np.diag(np.linspace(1.0, 1.0 / r, r))
+    block = u_true @ s @ v_true.T
+    return block, u_true, v_true
+
+
+def test_two_sample_compress_recovers_column_and_row_spaces_of_synthetic_block() -> None:
+    """Block has shape (dof_row * |alpha|, dof_col * |beta|) = (8, 5), i.e.
+    non-square per CLAUDE.md's row/col conventions; Y and Z accordingly have
+    different numbers of rows."""
+    m, n, r = 8, 5, 3
+    block, u_true, v_true = _synthetic_rank_k_block(m, n, r, seed=0)
+
+    p = 4  # oversampling
+    omega = gaussian(n, r, p, seed=1)
+    psi = gaussian(m, r, p, seed=2)
+
+    y = block @ omega  # column sample, shape (m, r+p)
+    z = block.T @ psi  # row sample, shape (n, r+p)
+
+    u, v = two_sample_compress(y, z, k=r)
+
+    assert u.shape == (m, r)
+    assert v.shape == (n, r)
+
+    # Orthonormal bases.
+    np.testing.assert_allclose(u.T @ u, np.eye(r), atol=1e-10)
+    np.testing.assert_allclose(v.T @ v, np.eye(r), atol=1e-10)
+
+    # U spans the true column space: U U^T projects U_true onto itself.
+    np.testing.assert_allclose(u @ (u.T @ u_true), u_true, atol=1e-8)
+    # V spans the true row space: V V^T projects V_true onto itself.
+    np.testing.assert_allclose(v @ (v.T @ v_true), v_true, atol=1e-8)
+
+    # The block is exactly reconstructed from the recovered subspaces.
+    reconstructed = (u @ u.T) @ block @ (v @ v.T)
+    np.testing.assert_allclose(reconstructed, block, atol=1e-8)
+
+
+def test_two_sample_compress_returns_orth_of_inputs() -> None:
+    """two_sample_compress reuses orth(., k) verbatim -- no QR
+    reimplementation."""
+    rng = np.random.default_rng(3)
+    y = rng.standard_normal((10, 6))
+    z = rng.standard_normal((7, 6))
+
+    u, v = two_sample_compress(y, z, k=4)
+
+    np.testing.assert_allclose(u, orth(y, k=4))
+    np.testing.assert_allclose(v, orth(z, k=4))
+
+
+def test_two_sample_compress_on_mockgf_admissible_block() -> None:
+    """On a real admissible (low-rank) MockGF block, the recovered U/V
+    subspaces capture the dominant column/row space: A_block - (UU^T) A_block
+    (VV^T) is small relative to A_block."""
+    n_side = 4
+    gap = 100.0
+
+    axes = [np.arange(n_side, dtype=float), np.arange(n_side, dtype=float)]
+    grids = np.meshgrid(*axes, indexing="ij")
+    cluster_a_centroids = np.stack([g.ravel() for g in grids], axis=1)
+    cluster_b_centroids = cluster_a_centroids + np.array([gap, 0.0])
+
+    centroids = np.concatenate([cluster_a_centroids, cluster_b_centroids], axis=0)
+    lengths = np.full(centroids.shape[0], 0.1)
+    mesh = FaultMesh(centroids=centroids, L=lengths)
+    op = MockGF(mesh)
+
+    n_cluster = n_side * n_side
+    alpha = np.arange(n_cluster)
+    beta = np.arange(n_cluster, 2 * n_cluster)
+
+    block = op.block(alpha, beta)  # shape (dof_row * |alpha|, dof_col * |beta|)
+    m, n = block.shape
+
+    k, p = 3, 4
+    omega = gaussian(n, k, p, seed=4)
+    psi = gaussian(m, k, p, seed=5)
+
+    y = block @ omega
+    z = block.T @ psi
+
+    u, v = two_sample_compress(y, z, k=k)
+
+    assert u.shape == (m, k)
+    assert v.shape == (n, k)
+    np.testing.assert_allclose(u.T @ u, np.eye(k), atol=1e-10)
+    np.testing.assert_allclose(v.T @ v, np.eye(k), atol=1e-10)
+
+    reconstructed = (u @ u.T) @ block @ (v @ v.T)
+    rel_err = np.linalg.norm(reconstructed - block) / np.linalg.norm(block)
+    assert rel_err < 1e-3
+
+
+def test_two_sample_compress_rejects_k_out_of_range() -> None:
+    rng = np.random.default_rng(6)
+    y = rng.standard_normal((10, 4))
+    z = rng.standard_normal((8, 4))
+
+    with pytest.raises(ValueError):
+        two_sample_compress(y, z, k=-1)
+    with pytest.raises(ValueError):
+        two_sample_compress(y, z, k=5)
