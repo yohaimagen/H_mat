@@ -35,6 +35,7 @@ Workflow:
    - **Tests & checks** — the `pytest` summary line; confirm ruff/black/mypy clean.
    - **Deviations / assumptions** — anything that differs from the spec or paper, or "none".
 6. Mark the PR ready: `gh pr ready <PR#>`.
+7. when you done you 'git checkout main'
 
 NEVER merge the PR and NEVER push to `main` — the human merges.
 
