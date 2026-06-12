@@ -14,6 +14,11 @@ matrices, after Levitt & Martinsson (2024). The full task breakdown is in
   - lint/format/type: `.venv/bin/ruff check .`, `.venv/bin/black .`, `.venv/bin/mypy`
   You may `source .venv/bin/activate` if you prefer, but never invoke a bare
   `python`/`pytest` that resolves outside `.venv`.
+- **Sandbox execution**: All tasks, tests, and shell operations must remain entirely 
+  within the repository root directory. Never write temporary files, artifacts, or 
+  test outputs outside the project tree (e.g., do not use `/tmp/`). If a test or 
+  tool requires writing to disk, use a local temporary file or directory within 
+  the workspace root.
 - Code must pass `ruff`, `black`, and `mypy`.
 - Every task ships its own tests (see each task's "Output"). No untested code.
 
