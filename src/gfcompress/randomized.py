@@ -1,5 +1,5 @@
-"""Randomized low-rank primitives: Gaussian sampling, orthonormalization, and
-two-sample compression (Tasks 3.1-3.2).
+"""Randomized low-rank primitives: Gaussian sampling, orthonormalization,
+two-sample compression, and the core-matrix solve (Tasks 3.1-3.3).
 
 These are the basic building blocks for the randomized SVD machinery used
 throughout Stage 3 and beyond (Algorithm 2.1 two-sample compression, the core
@@ -20,6 +20,13 @@ here -- this module only provides:
   of `A* @ Psi` restricted to the block's column indices), returns `(U, V) =
   (qr(Y, k), qr(Z, k))` -- orthonormal bases for the block's column and row
   spaces.
+- `core_matrix_solve` (Eq. 4.3): given the bases `U`, `V` from
+  `two_sample_compress`, the column sample restricted to block-`alpha` rows
+  `Y(I_alpha, :)`, and the Gaussian sketches `G_alpha`, `G_beta` used to
+  generate the row/column samples, returns the `k x k` core matrix `B` such
+  that `A_{alpha,beta} ~= U @ B @ V*`. `B` is formed entirely from these
+  sample/basis quantities via two least-squares (pseudoinverse) solves --
+  `A_{alpha,beta}` is never assembled.
 """
 
 from __future__ import annotations
@@ -136,3 +143,98 @@ def two_sample_compress(
     u = orth(y, k)
     v = orth(z, k)
     return u, v
+
+
+def core_matrix_solve(
+    u: NDArray[np.floating],
+    v: NDArray[np.floating],
+    y_alpha: NDArray[np.floating],
+    g_alpha: NDArray[np.floating],
+    g_beta: NDArray[np.floating],
+) -> NDArray[np.float64]:
+    """Core-matrix solve for a single admissible block (Eq. 4.3).
+
+    Computes the `k x k` core matrix `B` of the rank-`k` factorization
+    `A_{alpha,beta} ~= U @ B @ V*`, via
+
+        B = (G_alpha* U)^+ (G_alpha* Y(I_alpha, :)) (V* G_beta)^+
+
+    where `^+` denotes the Moore-Penrose pseudoinverse, implemented as
+    least-squares solves (`scipy.linalg.lstsq`) rather than by inverting or
+    assembling `A_{alpha,beta}`. Everything on the right-hand side is a
+    sample or basis quantity:
+
+    - `Y(I_alpha, :) = A_{alpha,beta} @ G_beta` is the column sample of the
+      block (rows of the global column sample `Y = A @ Omega` restricted to
+      box `alpha`'s row indices `I_alpha`).
+    - `G_alpha` is the Gaussian sketch (restricted to `I_alpha`) used to
+      generate the block's row sample `Z(I_beta, :) = A_{alpha,beta}* @
+      G_alpha`, from which `V` was computed.
+    - `G_beta` is the Gaussian sketch (restricted to `I_beta`) used to
+      generate `Y(I_alpha, :)` above, from which `U` was computed.
+
+    Per CLAUDE.md's shape conventions, `A_{alpha,beta}` maps
+    `R^{dof_col * |beta|} -> R^{dof_row * |alpha|}`, so `U` and `V` have
+    different numbers of rows, and `G_alpha`/`G_beta` correspondingly have
+    different numbers of rows (`U`/`G_alpha` index over box `alpha`'s rows,
+    `V`/`G_beta` over box `beta`'s columns).
+
+    Args:
+        u: Column-space basis from `two_sample_compress`, shape
+            `(dof_row * |alpha|, k)`, orthonormal columns.
+        v: Row-space basis from `two_sample_compress`, shape
+            `(dof_col * |beta|, k)`, orthonormal columns.
+        y_alpha: Column sample restricted to box `alpha`'s rows,
+            `Y(I_alpha, :) = A_{alpha,beta} @ G_beta`, shape
+            `(dof_row * |alpha|, k + p)`.
+        g_alpha: Gaussian sketch used for the row sample, restricted to box
+            `alpha`'s rows, shape `(dof_row * |alpha|, k + p)`. Same number
+            of rows as `u` and `y_alpha`.
+        g_beta: Gaussian sketch used for the column sample, restricted to
+            box `beta`'s columns, shape `(dof_col * |beta|, k + p)`. Same
+            number of rows as `v`.
+
+    Returns:
+        `B`, shape `(k, k)`, the core matrix such that
+        `U @ B @ V.conj().T` approximates `A_{alpha,beta}`.
+
+    Raises:
+        ValueError: If the shapes of `u`, `v`, `y_alpha`, `g_alpha`, and
+            `g_beta` are inconsistent (row counts of `u`/`y_alpha`/`g_alpha`
+            must agree, as must those of `v`/`g_beta`, and `u`/`v` must have
+            the same number of columns `k`).
+    """
+    u = np.asarray(u)
+    v = np.asarray(v)
+    y_alpha = np.asarray(y_alpha)
+    g_alpha = np.asarray(g_alpha)
+    g_beta = np.asarray(g_beta)
+
+    if u.shape[1] != v.shape[1]:
+        raise ValueError(
+            "u and v must have the same number of columns k, got "
+            f"u.shape={u.shape}, v.shape={v.shape}"
+        )
+    if not (u.shape[0] == y_alpha.shape[0] == g_alpha.shape[0]):
+        raise ValueError(
+            "u, y_alpha, and g_alpha must have the same number of rows "
+            f"(dof_row * |alpha|), got u.shape={u.shape}, "
+            f"y_alpha.shape={y_alpha.shape}, g_alpha.shape={g_alpha.shape}"
+        )
+    if v.shape[0] != g_beta.shape[0]:
+        raise ValueError(
+            "v and g_beta must have the same number of rows (dof_col * "
+            f"|beta|), got v.shape={v.shape}, g_beta.shape={g_beta.shape}"
+        )
+
+    # left = (G_alpha* U)^+ (G_alpha* Y(I_alpha, :)), shape (k, k+p).
+    lhs = g_alpha.conj().T @ u  # (k+p, k)
+    rhs = g_alpha.conj().T @ y_alpha  # (k+p, k+p)
+    left, *_ = scipy.linalg.lstsq(lhs, rhs)  # (k, k+p)
+
+    # right = (V* G_beta)^+, shape (k+p, k).
+    vg = v.conj().T @ g_beta  # (k, k+p)
+    right = np.linalg.pinv(vg)  # (k+p, k)
+
+    b: NDArray[np.float64] = left @ right
+    return b

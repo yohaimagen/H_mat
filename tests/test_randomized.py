@@ -1,12 +1,14 @@
-"""Tests for Gaussian sampling, orthonormalization, and two-sample
-compression helpers (Tasks 3.1-3.2).
+"""Tests for Gaussian sampling, orthonormalization, two-sample compression,
+and core-matrix-solve helpers (Tasks 3.1-3.3).
 
 `gaussian(n, k, p, seed)` draws an `n x (k+p)` standard-normal matrix
 (seedable via `numpy.random.default_rng`); `orth(Y)` and `orth(Y, k)` wrap
 `scipy.linalg.qr` to return an orthonormal basis `Q` for `range(Y)` (thin /
 rank-`k`-truncated). `two_sample_compress(Y, Z, k)` (Algorithm 2.1) returns
 `(U, V) = (qr(Y, k), qr(Z, k))`, orthonormal bases for a single block's
-column and row spaces.
+column and row spaces. `core_matrix_solve(U, V, Y_alpha, G_alpha, G_beta)`
+(Eq. 4.3) returns the `k x k` core matrix `B` such that `U @ B @ V*`
+approximates the block.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from numpy.typing import NDArray
 
 from gfcompress.geometry import FaultMesh
 from gfcompress.mockgf import MockGF
-from gfcompress.randomized import gaussian, orth, two_sample_compress
+from gfcompress.randomized import core_matrix_solve, gaussian, orth, two_sample_compress
 
 # ---------------------------------------------------------------------------
 # gaussian
@@ -286,3 +288,98 @@ def test_two_sample_compress_rejects_k_out_of_range() -> None:
         two_sample_compress(y, z, k=-1)
     with pytest.raises(ValueError):
         two_sample_compress(y, z, k=5)
+
+
+# ---------------------------------------------------------------------------
+# core_matrix_solve (Eq. 4.3, Task 3.3)
+# ---------------------------------------------------------------------------
+
+
+def test_core_matrix_solve_reconstructs_synthetic_rank_k_block() -> None:
+    """Block has shape (dof_row * |alpha|, dof_col * |beta|) = (8, 5), a
+    genuinely rank-r factorization (per CLAUDE.md, not a full-rank random
+    dense matrix). U @ B @ V* should reconstruct it to tolerance."""
+    m, n, r = 8, 5, 3
+    block, _, _ = _synthetic_rank_k_block(m, n, r, seed=20)
+
+    p = 4  # oversampling
+    k = r
+    g_beta = gaussian(n, k, p, seed=21)  # column-sample sketch, (n, k+p)
+    g_alpha = gaussian(m, k, p, seed=22)  # row-sample sketch, (m, k+p)
+
+    y = block @ g_beta  # column sample, shape (m, k+p)
+    z = block.T @ g_alpha  # row sample, shape (n, k+p)
+
+    u, v = two_sample_compress(y, z, k=k)
+
+    b = core_matrix_solve(u, v, y_alpha=y, g_alpha=g_alpha, g_beta=g_beta)
+
+    assert b.shape == (k, k)
+
+    reconstructed = u @ b @ v.conj().T
+    np.testing.assert_allclose(reconstructed, block, atol=1e-8)
+
+
+def test_core_matrix_solve_on_mockgf_admissible_block() -> None:
+    """On a real admissible (low-rank) MockGF block, U @ B @ V* reconstructs
+    the block to a small relative error in Frobenius norm."""
+    n_side = 4
+    gap = 100.0
+
+    axes = [np.arange(n_side, dtype=float), np.arange(n_side, dtype=float)]
+    grids = np.meshgrid(*axes, indexing="ij")
+    cluster_a_centroids = np.stack([g.ravel() for g in grids], axis=1)
+    cluster_b_centroids = cluster_a_centroids + np.array([gap, 0.0])
+
+    centroids = np.concatenate([cluster_a_centroids, cluster_b_centroids], axis=0)
+    lengths = np.full(centroids.shape[0], 0.1)
+    mesh = FaultMesh(centroids=centroids, L=lengths)
+    op = MockGF(mesh)
+
+    n_cluster = n_side * n_side
+    alpha = np.arange(n_cluster)
+    beta = np.arange(n_cluster, 2 * n_cluster)
+
+    block = op.block(alpha, beta)  # shape (dof_row * |alpha|, dof_col * |beta|)
+    m, n = block.shape
+
+    k, p = 3, 6
+    g_beta = gaussian(n, k, p, seed=23)
+    g_alpha = gaussian(m, k, p, seed=24)
+
+    y = block @ g_beta
+    z = block.T @ g_alpha
+
+    u, v = two_sample_compress(y, z, k=k)
+
+    b = core_matrix_solve(u, v, y_alpha=y, g_alpha=g_alpha, g_beta=g_beta)
+
+    assert b.shape == (k, k)
+
+    reconstructed = u @ b @ v.conj().T
+    rel_err = np.linalg.norm(reconstructed - block) / np.linalg.norm(block)
+    assert rel_err < 1e-3
+
+
+def test_core_matrix_solve_rejects_inconsistent_shapes() -> None:
+    rng = np.random.default_rng(25)
+    k, p = 3, 2
+    m, n = 8, 5
+
+    u = orth(rng.standard_normal((m, k + 2)))[:, :k]
+    v = orth(rng.standard_normal((n, k + 2)))[:, :k]
+    y_alpha = rng.standard_normal((m, k + p))
+    g_alpha = rng.standard_normal((m, k + p))
+    g_beta = rng.standard_normal((n, k + p))
+
+    # u and v have mismatched number of columns.
+    with pytest.raises(ValueError):
+        core_matrix_solve(u, v[:, :-1], y_alpha, g_alpha, g_beta)
+
+    # g_alpha has the wrong number of rows.
+    with pytest.raises(ValueError):
+        core_matrix_solve(u, v, y_alpha, g_alpha[:-1, :], g_beta)
+
+    # g_beta has the wrong number of rows.
+    with pytest.raises(ValueError):
+        core_matrix_solve(u, v, y_alpha, g_alpha, g_beta[:-1, :])

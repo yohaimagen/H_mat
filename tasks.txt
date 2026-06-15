@@ -19,7 +19,7 @@
 # Stage 3: randomized low-rank primitives
 3.1 # done
 3.2 # done
-3.3
+3.3 # done
 
 # Stage 4: fixed-pattern structured test matrices (no graph)
 4.1
