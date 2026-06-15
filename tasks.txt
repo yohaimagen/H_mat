@@ -22,7 +22,7 @@
 3.3 # done
 
 # Stage 4: fixed-pattern structured test matrices (no graph)
-4.1
+4.1  # done c644fad 2026-06-15
 4.2
 4.3
 
