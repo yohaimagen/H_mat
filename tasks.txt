@@ -24,7 +24,7 @@
 # Stage 4: fixed-pattern structured test matrices (no graph)
 4.1  # done c644fad 2026-06-15
 4.2  # done 1b3c31c 2026-06-15
-4.3
+4.3  # done 39ea94c 2026-06-15
 
 # Stage 5: peeling driver & block compression (non-uniform H1)
 5.1
