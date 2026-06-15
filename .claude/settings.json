@@ -89,13 +89,10 @@
       "Bash(sudo:*)",
       "Edit(/PLAN.md)",
       "Write(/PLAN.md)",
-      "MultiEdit(/PLAN.md)",
       "Edit(/CLAUDE.md)",
       "Write(/CLAUDE.md)",
-      "MultiEdit(/CLAUDE.md)",
       "Edit(/tasks.txt)",
-      "Write(/tasks.txt)",
-      "MultiEdit(/tasks.txt)"
+      "Write(/tasks.txt)"
     ]
   }
 }
