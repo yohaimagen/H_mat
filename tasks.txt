@@ -27,7 +27,7 @@
 4.3  # done 39ea94c 2026-06-15
 
 # Stage 5: peeling driver & block compression (non-uniform H1)
-5.1
+5.1  # done f903698 2026-06-15
 5.2
 5.3
 5.4
