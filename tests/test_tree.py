@@ -219,6 +219,29 @@ def test_iter_levels() -> None:
         assert all_patches == [0, 1, 2, 3]
 
 
+# ---------------------------------------------------------------------------
+# Hashability (Task F.1: `eq=False` -> identity-based `__eq__`/`__hash__`).
+# ---------------------------------------------------------------------------
+
+
+def test_tree_node_is_hashable_by_identity() -> None:
+    mesh = _grid_mesh_2d()
+    a = make_node(mesh, np.array([0, 2]), level=0)
+    b = make_node(mesh, np.array([0, 2]), level=0)  # identical fields, distinct object
+
+    # Usable as a dict key / set member.
+    d = {a: "a", b: "b"}
+    assert d[a] == "a"
+    assert d[b] == "b"
+    s = {a, b}
+    assert len(s) == 2
+
+    # Distinct nodes with identical fields are not equal, even though they
+    # compare field-for-field equal.
+    assert a != b
+    assert a == a  # noqa: PLR0124 (identity check is the point)
+
+
 def test_iter_levels_from_subtree() -> None:
     mesh = _grid_mesh_2d()
     root = _build_small_tree(mesh)

@@ -176,7 +176,9 @@ def test_neighbor_lists_3d_interior_has_27() -> None:
 def test_neighbor_lists_1d_equivalent_interior_has_3() -> None:
     nx = 8
     mesh = _grid_mesh(nx, 1)
-    root = build_tree(mesh, m=2)
+    # Paper §3 rule is `> m` continuation (leaf iff `<= m`): m=1 is what
+    # yields one patch per leaf box here.
+    root = build_tree(mesh, m=1)
 
     level = _deepest_full_level(root, (nx, 1))
     level_nodes = root.nodes_at_level(level)
