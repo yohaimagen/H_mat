@@ -31,6 +31,8 @@ gate used anywhere else in this package.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -106,89 +108,89 @@ def is_admissible(alpha: TreeNode, beta: TreeNode, eta: float = DEFAULT_ETA) -> 
     return dist >= eta * max(alpha.diam, beta.diam)
 
 
-def interaction_list(alpha: TreeNode, root: TreeNode) -> list[TreeNode]:
-    """Compute `L^int(alpha)`: children of `alpha.parent`'s neighbors, minus
-    `alpha`'s own neighbors.
+def interaction_lists(
+    root: TreeNode, nei: dict[TreeNode, list[TreeNode]]
+) -> dict[TreeNode, list[TreeNode]]:
+    """Build the interaction-list map `L^int` for the tree rooted at `root`.
 
-    This is a convenience single-node wrapper around `interaction_lists`,
-    which computes the per-level map for the whole tree in one pass. For
-    repeated queries over many nodes, prefer calling `interaction_lists(root)`
-    once and indexing into the result.
-
-    Args:
-        alpha: The box whose interaction list is computed.
-        root: Root of the geometric cluster tree containing `alpha`.
-
-    Returns:
-        List of `TreeNode`s at `alpha`'s level: every child of a neighbor of
-        `alpha.parent` (including `alpha.parent` itself, since a node is
-        always its own neighbor) that is not in `alpha`'s own neighbor list
-        (which includes `alpha` itself). At most `6^d - 3^d` entries on a
-        regular grid. Empty if `alpha is root` (the root has no parent).
-    """
-    level_map = interaction_lists(root)[alpha.level]
-    level_nodes = root.nodes_at_level(alpha.level)
-    i = next(idx for idx, node in enumerate(level_nodes) if node is alpha)
-    return level_map[i]
-
-
-def interaction_lists(root: TreeNode) -> dict[int, dict[int, list[TreeNode]]]:
-    """Build the per-level interaction-list map `L^int` for the tree rooted
-    at `root`.
-
-    For each level `l >= 1` present in the tree, and for each node `alpha` at
-    level `l`, `L^int(alpha)` is the list of all level-`l` nodes that are
-    children of a neighbor of `alpha.parent` (in `nodes_at_level(l-1)`'s
-    neighbor map) but are *not* in `alpha`'s own neighbor list `L^nei(alpha)`
+    For every node `alpha` at level `l >= 1`, `L^int(alpha)` is the list of
+    all level-`l` nodes that are children of a neighbor of `alpha.parent`
+    (per `nei`) but are *not* in `alpha`'s own neighbor list `L^nei(alpha)`
     (which includes `alpha` itself).
 
-    Level 0 (the root, which has no parent) maps to `{0: []}`.
-
-    Nodes are keyed exactly as in `gfcompress.neighbors.neighbor_lists`: each
-    per-level dict is keyed by the node's index in `root.nodes_at_level(l)`.
+    The root (which has no parent) maps to `[]`.
 
     Args:
         root: Root of the geometric cluster tree (e.g. from `build_tree`).
+        nei: Precomputed neighbor-list map (`gfcompress.neighbors.
+            neighbor_lists(root)`); not recomputed here.
 
     Returns:
-        Mapping `level -> {index_in_level: [interaction-list nodes]}`.
+        A flat mapping `node -> [interaction-list nodes]`, with one entry per
+        node in the tree.
     """
-    nei = neighbor_lists(root)
-    result: dict[int, dict[int, list[TreeNode]]] = {}
+    result: dict[TreeNode, list[TreeNode]] = {}
 
     for level_nodes in root.iter_levels():
         level = level_nodes[0].level
         if level == 0:
-            result[level] = {0: []}
+            result[level_nodes[0]] = []
             continue
 
-        own_nei = nei[level]
-        parent_level_nodes = root.nodes_at_level(level - 1)
-        parent_nei = nei[level - 1]
-
-        level_map: dict[int, list[TreeNode]] = {}
-        for i, alpha in enumerate(level_nodes):
-            own_neighbor_ids = {id(beta) for beta in own_nei[i]}
+        for alpha in level_nodes:
+            own_neighbors = set(nei[alpha])
 
             parent = alpha.parent
             assert parent is not None  # level >= 1
-            parent_idx = next(idx for idx, node in enumerate(parent_level_nodes) if node is parent)
 
             # All same-level candidates: children of every neighbor of
             # alpha's parent (a node is always its own neighbor, so this
             # includes alpha.parent's own children too).
             candidates: list[TreeNode] = []
-            seen_ids: set[int] = set()
-            for parent_neighbor in parent_nei[parent_idx]:
+            seen: set[TreeNode] = set()
+            for parent_neighbor in nei[parent]:
                 for child in parent_neighbor.children:
-                    if id(child) not in seen_ids:
-                        seen_ids.add(id(child))
+                    if child not in seen:
+                        seen.add(child)
                         candidates.append(child)
 
-            level_map[i] = [beta for beta in candidates if id(beta) not in own_neighbor_ids]
-        result[level] = level_map
+            result[alpha] = [beta for beta in candidates if beta not in own_neighbors]
 
     return result
+
+
+@dataclass(frozen=True)
+class TreeLists:
+    """Node-keyed neighbor/interaction-list maps for a tree, computed once.
+
+    Attributes:
+        nei: Flat mapping `node -> L^nei(node)` (`gfcompress.neighbors.
+            neighbor_lists`).
+        interaction: Flat mapping `node -> L^int(node)` (`interaction_lists`).
+    """
+
+    nei: dict[TreeNode, list[TreeNode]]
+    interaction: dict[TreeNode, list[TreeNode]]
+
+
+def build_lists(root: TreeNode, tol: float = 1e-9) -> TreeLists:
+    """Build the neighbor and interaction lists for the whole tree once.
+
+    Downstream code (`gfcompress.sampling.build_sampling_constraint`,
+    `gfcompress.column_basis.column_bases`, ...) should call this once per
+    tree and pass the resulting `TreeLists` around, rather than recomputing
+    `L^nei`/`L^int` per query.
+
+    Args:
+        root: Root of the geometric cluster tree (e.g. from `build_tree`).
+        tol: Adjacency tolerance forwarded to `neighbor_lists`.
+
+    Returns:
+        A `TreeLists` with both maps.
+    """
+    nei = neighbor_lists(root, tol=tol)
+    interaction = interaction_lists(root, nei)
+    return TreeLists(nei=nei, interaction=interaction)
 
 
 def suggest_eta(gamma: float = 0.1, target_rel_error: float = 1e-2, d: int = 3) -> float:

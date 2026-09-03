@@ -14,11 +14,20 @@ overlap; a box is always its own neighbor. On a full grid an interior box has
 exactly `3^d` neighbors (itself plus the `3^d - 1` cells sharing a face,
 edge, or corner), and a boundary box has fewer.
 
-`neighbor_lists(root)` builds the per-level neighbor map by brute-force
-all-pairs comparison among same-level nodes using `boxes_adjacent`. This is
-`O(n_l^2)` per level `l`, which is fine for the tree sizes used in this
-project's tests; if it ever becomes a bottleneck, it can be replaced by a
-spatial hash keyed on dyadic-grid cell indices without changing the API.
+`neighbor_lists(root)` builds the neighbor map by brute-force all-pairs
+comparison among same-level nodes, applying `boxes_adjacent`'s touch-or-
+overlap test to every pair at once via vectorized numpy broadcasting (rather
+than one Python-level `boxes_adjacent` call per pair). This keeps the
+`O(n_l^2)` per-level complexity but removes the Python-call overhead that
+made it a bottleneck at the tree sizes used for the Stage 7 (coloring)
+sampling constraint (Task F.2); if it ever becomes a bottleneck again, it can
+be replaced by a spatial hash keyed on dyadic-grid cell indices without
+changing the API.
+
+`TreeNode` is hashable by identity (Task F.1, `@dataclass(eq=False)`), so the
+result is a single flat, node-keyed dict rather than the earlier
+`level -> index_in_level -> list` nesting; per-level iteration is available
+via `root.nodes_at_level(level)` and indexing the dict directly.
 """
 
 from __future__ import annotations
@@ -69,41 +78,34 @@ def boxes_adjacent(
     return bool(np.all(gap <= tol))
 
 
-def neighbor_lists(
-    root: TreeNode, tol: float = _DEFAULT_TOL
-) -> dict[int, dict[int, list[TreeNode]]]:
-    """Build the per-level neighbor-list map `L^nei` for the tree rooted at
-    `root`.
+def neighbor_lists(root: TreeNode, tol: float = _DEFAULT_TOL) -> dict[TreeNode, list[TreeNode]]:
+    """Build the neighbor-list map `L^nei` for the tree rooted at `root`.
 
-    For each level `l` present in the tree, and for each node `alpha` at
-    level `l`, `L^nei(alpha)` is the list of all same-level nodes `beta`
-    (including `alpha` itself) whose `bounding_box` touches or overlaps
-    `alpha`'s `bounding_box`, per `boxes_adjacent`.
-
-    `TreeNode` is a mutable dataclass and therefore unhashable, so nodes
-    cannot be used directly as dict keys. Instead, each per-level map is
-    keyed by the node's position in `nodes_at_level(level)`'s output order
-    (i.e. `level_nodes[i]` corresponds to key `i`).
+    For each node `alpha` at every level of the tree, `L^nei(alpha)` is the
+    list of all same-level nodes `beta` (including `alpha` itself) whose
+    `bounding_box` touches or overlaps `alpha`'s `bounding_box`, per
+    `boxes_adjacent`.
 
     Args:
         root: Root of the geometric cluster tree (e.g. from `build_tree`).
         tol: Adjacency tolerance forwarded to `boxes_adjacent`.
 
     Returns:
-        Mapping `level -> {index_in_level: [neighbor nodes, including the
-        node itself]}`. Each per-level dict has one entry per node at that
-        level, keyed by that node's index in `root.nodes_at_level(level)`.
+        A flat mapping `node -> [neighbor nodes, including the node itself]`,
+        with one entry per node in the tree.
     """
-    result: dict[int, dict[int, list[TreeNode]]] = {}
+    result: dict[TreeNode, list[TreeNode]] = {}
     for level_nodes in root.iter_levels():
-        level = level_nodes[0].level
-        level_map: dict[int, list[TreeNode]] = {}
+        boxes = np.stack([node.bounding_box for node in level_nodes])  # (n, d, 2)
+        lo, hi = boxes[:, :, 0], boxes[:, :, 1]  # each (n, d)
+
+        # Same separating-axis test as `boxes_adjacent`, applied to every
+        # pair (i, j) at once: gap[i, j, axis] = max(lo_i - hi_j, lo_j - hi_i).
+        gap = np.maximum(
+            lo[:, None, :] - hi[None, :, :], lo[None, :, :] - hi[:, None, :]
+        )  # (n, n, d)
+        adjacent = np.all(gap <= tol, axis=-1)  # (n, n)
+
         for i, alpha in enumerate(level_nodes):
-            neighbors = [
-                beta
-                for beta in level_nodes
-                if boxes_adjacent(alpha.bounding_box, beta.bounding_box, tol=tol)
-            ]
-            level_map[i] = neighbors
-        result[level] = level_map
+            result[alpha] = [level_nodes[j] for j in np.flatnonzero(adjacent[i])]
     return result

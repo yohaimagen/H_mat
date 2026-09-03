@@ -1,6 +1,6 @@
 """Tests for per-level column bases `U_{alpha,beta}` (Task 5.2).
 
-`column_bases(operator, root, mesh, level, factors, k, p, seed)` builds the
+`column_bases(operator, root, lists, mesh, level, factors, k, p, seed)` builds the
 level's fixed `6x...x6` periodic admissible test matrices (Task 4.2), applies
 them through `peeled_matvec` (Task 5.1), and for every admissible pair
 `(alpha, beta)` at `level` extracts `Y(I_alpha, :)` and sets
@@ -25,7 +25,7 @@ import numpy as np
 from gfcompress.build_tree import build_tree
 from gfcompress.column_basis import ColumnBasis, column_bases
 from gfcompress.geometry import FaultMesh
-from gfcompress.interactions import interaction_lists
+from gfcompress.interactions import TreeLists, build_lists
 from gfcompress.mockgf import MockGF
 from gfcompress.tree import TreeNode
 
@@ -40,13 +40,14 @@ def _grid_mesh(*shape: int, spacing: float = 1.0) -> FaultMesh:
     return FaultMesh(centroids=centroids, L=L)
 
 
-def _admissible_pairs(root: TreeNode, level: int) -> list[tuple[TreeNode, TreeNode]]:
+def _admissible_pairs(
+    root: TreeNode, level: int, lists: TreeLists
+) -> list[tuple[TreeNode, TreeNode]]:
     """All admissible `(alpha, beta)` pairs at `level`, from `L^int`."""
     level_nodes = root.nodes_at_level(level)
-    il = interaction_lists(root)[level]
     pairs: list[tuple[TreeNode, TreeNode]] = []
-    for i, alpha in enumerate(level_nodes):
-        for beta in il[i]:
+    for alpha in level_nodes:
+        for beta in lists.interaction[alpha]:
             pairs.append((alpha, beta))
     return pairs
 
@@ -59,13 +60,14 @@ def _admissible_pairs(root: TreeNode, level: int) -> list[tuple[TreeNode, TreeNo
 def test_column_bases_are_orthonormal_2d() -> None:
     mesh = _grid_mesh(8, 8)
     root = build_tree(mesh, m=2)
+    lists = build_lists(root)
     op = MockGF(mesh)
 
     level = 2  # coarsest level with admissible pairs
     k, p = 4, 6
 
-    bases = column_bases(op, root, mesh, level, factors=[], k=k, p=p, seed=0)
-    assert len(bases) == len(_admissible_pairs(root, level))
+    bases = column_bases(op, root, lists, mesh, level, factors=[], k=k, p=p, seed=0)
+    assert len(bases) == len(_admissible_pairs(root, level, lists))
 
     for cb in bases:
         assert isinstance(cb, ColumnBasis)
@@ -77,6 +79,7 @@ def test_column_bases_are_orthonormal_2d() -> None:
 def test_column_bases_are_orthonormal_3d() -> None:
     mesh = _grid_mesh(4, 4, 4)
     root = build_tree(mesh, m=2)
+    lists = build_lists(root)
     op = MockGF(mesh)
 
     deepest = 0
@@ -85,7 +88,7 @@ def test_column_bases_are_orthonormal_3d() -> None:
 
     level = None
     for candidate in range(1, deepest + 1):
-        if _admissible_pairs(root, candidate):
+        if _admissible_pairs(root, candidate, lists):
             level = candidate
             break
     assert level is not None
@@ -93,8 +96,8 @@ def test_column_bases_are_orthonormal_3d() -> None:
     # At this level each box covers a single patch (dof_row * |alpha| = 3
     # rows), so k can be at most 3.
     k, p = 3, 4
-    bases = column_bases(op, root, mesh, level, factors=[], k=k, p=p, seed=1)
-    assert len(bases) == len(_admissible_pairs(root, level))
+    bases = column_bases(op, root, lists, mesh, level, factors=[], k=k, p=p, seed=1)
+    assert len(bases) == len(_admissible_pairs(root, level, lists))
 
     for cb in bases:
         assert cb.u.shape == (len(cb.alpha.row_indices), k)
@@ -110,12 +113,13 @@ def test_column_bases_are_orthonormal_3d() -> None:
 def test_column_bases_capture_dominant_column_space_2d() -> None:
     mesh = _grid_mesh(8, 8)
     root = build_tree(mesh, m=2)
+    lists = build_lists(root)
     op = MockGF(mesh)
 
     level = 2
     k, p = 6, 8
 
-    bases = column_bases(op, root, mesh, level, factors=[], k=k, p=p, seed=2)
+    bases = column_bases(op, root, lists, mesh, level, factors=[], k=k, p=p, seed=2)
 
     for cb in bases:
         block = op.block(cb.alpha.patch_indices, cb.beta.patch_indices)
@@ -132,6 +136,7 @@ def test_column_bases_capture_dominant_column_space_2d() -> None:
 def test_column_bases_capture_dominant_column_space_3d() -> None:
     mesh = _grid_mesh(4, 4, 4)
     root = build_tree(mesh, m=2)
+    lists = build_lists(root)
     op = MockGF(mesh)
 
     deepest = 0
@@ -140,7 +145,7 @@ def test_column_bases_capture_dominant_column_space_3d() -> None:
 
     level = None
     for candidate in range(1, deepest + 1):
-        if _admissible_pairs(root, candidate):
+        if _admissible_pairs(root, candidate, lists):
             level = candidate
             break
     assert level is not None
@@ -149,7 +154,7 @@ def test_column_bases_capture_dominant_column_space_3d() -> None:
     # (dof_row, dof_col) = (3, 2): rank <= 2. Use k = 2 < 3 = dof_row * |alpha|
     # so the projection is a genuine (non-trivial) subspace test.
     k, p = 2, 6
-    bases = column_bases(op, root, mesh, level, factors=[], k=k, p=p, seed=3)
+    bases = column_bases(op, root, lists, mesh, level, factors=[], k=k, p=p, seed=3)
 
     for cb in bases:
         block = op.block(cb.alpha.patch_indices, cb.beta.patch_indices)
@@ -171,10 +176,11 @@ def test_column_bases_capture_dominant_column_space_3d() -> None:
 def test_column_bases_empty_when_level_has_no_admissible_pairs() -> None:
     mesh = _grid_mesh(8, 8)
     root = build_tree(mesh, m=2)
+    lists = build_lists(root)
     op = MockGF(mesh)
 
     level = 1  # no admissible pairs at level 1 for this tree
-    assert _admissible_pairs(root, level) == []
+    assert _admissible_pairs(root, level, lists) == []
 
-    bases = column_bases(op, root, mesh, level, factors=[], k=4, p=6, seed=4)
+    bases = column_bases(op, root, lists, mesh, level, factors=[], k=4, p=6, seed=4)
     assert bases == []

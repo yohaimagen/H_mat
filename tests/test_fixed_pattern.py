@@ -43,9 +43,8 @@ from gfcompress.fixed_pattern import (
     pattern_cell,
 )
 from gfcompress.geometry import FaultMesh
-from gfcompress.interactions import interaction_lists
+from gfcompress.interactions import build_lists
 from gfcompress.mockgf import MockGF
-from gfcompress.neighbors import neighbor_lists
 from gfcompress.sampling import build_sampling_constraint
 from gfcompress.tree import TreeNode
 
@@ -167,13 +166,14 @@ def test_admissible_test_matrices_coverage_2d_wraparound() -> None:
     # Every level node appears in exactly one Omega.
     assert set(box_to_tm.keys()) == {id(node) for node in level_nodes}
 
-    ints = interaction_lists(root)[level]
+    lists = build_lists(root)
+    ints = lists.interaction
 
     n_checked = 0
-    for i, alpha in enumerate(level_nodes):
-        for beta in ints[i]:
+    for alpha in level_nodes:
+        for beta in ints[alpha]:
             tm = box_to_tm[id(beta)]
-            constraint = build_sampling_constraint(alpha, beta, root)
+            constraint = build_sampling_constraint(alpha, beta, lists)
 
             # All required-zero columns are zero in this Omega.
             if constraint.zero_cols.size:
@@ -219,13 +219,14 @@ def test_admissible_test_matrices_3d_smoke() -> None:
 
     assert set(box_to_tm.keys()) == {id(node) for node in level_nodes}
 
-    ints = interaction_lists(root)[level]
+    lists = build_lists(root)
+    ints = lists.interaction
 
     found_admissible = False
-    for i, alpha in enumerate(level_nodes):
-        for beta in ints[i]:
+    for alpha in level_nodes:
+        for beta in ints[alpha]:
             tm = box_to_tm[id(beta)]
-            constraint = build_sampling_constraint(alpha, beta, root)
+            constraint = build_sampling_constraint(alpha, beta, lists)
 
             if constraint.zero_cols.size:
                 zero_block = tm.omega[constraint.zero_cols, :]
@@ -347,11 +348,11 @@ def test_leaf_test_matrices_coverage_2d_wraparound() -> None:
     # Every level node appears in exactly one Omega.
     assert set(box_to_tm.keys()) == {id(node) for node in level_nodes}
 
-    nei = neighbor_lists(root)[level]
+    nei = build_lists(root).nei
 
     n_checked = 0
-    for i, _alpha in enumerate(level_nodes):
-        for beta in nei[i]:
+    for alpha in level_nodes:
+        for beta in nei[alpha]:
             tm, sl = box_to_tm[id(beta)]
             w_beta = len(beta.col_indices)
             assert sl.stop - sl.start == w_beta
@@ -389,10 +390,10 @@ def test_leaf_test_matrices_isolate_each_inadmissible_block_exactly_once() -> No
         for box, sl in zip(tm.active_boxes, tm.col_slices, strict=True):
             box_to_tm[id(box)] = (tm, sl)
 
-    nei = neighbor_lists(root)[level]
+    nei = build_lists(root).nei
 
-    for i, _alpha in enumerate(level_nodes):
-        for beta in nei[i]:
+    for alpha in level_nodes:
+        for beta in nei[alpha]:
             isolating = [tm for tm in test_matrices if any(box is beta for box in tm.active_boxes)]
             assert len(isolating) == 1, f"beta isolated by {len(isolating)} matrices, want 1"
             assert box_to_tm[id(beta)][0] is isolating[0]
@@ -417,14 +418,14 @@ def test_leaf_test_matrices_recover_dense_neighbor_blocks_exactly() -> None:
         for box, sl in zip(tm.active_boxes, tm.col_slices, strict=True):
             box_to_tm[id(box)] = (tm, sl)
 
-    nei = neighbor_lists(root)[level]
+    nei = build_lists(root).nei
 
     # Precompute A @ Omega for every emitted test matrix.
     samples = {id(tm): gf.matvec(tm.omega) for tm in test_matrices}
 
     n_checked = 0
-    for i, alpha in enumerate(level_nodes):
-        for beta in nei[i]:
+    for alpha in level_nodes:
+        for beta in nei[alpha]:
             tm, sl = box_to_tm[id(beta)]
             y = samples[id(tm)]
 
@@ -464,11 +465,11 @@ def test_leaf_test_matrices_3d_smoke() -> None:
 
     assert set(box_to_tm.keys()) == {id(node) for node in level_nodes}
 
-    nei = neighbor_lists(root)[level]
+    nei = build_lists(root).nei
 
     found_neighbor = False
-    for i, _alpha in enumerate(level_nodes):
-        for beta in nei[i]:
+    for alpha in level_nodes:
+        for beta in nei[alpha]:
             tm, sl = box_to_tm[id(beta)]
             w_beta = len(beta.col_indices)
 

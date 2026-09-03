@@ -29,7 +29,7 @@ import numpy as np
 
 from gfcompress.build_tree import build_tree
 from gfcompress.geometry import FaultMesh
-from gfcompress.interactions import interaction_lists
+from gfcompress.interactions import build_lists
 from gfcompress.mockgf import MockGF
 from gfcompress.peeling import (
     BlockFactor,
@@ -55,10 +55,10 @@ def _grid_mesh(*shape: int, spacing: float = 1.0) -> FaultMesh:
 def _admissible_pairs(root: TreeNode, level: int) -> list[tuple[TreeNode, TreeNode]]:
     """All admissible `(alpha, beta)` pairs at `level`, from `L^int`."""
     level_nodes = root.nodes_at_level(level)
-    il = interaction_lists(root)[level]
+    il = build_lists(root).interaction
     pairs: list[tuple[TreeNode, TreeNode]] = []
-    for i, alpha in enumerate(level_nodes):
-        for beta in il[i]:
+    for alpha in level_nodes:
+        for beta in il[alpha]:
             pairs.append((alpha, beta))
     return pairs
 
