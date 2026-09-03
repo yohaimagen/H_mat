@@ -9,13 +9,19 @@ with period `6` along every axis assigns each box a **pattern cell**
 `(i_0 mod 6, ..., i_{d-1} mod 6) in {0, ..., 5}^d`, where `(i_0, ..., i_{d-1})`
 are the box's dyadic grid coordinates.
 
-The period `6` is large enough that, for any box `alpha` at the level, no two
-boxes in `{beta} | L^nei(alpha) | L^int(alpha)` share a pattern cell: `L^nei`
-reaches at most one cell away from `alpha` along each axis, and `L^int`
-reaches at most two cells away (children of the parent's neighbors), so the
-full neighborhood `L^nei(alpha) | L^int(alpha)` spans grid coordinates within
-`+-2` of `alpha`'s along each axis -- a `5x...x5` window, strictly smaller than
-the `6x...x6` period. Hence activating *every* box that shares a single
+The period `6` is the *minimal* one for which, for any box `alpha` at the
+level, no two boxes in `{beta} | L^nei(alpha) | L^int(alpha)` share a pattern
+cell. `L^int(alpha)` consists of the children of `alpha`'s parent's neighbors
+(minus `alpha`'s own neighbors). With `i` the grid coordinate of `alpha` along
+an axis, the parent sits at `i // 2` and the parent's neighbors at
+`i // 2 + {-1, 0, 1}`; their children therefore span grid coordinates
+`2 * (i // 2) - 2 ... 2 * (i // 2) + 3`, i.e. offsets `-2 ... +3` relative to
+`alpha` when `i` is even and `-3 ... +2` when `i` is odd. Either way `L^nei |
+L^int` spans a **6-wide** window along each axis (`L^nei` alone spans only
+`-1 ... +1`, a 3-wide window -- hence period `3` for the leaf matrices below).
+Two distinct boxes inside a 6-wide window differ by at most `5` along each
+axis, so they can only collide mod `6` if their difference is `0` along every
+axis -- i.e. if they are the same box. Hence activating *every* box that shares a single
 pattern cell simultaneously (filling its columns with an independent Gaussian
 block, zeroing everything else) cannot put two boxes from the same
 neighborhood `{beta} | L^nei(alpha) | L^int(alpha)` into the same "active"
@@ -30,21 +36,35 @@ in `L^nei(alpha) | L^int(alpha) \\ {beta}` is zero.
 `build_admissible_test_matrices` emits one such `Omega` per non-empty pattern
 cell (at most `6**d`), each of shape `(mesh.n_cols, k + p)`.
 
+The very same combinatorics applies to *row* sampling (`Psi`, used to build
+the row bases): the admissibility relation is symmetric, so grouping the boxes
+by the same period-6 pattern cell and filling `Psi[alpha.row_indices, :]` with
+a Gaussian block yields, for every admissible pair `(alpha, beta)`, a unique
+`Psi` in which `alpha` is Gaussian and every `gamma in L^nei(beta) |
+L^int(beta) \\ {alpha}` is zero. `side="row"` selects this variant; the only
+differences are the index set used (`row_indices`, so `Psi` has `mesh.n_rows`
+rows -- `A` is not square) and an independent seed stream, so `Omega` and
+`Psi` never share random entries.
+
 Leaf/inadmissible test matrices (Task 4.3, Sec. 4.1.3)
 --------------------------------------------------------
 For a same-level pair `(alpha, beta)` with `beta in L^nei(alpha)` (an
 inadmissible "neighbor" pair), the dense block `A_{alpha,beta}` is extracted
-directly rather than compressed. Reading off `A_{alpha,beta}` from a matvec
-`A @ Omega` requires `Omega` to contain a column block `C` of width
-`w = len(beta.col_indices)` such that `Omega[beta.col_indices, C] = I_w` and
-`Omega[gamma.col_indices, C] = 0` for every other box `gamma != beta` active
-in `Omega` -- then `(A @ Omega)[alpha.row_indices, C] = A_{alpha,beta} @ I_w +
-sum_{gamma != beta} A_{alpha,gamma} @ 0 = A_{alpha,beta}` exactly, regardless
-of whether those other active boxes interact with `alpha`.
+directly rather than compressed, from a matvec of the *residual* operator
+`A - A^{(L)}` (all admissible blocks of all levels already peeled off). In
+that residual only the neighbor blocks of `alpha` survive, so a sample
+`Y = (A - A^{(L)}) @ Omega` satisfies
 
-`L^nei(alpha)` reaches at most one dyadic cell away from `alpha` along each
-axis -- a `3x...x3` window. Tiling the dyadic grid periodically with period
-`3` along every axis assigns each box a **leaf pattern cell**
+    Y[alpha.row_indices, :] = sum_{gamma in L^nei(alpha)}
+        A_{alpha,gamma} @ Omega[gamma.col_indices, :].
+
+Hence `A_{alpha,beta}` is read off directly as long as `Omega` restricted to
+`beta`'s columns is an identity block and *no other member of `L^nei(alpha)`
+is active in that same `Omega`*.
+
+`L^nei(alpha)` spans grid offsets `-1 ... +1` along each axis -- a `3x...x3`
+window. Tiling the dyadic grid periodically with period `3` along every axis
+assigns each box a **leaf pattern cell**
 `(i_0 mod 3, ..., i_{d-1} mod 3) in {0, ..., 2}^d`. Two distinct boxes whose
 grid coordinates differ by at most `2` along every axis (as any two boxes
 within a `3x...x3` window of `alpha` -- including `alpha` itself -- do)
@@ -56,14 +76,15 @@ beta)`, the single test matrix `Omega` whose active set contains `beta` is
 the *unique* one in which `beta` is active among `L^nei(alpha)` (including
 `alpha` itself).
 
-Concretely, every box sharing a leaf pattern cell is activated
-*simultaneously* in the same `Omega`, each given its own dedicated column
-slot: `Omega` has shape `(mesh.n_cols, sum(w_beta for beta in active_boxes))`,
-and the `j`-th active box `beta` gets `I_{w_beta}` placed in
-`Omega[beta.col_indices, col_slices[j]]`, with every other entry of that
-column block -- including the rows of every other active box -- zero. This is
-"identity-like" rather than a full `n_cols x n_cols` identity (each `Omega` is
-narrow, width `O(N / 3**d)`), while the matrix count stays at `<= 3**d`.
+Because the active boxes of one `Omega` never collide inside any `L^nei`,
+they can all **share the same column slot** instead of each getting a
+dedicated one: with `w_max = max(len(beta.col_indices) for beta in the
+level)`, `Omega` has shape `(mesh.n_cols, w_max)` and every active `beta`
+carries `Omega[beta.col_indices, :w_beta] = I_{w_beta}` (`w_beta =
+len(beta.col_indices)`). The consumer reads `Y[alpha.row_indices, :w_beta]`.
+This keeps each `Omega` as narrow as a single box (`w_max` columns, not
+`O(N / 3**d)`) while the matrix count stays at `<= 3**d`, so the whole leaf
+extraction costs at most `3**d * w_max` matvecs.
 
 `build_leaf_test_matrices` emits one such `Omega` per non-empty leaf pattern
 cell (at most `3**d`).
@@ -72,6 +93,7 @@ cell (at most `3**d`).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -86,23 +108,37 @@ PERIOD = 6
 #: Periodic pattern period for leaf/inadmissible test matrices (Sec. 4.1.3).
 LEAF_PERIOD = 3
 
+#: Which of `A`'s two (different-sized) spaces a test matrix lives in:
+#: `"col"` -> `Omega` in `R^{n_cols x (k+p)}` (domain of `A`, sampled with
+#: `matvec`), `"row"` -> `Psi` in `R^{n_rows x (k+p)}` (range of `A`, sampled
+#: with `rmatvec`).
+Side = Literal["col", "row"]
+
 
 @dataclass(frozen=True)
 class PeriodicTestMatrix:
     """One emitted test matrix for the fixed `6x...x6` periodic pattern.
 
     Attributes:
-        omega: The test matrix `Omega`, shape `(mesh.n_cols, k + p)`.
+        omega: The test matrix, shape `(mesh.n_cols, k + p)` for
+            `side="col"` (`Omega`) or `(mesh.n_rows, k + p)` for `side="row"`
+            (`Psi`).
         pattern: The pattern-cell offset `(i_0 mod 6, ..., i_{d-1} mod 6)`
             shared by every box in `active_boxes`, length `d`.
         active_boxes: The level-`level` nodes whose pattern cell equals
-            `pattern`; their `col_indices` rows of `omega` hold independent
-            Gaussian blocks, every other row is zero.
+            `pattern`; their `col_indices` (resp. `row_indices`) rows of
+            `omega` hold independent Gaussian blocks, every other row is zero.
+        blocks: For each box in `active_boxes`, the Gaussian block written
+            into that box's rows: `blocks[box] == omega[box.col_indices, :]`
+            (`side="col"`, the `G_beta` of Eq. 4.3) or
+            `omega[box.row_indices, :]` (`side="row"`, `G_alpha`). Stored so
+            consumers read it back instead of re-deriving it from seeds.
     """
 
     omega: NDArray[np.float64]
     pattern: tuple[int, ...]
     active_boxes: list[TreeNode]
+    blocks: dict[TreeNode, NDArray[np.float64]]
 
 
 def grid_coordinates(node: TreeNode, root: TreeNode) -> tuple[int, ...]:
@@ -163,37 +199,53 @@ def build_admissible_test_matrices(
     k: int,
     p: int = 0,
     seed: int | None = None,
+    side: Side = "col",
 ) -> list[PeriodicTestMatrix]:
     """Build the fixed `6x...x6` periodic admissible test matrices for `level`.
 
     Groups the level-`level` nodes by their periodic pattern cell
-    (`pattern_cell`), and emits one `Omega` of shape `(mesh.n_cols, k + p)` per
-    non-empty pattern cell: for each "active" box `beta` in that cell,
-    `Omega[beta.col_indices, :]` is filled with an independent `(|beta.
-    col_indices|, k + p)` Gaussian block (`gfcompress.randomized.gaussian`);
-    all other rows of `Omega` are zero.
+    (`pattern_cell`), and emits one test matrix per non-empty pattern cell:
+    for each "active" box `beta` in that cell, the rows of `beta`'s index set
+    are filled with an independent Gaussian block
+    (`gfcompress.randomized.gaussian`); all other rows are zero.
+
+    With `side="col"` the index set is `beta.col_indices` and the result has
+    shape `(mesh.n_cols, k + p)` -- the `Omega` used with `matvec`. With
+    `side="row"` it is `beta.row_indices` and the shape is `(mesh.n_rows,
+    k + p)` -- the `Psi` used with `rmatvec`. `A` is not square, so the two
+    are genuinely different objects; their random streams are independent, so
+    `Omega` and `Psi` built from the same `seed` never share entries.
 
     Per the module docstring, this guarantees that for every admissible pair
     `(alpha, beta)` at `level`, the unique emitted `Omega` whose
     `active_boxes` contains `beta` satisfies the Eq. 4.4 sampling constraint
-    for `(alpha, beta)`.
+    for `(alpha, beta)` (and, for `side="row"`, the unique `Psi` whose
+    `active_boxes` contains `alpha` satisfies the transposed constraint).
 
     Args:
         root: Root of the geometric cluster tree.
         level: The tree level to build test matrices for.
-        mesh: The `FaultMesh` (provides `n_cols`).
-        k: Target rank (number of "signal" columns of each `Omega`).
+        mesh: The `FaultMesh` (provides `n_cols` / `n_rows`).
+        k: Target rank (number of "signal" columns of each test matrix).
         p: Oversampling parameter. Defaults to `0`.
         seed: Optional base seed for `gfcompress.randomized.gaussian`. Each
             active box's Gaussian block is drawn with a seed derived
-            deterministically from `seed` and a running counter, so the whole
-            generator is reproducible given `seed`.
+            deterministically from `seed`, `side`, and a running counter, so
+            the whole generator is reproducible given `seed` while the two
+            sides stay independent.
+        side: `"col"` (default) for `Omega`, `"row"` for `Psi`.
 
     Returns:
         A list of `PeriodicTestMatrix`, one per non-empty pattern cell, in a
         deterministic order (pattern cells sorted lexicographically). At most
         `6 ** mesh.d` entries.
+
+    Raises:
+        ValueError: If `side` is not `"col"` or `"row"`.
     """
+    if side not in ("col", "row"):
+        raise ValueError(f"side must be 'col' or 'row', got {side!r}")
+
     level_nodes = root.nodes_at_level(level)
 
     groups: dict[tuple[int, ...], list[TreeNode]] = {}
@@ -201,22 +253,39 @@ def build_admissible_test_matrices(
         cell = pattern_cell(node, root)
         groups.setdefault(cell, []).append(node)
 
-    n_cols = mesh.n_cols
+    n_dofs = mesh.n_cols if side == "col" else mesh.n_rows
     k_p = k + p
 
     result: list[PeriodicTestMatrix] = []
     box_counter = 0
     for cell in sorted(groups.keys()):
         active_boxes = groups[cell]
-        omega = np.zeros((n_cols, k_p), dtype=np.float64)
+        omega = np.zeros((n_dofs, k_p), dtype=np.float64)
+        blocks: dict[TreeNode, NDArray[np.float64]] = {}
         for beta in active_boxes:
-            block_seed = None if seed is None else seed + box_counter
+            indices = beta.col_indices if side == "col" else beta.row_indices
+            block = gaussian(len(indices), k, p, seed=_block_seed(seed, side, box_counter))
             box_counter += 1
-            block = gaussian(len(beta.col_indices), k, p, seed=block_seed)
-            omega[beta.col_indices, :] = block
-        result.append(PeriodicTestMatrix(omega=omega, pattern=cell, active_boxes=active_boxes))
+            omega[indices, :] = block
+            blocks[beta] = block
+        result.append(
+            PeriodicTestMatrix(omega=omega, pattern=cell, active_boxes=active_boxes, blocks=blocks)
+        )
 
     return result
+
+
+def _block_seed(seed: int | None, side: Side, counter: int) -> int | None:
+    """Derive an independent per-box seed from `(seed, side, counter)`.
+
+    Returns `None` (i.e. OS entropy) when `seed` is `None`. Otherwise
+    `numpy.random.SeedSequence` spawns decorrelated streams for the two sides,
+    so `Omega` and `Psi` built from the same base seed share no random rows.
+    """
+    if seed is None:
+        return None
+    side_id = 0 if side == "col" else 1
+    return int(np.random.SeedSequence([seed, side_id, counter]).generate_state(1)[0])
 
 
 @dataclass(frozen=True)
@@ -224,25 +293,19 @@ class PeriodicLeafTestMatrix:
     """One emitted test matrix for the fixed `3x...x3` leaf periodic pattern.
 
     Attributes:
-        omega: The test matrix `Omega`, shape `(mesh.n_cols, w)` with
-            `w = sum(len(beta.col_indices) for beta in active_boxes)`.
+        omega: The test matrix `Omega`, shape `(mesh.n_cols, w_max)` with
+            `w_max` the widest `len(beta.col_indices)` over the level's boxes.
+            Every active box shares the same column slot:
+            `omega[beta.col_indices, :w_beta] = I_{w_beta}`, all else zero.
         pattern: The leaf pattern-cell offset `(i_0 mod 3, ..., i_{d-1} mod
             3)` shared by every box in `active_boxes`, length `d`.
         active_boxes: The level-`level` nodes whose leaf pattern cell equals
-            `pattern`, in the order their column slots appear in `omega`.
-        col_slices: For each `beta` in `active_boxes` (same order, same
-            length), the slice `omega[:, col_slices[j]]` is the
-            `(mesh.n_cols, len(beta.col_indices))` block where
-            `omega[beta.col_indices, col_slices[j]] = I_{len(beta.
-            col_indices)}`; every other entry of `omega`, including
-            `omega[gamma.col_indices, col_slices[j]]` for `gamma != beta`, is
-            zero.
+            `pattern`.
     """
 
     omega: NDArray[np.float64]
     pattern: tuple[int, ...]
     active_boxes: list[TreeNode]
-    col_slices: list[slice]
 
 
 def leaf_pattern_cell(node: TreeNode, root: TreeNode) -> tuple[int, ...]:
@@ -270,25 +333,20 @@ def build_leaf_test_matrices(
 
     Groups the level-`level` nodes by their leaf pattern cell
     (`leaf_pattern_cell`), and emits one `Omega` per non-empty leaf pattern
-    cell. Each active box `beta` in the cell gets its own dedicated column
-    slot of width `w_beta = len(beta.col_indices)`: `Omega` has shape
-    `(mesh.n_cols, sum(w_beta for beta in active_boxes))`, and for the `j`-th
-    active box, `Omega[beta.col_indices, col_slices[j]] = I_{w_beta}` while
-    every other entry of column block `col_slices[j]` -- including the rows
-    of every other active box `gamma != beta` -- is zero.
-
-    Because each active box owns a disjoint column slot, `(A @ Omega)
-    [alpha.row_indices, col_slices[j]] = A_{alpha,beta} @ I_{w_beta} +
-    sum_{gamma != beta} A_{alpha,gamma} @ 0 = A_{alpha,beta}` exactly, with no
-    contamination from any other active box (whether or not it interacts
-    with `alpha`).
+    cell. All active boxes of a cell **share one column slot** of width
+    `w_max = max(len(beta.col_indices))` over the level: `Omega` has shape
+    `(mesh.n_cols, w_max)` and `Omega[beta.col_indices, :w_beta] =
+    I_{w_beta}` for every active `beta` (`w_beta = len(beta.col_indices)`).
 
     Per the module docstring, the period-3 collision-avoidance property
-    further guarantees that for every inadmissible pair `(alpha, beta)` at
-    `level` with `beta in L^nei(alpha)`, the unique emitted `Omega` whose
-    `active_boxes` contains `beta` is the only one isolating
-    `A_{alpha,beta}`: no other box in `L^nei(alpha)` (including `alpha`
-    itself) can be active in that same `Omega`.
+    guarantees that for every inadmissible pair `(alpha, beta)` at `level`
+    with `beta in L^nei(alpha)`, `beta` is the *only* member of
+    `L^nei(alpha)` (including `alpha` itself) active in the emitted `Omega`
+    that contains it. Sampling the residual operator, in which only
+    `alpha`'s neighbor blocks survive, therefore gives
+    `((A - A^{(L)}) @ Omega)[alpha.row_indices, :w_beta] = A_{alpha,beta}`:
+    the other active boxes of that `Omega` contribute zero because they are
+    not neighbors of `alpha`.
 
     Args:
         root: Root of the geometric cluster tree.
@@ -309,27 +367,18 @@ def build_leaf_test_matrices(
         groups.setdefault(cell, []).append(node)
 
     n_cols = mesh.n_cols
+    w_max = max(len(node.col_indices) for node in level_nodes)
 
     result: list[PeriodicLeafTestMatrix] = []
     for cell in sorted(groups.keys()):
         active_boxes = groups[cell]
-        width = sum(len(beta.col_indices) for beta in active_boxes)
-        omega = np.zeros((n_cols, width), dtype=np.float64)
+        omega = np.zeros((n_cols, w_max), dtype=np.float64)
 
-        col_slices: list[slice] = []
-        offset = 0
         for beta in active_boxes:
             w_beta = len(beta.col_indices)
-            sl = slice(offset, offset + w_beta)
-            omega[np.ix_(beta.col_indices, np.arange(offset, offset + w_beta))] = np.eye(w_beta)
-            col_slices.append(sl)
-            offset += w_beta
+            omega[np.ix_(beta.col_indices, np.arange(w_beta))] = np.eye(w_beta)
 
-        result.append(
-            PeriodicLeafTestMatrix(
-                omega=omega, pattern=cell, active_boxes=active_boxes, col_slices=col_slices
-            )
-        )
+        result.append(PeriodicLeafTestMatrix(omega=omega, pattern=cell, active_boxes=active_boxes))
 
     return result
 
@@ -339,6 +388,7 @@ __all__ = [
     "PERIOD",
     "PeriodicLeafTestMatrix",
     "PeriodicTestMatrix",
+    "Side",
     "build_admissible_test_matrices",
     "build_leaf_test_matrices",
     "grid_coordinates",
