@@ -64,11 +64,15 @@ matvec/rmatvec only.
 ## Git & GitHub flow
 - Each task runs on its own branch `task/<id>` and a **draft PR** opened off
   `main`; the PR body states what is going to be done.
-- The implementer NEVER touches git. The committer makes **one commit per
-  implement/review round** and pushes it to the task branch — never to `main`,
-  never force-push.
+- The implementer NEVER touches git. The orchestrator (`/task`) makes **one commit
+  per implement/review round** and pushes it to the task branch — never to `main`,
+  never force-push. It stages only the files the implementer names, never
+  `git add -A`, so unrelated in-progress edits are never swept into a task PR.
 - The reviewer reads the branch diff (`git diff main...HEAD`); it does not commit
-  and does not post to GitHub.
+  and does not post to GitHub. On approval it also writes the final PR summary,
+  which the orchestrator posts verbatim.
+- `.claude/hooks/guard.sh` (PreToolUse on Bash) is the hard stop for "no merges,
+  no writes to `main`", so agent separation is not what enforces that rule.
 - On approval the pipeline posts a final "what was implemented and how" comment
   and marks the PR **ready for review**. **A human merges the PR to `main`** — no
   agent merges, and nothing is pushed directly to `main`.
