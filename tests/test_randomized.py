@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import scipy.linalg
 from numpy.typing import NDArray
 
 from gfcompress.geometry import FaultMesh
@@ -102,13 +103,10 @@ def test_orth_rank_k_truncation_shape_and_orthonormality() -> None:
     rng = np.random.default_rng(3)
     y = rng.standard_normal((30, 8))
 
-    q_full = orth(y)
     q_k = orth(y, k=3)
 
     assert q_k.shape == (30, 3)
     np.testing.assert_allclose(q_k.T @ q_k, np.eye(3), atol=1e-10)
-    # Truncation keeps the leading columns of the full Q.
-    np.testing.assert_allclose(q_k, q_full[:, :3])
 
 
 def test_orth_rank_k_zero_returns_empty_basis() -> None:
@@ -121,13 +119,67 @@ def test_orth_rank_k_zero_returns_empty_basis() -> None:
 
 
 def test_orth_rank_k_full_rank_matches_untruncated() -> None:
+    """At k == max_rank, the pivoted Q_k spans the same full space as the
+    unpivoted Q_full (both are bases for all of range(Y)), even though the
+    pivoted basis is in general a different rotation of it."""
     rng = np.random.default_rng(5)
     y = rng.standard_normal((12, 4))
 
     q_full = orth(y)
     q_k = orth(y, k=4)
 
-    np.testing.assert_allclose(q_k, q_full)
+    assert q_k.shape == q_full.shape
+    np.testing.assert_allclose(q_k.T @ q_k, np.eye(4), atol=1e-10)
+    np.testing.assert_allclose(q_k @ (q_k.T @ q_full), q_full, atol=1e-10)
+
+
+def test_orth_pivoted_truncation_spans_dominant_subspace() -> None:
+    """Y = [1e-8 * u, Y_big], where Y_big (n, k) has well-conditioned
+    columns. orth(Y, k) (column-pivoted) should span range(Y_big) to a tight
+    projection residual, because pivoting demotes the near-null tiny column.
+    The unpivoted Q[:, :k] does not (it processes columns in input order, so
+    it includes the tiny column and misses part of Y_big) -- this makes the
+    test discriminate between the two behaviors."""
+    n, k = 30, 5
+    rng = np.random.default_rng(100)
+
+    u = rng.standard_normal(n)
+    u /= np.linalg.norm(u)
+    y_big = orth(rng.standard_normal((n, k)))  # well-conditioned (orthonormal).
+
+    y = np.concatenate([(1e-8 * u)[:, None], y_big], axis=1)  # (n, k + 1)
+
+    def projection_residual(q: NDArray[np.float64]) -> float:
+        resid = y_big - q @ (q.T @ y_big)
+        return float(np.linalg.norm(resid) / np.linalg.norm(y_big))
+
+    q_pivoted = orth(y, k=k)
+    assert projection_residual(q_pivoted) < 1e-10
+
+    q_unpivoted_first_k, _ = scipy.linalg.qr(y, mode="economic")
+    assert projection_residual(q_unpivoted_first_k[:, :k]) >= 1e-10
+
+
+def test_orth_pivoted_truncation_error_near_optimal_sigma_k_plus_1() -> None:
+    """Y = A @ G for synthetic A with singular values 10^-j and k=5, p=5:
+    ||A - Q Q* A|| / ||A|| from orth(Y, k) is within a factor 10 of
+    sigma_{k+1}."""
+    n, k, p = 20, 5, 5
+    rng = np.random.default_rng(101)
+
+    u_true = orth(rng.standard_normal((n, n)))
+    v_true = orth(rng.standard_normal((n, n)))
+    sigmas = 10.0 ** (-np.arange(n))  # sigma_1 = 1, sigma_j = 10^-(j-1).
+    a = u_true @ np.diag(sigmas) @ v_true.T
+
+    g = gaussian(n, k, p, seed=102)
+    y = a @ g
+
+    q = orth(y, k=k)
+
+    rel_err = np.linalg.norm(a - q @ (q.T @ a)) / np.linalg.norm(a)
+    sigma_k_plus_1 = sigmas[k]  # sigma_{k+1}, 0-indexed.
+    assert rel_err < 10 * sigma_k_plus_1
 
 
 def test_orth_rejects_k_out_of_range() -> None:

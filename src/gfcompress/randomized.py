@@ -68,15 +68,25 @@ def gaussian(n: int, k: int, p: int = 0, seed: int | None = None) -> NDArray[np.
 def orth(y: NDArray[np.floating], k: int | None = None) -> NDArray[np.float64]:
     """Return an orthonormal basis for (an approximation of) `range(Y)`.
 
-    Thin wrapper around `scipy.linalg.qr` in economy ("thin") mode: for `Y`
-    of shape `(n, m)`, `Q` has shape `(n, min(n, m))` and satisfies `Q.T @ Q =
-    I`.
+    With no `k` (unpivoted): thin wrapper around `scipy.linalg.qr` in economy
+    ("thin") mode, the paper's plain `Q = qr(A)`. For `Y` of shape `(n, m)`,
+    `Q` has shape `(n, min(n, m))` and satisfies `Q.T @ Q = I`.
+
+    With `k` given: uses column-pivoted QR (`scipy.linalg.qr(...,
+    pivoting=True)`) and returns the first `k` columns of the pivoted `Q`.
+    Column pivoting reorders `Y`'s columns by decreasing contribution to
+    `range(Y)` before triangularizing, so the first `k` pivoted-`Q` columns
+    approximate the *dominant* `k`-dimensional subspace of `range(Y)`.
+    Truncating the *unpivoted* `Q` to its first `k` columns is not equivalent
+    -- it would only span `Y[:, :k]` (an arbitrary subset of `Y`'s columns),
+    not the dominant rank-`k` subspace of the full `range(Y)`.
 
     Args:
         y: The matrix whose column space is orthonormalized, shape `(n, m)`.
-        k: If given, truncate to the first `k` columns of `Q` -- an
-            orthonormal basis for an approximate rank-`k` subspace of
-            `range(Y)`. Must satisfy `0 <= k <= min(n, m)`.
+        k: If given, use column-pivoted QR and return the first `k` columns
+            of the pivoted `Q` -- an orthonormal basis for an approximate
+            dominant rank-`k` subspace of `range(Y)`. Must satisfy
+            `0 <= k <= min(n, m)`.
 
     Returns:
         `Q`, shape `(n, min(n, m))` if `k` is `None`, otherwise `(n, k)`.
@@ -86,9 +96,9 @@ def orth(y: NDArray[np.floating], k: int | None = None) -> NDArray[np.float64]:
         ValueError: If `k` is given and `k < 0` or `k > min(Y.shape)`.
     """
     y = np.asarray(y, dtype=np.float64)
-    q, _ = scipy.linalg.qr(y, mode="economic")
 
     if k is None:
+        q, _ = scipy.linalg.qr(y, mode="economic")
         result: NDArray[np.float64] = q
         return result
 
@@ -96,6 +106,7 @@ def orth(y: NDArray[np.floating], k: int | None = None) -> NDArray[np.float64]:
     if k < 0 or k > max_rank:
         raise ValueError(f"k must be in [0, {max_rank}], got {k}")
 
+    q, _, _ = scipy.linalg.qr(y, mode="economic", pivoting=True)
     truncated: NDArray[np.float64] = q[:, :k]
     return truncated
 
