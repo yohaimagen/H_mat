@@ -33,7 +33,7 @@
 # Stage F: remediation of 1.2-5.2 (see FIXPLAN.md) -- run before 5.3
 F.1  # done a2268c3 2026-09-03
 F.2  # done e8aca16 2026-09-03
-F.3
+F.3  # done caa1a59 2026-09-03
 F.4
 F.5
 
