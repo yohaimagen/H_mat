@@ -16,9 +16,9 @@ This module provides only the *descriptor*: a per-block dataclass recording
 which col-box is random and which col-boxes must be zeroed, expressed as
 `dof_col`-based patch-major column-index sets (`TreeNode.col_indices`, per
 `gfcompress.geometry.FaultMesh.patch_to_cols`), plus a builder function that
-assembles this descriptor from the existing neighbor-list (`L^nei`,
-`gfcompress.neighbors.neighbor_lists`) and interaction-list (`L^int`,
-`gfcompress.interactions.interaction_lists`) maps for an admissible pair
+assembles this descriptor from a precomputed `gfcompress.interactions.
+TreeLists` (neighbor-list `L^nei` and interaction-list `L^int` maps, built
+once via `gfcompress.interactions.build_lists`) for an admissible pair
 `(alpha, beta)`.
 
 Assembling the actual `Omega` test matrices from these descriptors (filling
@@ -33,8 +33,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from numpy.typing import NDArray
 
-from gfcompress.interactions import interaction_lists
-from gfcompress.neighbors import neighbor_lists
+from gfcompress.interactions import TreeLists
 from gfcompress.tree import TreeNode
 
 
@@ -84,18 +83,18 @@ class SamplingConstraint:
 
 
 def build_sampling_constraint(
-    alpha: TreeNode, beta: TreeNode, root: TreeNode
+    alpha: TreeNode, beta: TreeNode, lists: TreeLists
 ) -> SamplingConstraint:
     """Build the Eq. 4.4 sampling-constraint descriptor for the admissible
     pair `(alpha, beta)`.
 
     `beta` is marked as the *random* col-box (`G_beta`); every col-box `gamma
     in L^nei(alpha) | L^int(alpha)`, except `beta` itself, is collected as a
-    *zero* box. `L^nei(alpha)` and `L^int(alpha)` are taken from the existing
-    per-level maps (`gfcompress.neighbors.neighbor_lists`,
-    `gfcompress.interactions.interaction_lists`) for the tree rooted at
-    `root`, so this function does not re-derive admissibility or the
-    neighbor/interaction-list combinatorics.
+    *zero* box. `L^nei(alpha)` and `L^int(alpha)` are taken from the
+    precomputed `lists` (`gfcompress.interactions.build_lists`), so this
+    function does not re-derive admissibility or the neighbor/
+    interaction-list combinatorics -- it is a plain lookup, safe to call once
+    per admissible pair.
 
     Args:
         alpha: The row box of the admissible pair.
@@ -103,7 +102,7 @@ def build_sampling_constraint(
             not itself appear in `L^nei(alpha) | L^int(alpha)`; if it does, it
             is excluded from the zero set (a box cannot be both random and
             zero).
-        root: Root of the geometric cluster tree containing `alpha` and
+        lists: Precomputed `TreeLists` for the tree containing `alpha` and
             `beta` (both at the same level).
 
     Returns:
@@ -119,19 +118,15 @@ def build_sampling_constraint(
             f"alpha and beta must be at the same level, got {alpha.level} and {beta.level}"
         )
 
-    level = alpha.level
-    level_nodes = root.nodes_at_level(level)
-    alpha_idx = next(idx for idx, node in enumerate(level_nodes) if node is alpha)
-
-    nei = neighbor_lists(root)[level][alpha_idx]
-    interactions = interaction_lists(root)[level][alpha_idx]
+    nei = lists.nei[alpha]
+    interactions = lists.interaction[alpha]
 
     zero_boxes: list[TreeNode] = []
-    seen_ids: set[int] = set()
+    seen: set[TreeNode] = set()
     for gamma in (*nei, *interactions):
-        if gamma is beta or id(gamma) in seen_ids:
+        if gamma is beta or gamma in seen:
             continue
-        seen_ids.add(id(gamma))
+        seen.add(gamma)
         zero_boxes.append(gamma)
 
     return SamplingConstraint(alpha=alpha, beta=beta, zero_boxes=zero_boxes)

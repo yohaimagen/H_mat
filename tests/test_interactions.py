@@ -1,5 +1,6 @@
 """Tests for interaction lists `L^int` and the admissibility predicate
-(Task 1.5).
+(Task 1.5, revised by Task F.2 to flat, node-keyed maps built once via
+`TreeLists`/`build_lists`).
 
 Two structural invariants are checked at every level of the tree:
 
@@ -23,11 +24,17 @@ depth 3, and at the deepest level every same-level pair `(alpha, beta)` is
 classified as exactly one of {inadmissible neighbor, admissible interaction,
 or "not present" (neither a neighbor nor a child of a parent-neighbor)} -- the
 disjoint, complete tessellation that Fig. 3 depicts in red/blue.
+
+Also checked here (Task F.2, Finding 7): the `L^nei | L^int` window spans
+grid offsets `-3..+2` along each axis (children of the parent's neighbors,
+which are separated from the parent by up to 1 grid cell at half the
+resolution), not the `-2..+2` claimed by earlier docstrings.
 """
 
 from __future__ import annotations
 
 import itertools
+import time
 
 import numpy as np
 import pytest
@@ -37,7 +44,7 @@ from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import (
     DEFAULT_ETA,
     box_dist,
-    interaction_list,
+    build_lists,
     interaction_lists,
     is_admissible,
     suggest_eta,
@@ -54,6 +61,13 @@ def _grid_mesh(*shape: int, spacing: float = 1.0) -> FaultMesh:
     centroids = np.stack([g.ravel() for g in mesh_grids], axis=1)
     L = np.full(centroids.shape[0], 0.1 * spacing)
     return FaultMesh(centroids=centroids, L=L)
+
+
+def _deepest_level(root: TreeNode) -> int:
+    deepest = 0
+    for level_nodes in root.iter_levels():
+        deepest = level_nodes[0].level
+    return deepest
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +112,7 @@ def test_box_dist_symmetric() -> None:
 
 
 # ---------------------------------------------------------------------------
-# interaction_lists / interaction_list: complete, disjoint cover with L^nei
+# interaction_lists / build_lists: complete, disjoint cover with L^nei
 # ---------------------------------------------------------------------------
 
 
@@ -106,15 +120,13 @@ def test_box_dist_symmetric() -> None:
 def test_interaction_and_neighbor_lists_disjoint(shape: tuple[int, ...], m: int) -> None:
     mesh = _grid_mesh(*shape)
     root = build_tree(mesh, m=m)
-    nei = neighbor_lists(root)
-    ints = interaction_lists(root)
+    lists = build_lists(root)
 
     for level_nodes in root.iter_levels():
-        level = level_nodes[0].level
-        for i in range(len(level_nodes)):
-            nei_ids = {id(b) for b in nei[level][i]}
-            int_ids = {id(b) for b in ints[level][i]}
-            assert nei_ids.isdisjoint(int_ids), f"level {level} box {i}: L^nei and L^int overlap"
+        for alpha in level_nodes:
+            nei_ids = {id(b) for b in lists.nei[alpha]}
+            int_ids = {id(b) for b in lists.interaction[alpha]}
+            assert nei_ids.isdisjoint(int_ids), f"box {alpha}: L^nei and L^int overlap"
 
 
 @pytest.mark.parametrize("shape,m", [((8, 8), 2), ((4, 4, 4), 2)])
@@ -129,30 +141,23 @@ def test_interaction_list_is_complement_of_neighbors_within_candidates(
     """
     mesh = _grid_mesh(*shape)
     root = build_tree(mesh, m=m)
-    nei = neighbor_lists(root)
-    ints = interaction_lists(root)
+    lists = build_lists(root)
 
     for level_nodes in root.iter_levels():
         level = level_nodes[0].level
         if level == 0:
-            assert ints[level][0] == []
+            assert lists.interaction[level_nodes[0]] == []
             continue
 
-        parent_level_nodes = root.nodes_at_level(level - 1)
-        parent_nei = nei[level - 1]
-
-        for i, alpha in enumerate(level_nodes):
+        for alpha in level_nodes:
             assert alpha.parent is not None
-            parent_idx = next(
-                idx for idx, node in enumerate(parent_level_nodes) if node is alpha.parent
-            )
             candidates: set[int] = set()
-            for parent_neighbor in parent_nei[parent_idx]:
+            for parent_neighbor in lists.nei[alpha.parent]:
                 for child in parent_neighbor.children:
                     candidates.add(id(child))
 
-            nei_ids = {id(b) for b in nei[level][i]}
-            int_ids = {id(b) for b in ints[level][i]}
+            nei_ids = {id(b) for b in lists.nei[alpha]}
+            int_ids = {id(b) for b in lists.interaction[alpha]}
 
             # Every interaction-list box is a candidate not in L^nei(alpha).
             assert int_ids <= candidates
@@ -170,33 +175,33 @@ def test_interaction_list_size_bound(shape: tuple[int, ...], m: int) -> None:
     """On a regular grid, `|L^int(alpha)| <= 6^d - 3^d`."""
     mesh = _grid_mesh(*shape)
     root = build_tree(mesh, m=m)
-    ints = interaction_lists(root)
+    lists = build_lists(root)
     d = len(shape)
     bound = 6**d - 3**d
 
-    for level_map in ints.values():
-        for entries in level_map.values():
-            assert len(entries) <= bound
+    for entries in lists.interaction.values():
+        assert len(entries) <= bound
 
 
-def test_interaction_list_single_node_matches_full_map() -> None:
+def test_interaction_lists_matches_build_lists() -> None:
+    """`interaction_lists(root, nei)` (called directly with a precomputed
+    `nei`) agrees with `build_lists(root).interaction`."""
     mesh = _grid_mesh(8, 8)
     root = build_tree(mesh, m=2)
-    ints = interaction_lists(root)
+    nei = neighbor_lists(root)
+    ints = interaction_lists(root, nei)
+    lists = build_lists(root)
 
-    for level_nodes in root.iter_levels():
-        level = level_nodes[0].level
-        for i, alpha in enumerate(level_nodes):
-            single = interaction_list(alpha, root)
-            full = ints[level][i]
-            assert [id(b) for b in single] == [id(b) for b in full]
+    assert ints.keys() == lists.interaction.keys()
+    for node in ints:
+        assert [id(b) for b in ints[node]] == [id(b) for b in lists.interaction[node]]
 
 
 def test_root_has_empty_interaction_list() -> None:
     mesh = _grid_mesh(8, 8)
     root = build_tree(mesh, m=2)
-    assert interaction_list(root, root) == []
-    assert interaction_lists(root)[0] == {0: []}
+    lists = build_lists(root)
+    assert lists.interaction[root] == []
 
 
 # ---------------------------------------------------------------------------
@@ -214,23 +219,21 @@ def test_admissibility_consistent_with_interaction_and_neighbor_lists(
     combinatorial interaction-list/neighbor-list split."""
     mesh = _grid_mesh(*shape)
     root = build_tree(mesh, m=m)
-    nei = neighbor_lists(root)
-    ints = interaction_lists(root)
+    lists = build_lists(root)
 
     checked_int = 0
     checked_nei = 0
     for level_nodes in root.iter_levels():
-        level = level_nodes[0].level
-        for i, alpha in enumerate(level_nodes):
-            for beta in nei[level][i]:
+        for alpha in level_nodes:
+            for beta in lists.nei[alpha]:
                 assert not is_admissible(
                     alpha, beta, DEFAULT_ETA
-                ), f"level {level} box {i}: neighbor tested admissible"
+                ), f"box {alpha}: neighbor tested admissible"
                 checked_nei += 1
-            for beta in ints[level][i]:
+            for beta in lists.interaction[alpha]:
                 assert is_admissible(
                     alpha, beta, DEFAULT_ETA
-                ), f"level {level} box {i}: interaction-list box tested inadmissible"
+                ), f"box {alpha}: interaction-list box tested inadmissible"
                 checked_int += 1
 
     assert checked_nei > 0
@@ -251,13 +254,6 @@ def test_admissibility_symmetric() -> None:
     level_nodes = root.nodes_at_level(_deepest_level(root))
     for alpha, beta in itertools.product(level_nodes, repeat=2):
         assert is_admissible(alpha, beta, DEFAULT_ETA) == is_admissible(beta, alpha, DEFAULT_ETA)
-
-
-def _deepest_level(root: TreeNode) -> int:
-    deepest = 0
-    for level_nodes in root.iter_levels():
-        deepest = level_nodes[0].level
-    return deepest
 
 
 # ---------------------------------------------------------------------------
@@ -293,16 +289,15 @@ def test_fig3_tessellation_2d_depth3() -> None:
     level_nodes = root.nodes_at_level(deepest)
     assert len(level_nodes) == nx * ny
 
-    nei = neighbor_lists(root)[deepest]
-    ints = interaction_lists(root)[deepest]
+    lists = build_lists(root)
 
     n_admissible = 0
     n_inadmissible = 0
     n_absent = 0
 
-    for i, alpha in enumerate(level_nodes):
-        nei_ids = {id(b) for b in nei[i]}
-        int_ids = {id(b) for b in ints[i]}
+    for alpha in level_nodes:
+        nei_ids = {id(b) for b in lists.nei[alpha]}
+        int_ids = {id(b) for b in lists.interaction[alpha]}
 
         # Disjoint.
         assert nei_ids.isdisjoint(int_ids)
@@ -345,22 +340,90 @@ def test_fig3_tessellation_3d() -> None:
     level_nodes = root.nodes_at_level(deepest)
     assert len(level_nodes) == nx * ny * nz
 
-    nei = neighbor_lists(root)[deepest]
-    ints = interaction_lists(root)[deepest]
+    lists = build_lists(root)
 
-    for i, alpha in enumerate(level_nodes):
-        nei_ids = {id(b) for b in nei[i]}
-        int_ids = {id(b) for b in ints[i]}
+    for alpha in level_nodes:
+        nei_ids = {id(b) for b in lists.nei[alpha]}
+        int_ids = {id(b) for b in lists.interaction[alpha]}
         assert nei_ids.isdisjoint(int_ids)
 
-        for beta_id, beta in [(id(b), b) for b in level_nodes]:
-            is_nei = beta_id in nei_ids
-            is_int = beta_id in int_ids
+        for beta in level_nodes:
+            is_nei = id(beta) in nei_ids
+            is_int = id(beta) in int_ids
             assert is_nei + is_int <= 1
             if is_nei:
                 assert not is_admissible(alpha, beta, DEFAULT_ETA)
             elif is_int:
                 assert is_admissible(alpha, beta, DEFAULT_ETA)
+
+
+# ---------------------------------------------------------------------------
+# Window: L^nei | L^int spans grid offsets -3..+2 (Task F.2, Finding 7)
+# ---------------------------------------------------------------------------
+
+
+def test_window_spans_3_on_one_side_and_2_on_the_other() -> None:
+    """On a `16x1` 2D grid (a 1D-like grid, since `FaultMesh` requires
+    `d in (2, 3)`), `L^nei(alpha) | L^int(alpha)` is a 6-wide window of grid
+    offsets relative to `alpha`: depending on whether `alpha` is the even- or
+    odd-indexed child of its parent, the window is `{-3, ..., +2}` or
+    `{-2, ..., +3}` -- max offset `3` on one side and `2` on the other, never
+    `3` on both (which would require a 7-wide, period-7 window). This is the
+    correct justification for period `6` (Task F.2, Finding 7), replacing an
+    earlier "+-2 -> 5x5 window" argument.
+    """
+    nx = 16
+    mesh = _grid_mesh(nx, 1)
+    root = build_tree(mesh, m=1)
+
+    deepest = _deepest_level(root)
+    level_nodes = root.nodes_at_level(deepest)
+    assert len(level_nodes) == nx
+
+    lists = build_lists(root)
+
+    # Grid index along x: node.center is (x, y); spacing is 1.0, so the grid
+    # index is just round(center_x).
+    def grid_x(node: TreeNode) -> int:
+        return int(round(node.center[0]))
+
+    seen_windows: set[tuple[int, int]] = set()
+    for alpha in level_nodes:
+        ax = grid_x(alpha)
+        offsets = [grid_x(beta) - ax for beta in (*lists.nei[alpha], *lists.interaction[alpha])]
+        if len(offsets) != 6:
+            # Boundary box: window truncated by the domain edge, not a full
+            # (6-member) interior window -- skip.
+            continue
+        lo, hi = min(offsets), max(offsets)
+        # A full interior window is exactly 6 wide, never simultaneously
+        # reaching -3 and +3.
+        assert hi - lo == 5, f"expected a 6-wide window, got offsets {offsets}"
+        assert not (lo == -3 and hi == 3), f"window reaches both extremes: {offsets}"
+        seen_windows.add((lo, hi))
+
+    # Both the "-3..+2" and "-2..+3" interior windows must occur (parity of
+    # which child alpha is of its parent), so the test discriminates a wrong
+    # symmetric +-2 window.
+    assert (-3, 2) in seen_windows
+    assert (-2, 3) in seen_windows
+
+
+# ---------------------------------------------------------------------------
+# Perf guard (Task F.2, Finding 8): build_lists is a single pass, not
+# recomputed per query.
+# ---------------------------------------------------------------------------
+
+
+def test_build_lists_perf_64x64_grid() -> None:
+    mesh = _grid_mesh(64, 64)
+    root = build_tree(mesh, m=4)
+
+    t0 = time.perf_counter()
+    build_lists(root)
+    elapsed = time.perf_counter() - t0
+
+    assert elapsed < 2.0, f"build_lists took {elapsed:.2f}s on a 64x64 grid, want < 2s"
 
 
 # ---------------------------------------------------------------------------

@@ -21,13 +21,14 @@ Two small grids (2D and 3D) are used. For sample admissible pairs we check:
 
 from __future__ import annotations
 
+import time
+
 import numpy as np
 import pytest
 
 from gfcompress.build_tree import build_tree
 from gfcompress.geometry import FaultMesh
-from gfcompress.interactions import DEFAULT_ETA, interaction_lists, is_admissible
-from gfcompress.neighbors import neighbor_lists
+from gfcompress.interactions import DEFAULT_ETA, TreeLists, build_lists, is_admissible
 from gfcompress.sampling import SamplingConstraint, build_sampling_constraint
 from gfcompress.tree import TreeNode
 
@@ -49,14 +50,15 @@ def _deepest_level(root: TreeNode) -> int:
     return deepest
 
 
-def _find_admissible_pair(root: TreeNode, level: int) -> tuple[TreeNode, TreeNode]:
+def _find_admissible_pair(
+    root: TreeNode, level: int, lists: TreeLists
+) -> tuple[TreeNode, TreeNode]:
     """Return the first admissible same-level pair `(alpha, beta)` at
     `level`, via `L^int`."""
     level_nodes = root.nodes_at_level(level)
-    ints = interaction_lists(root)[level]
-    for i, alpha in enumerate(level_nodes):
-        if ints[i]:
-            return alpha, ints[i][0]
+    for alpha in level_nodes:
+        if lists.interaction[alpha]:
+            return alpha, lists.interaction[alpha][0]
     raise AssertionError(f"no admissible pair found at level {level}")
 
 
@@ -70,9 +72,10 @@ def test_constraint_random_box_is_beta(shape: tuple[int, ...], m: int) -> None:
     mesh = _grid_mesh(*shape)
     root = build_tree(mesh, m=m)
     level = _deepest_level(root)
-    alpha, beta = _find_admissible_pair(root, level)
+    lists = build_lists(root)
+    alpha, beta = _find_admissible_pair(root, level, lists)
 
-    constraint = build_sampling_constraint(alpha, beta, root)
+    constraint = build_sampling_constraint(alpha, beta, lists)
 
     assert constraint.alpha is alpha
     assert constraint.beta is beta
@@ -85,14 +88,13 @@ def test_constraint_zero_set_is_nei_union_int_minus_beta(shape: tuple[int, ...],
     mesh = _grid_mesh(*shape)
     root = build_tree(mesh, m=m)
     level = _deepest_level(root)
-    alpha, beta = _find_admissible_pair(root, level)
+    lists = build_lists(root)
+    alpha, beta = _find_admissible_pair(root, level, lists)
 
-    constraint = build_sampling_constraint(alpha, beta, root)
+    constraint = build_sampling_constraint(alpha, beta, lists)
 
-    level_nodes = root.nodes_at_level(level)
-    alpha_idx = next(idx for idx, node in enumerate(level_nodes) if node is alpha)
-    nei = neighbor_lists(root)[level][alpha_idx]
-    ints = interaction_lists(root)[level][alpha_idx]
+    nei = lists.nei[alpha]
+    ints = lists.interaction[alpha]
 
     expected_ids = {id(g) for g in (*nei, *ints)} - {id(beta)}
     actual_ids = {id(g) for g in constraint.zero_boxes}
@@ -111,9 +113,10 @@ def test_constraint_zero_cols_match_col_indices_concatenation(
     mesh = _grid_mesh(*shape)
     root = build_tree(mesh, m=m)
     level = _deepest_level(root)
-    alpha, beta = _find_admissible_pair(root, level)
+    lists = build_lists(root)
+    alpha, beta = _find_admissible_pair(root, level, lists)
 
-    constraint = build_sampling_constraint(alpha, beta, root)
+    constraint = build_sampling_constraint(alpha, beta, lists)
 
     expected = (
         np.concatenate([gamma.col_indices for gamma in constraint.zero_boxes])
@@ -133,9 +136,10 @@ def test_constraint_random_and_zero_cols_disjoint(shape: tuple[int, ...], m: int
     mesh = _grid_mesh(*shape)
     root = build_tree(mesh, m=m)
     level = _deepest_level(root)
-    alpha, beta = _find_admissible_pair(root, level)
+    lists = build_lists(root)
+    alpha, beta = _find_admissible_pair(root, level, lists)
 
-    constraint = build_sampling_constraint(alpha, beta, root)
+    constraint = build_sampling_constraint(alpha, beta, lists)
 
     random_set = set(constraint.random_cols.tolist())
     zero_set = set(constraint.zero_cols.tolist())
@@ -154,9 +158,10 @@ def test_constraint_beta_excluded_even_if_neighbor(shape: tuple[int, ...], m: in
     level = _deepest_level(root)
     level_nodes = root.nodes_at_level(level)
     alpha = level_nodes[0]
+    lists = build_lists(root)
 
     # beta = alpha is always in L^nei(alpha) (a node is its own neighbor).
-    constraint = build_sampling_constraint(alpha, alpha, root)
+    constraint = build_sampling_constraint(alpha, alpha, lists)
 
     assert constraint.random_box is alpha
     assert all(gamma is not alpha for gamma in constraint.zero_boxes)
@@ -174,19 +179,18 @@ def test_underlying_lists_disjoint_complete_cover(shape: tuple[int, ...], m: int
     root = build_tree(mesh, m=m)
     level = _deepest_level(root)
     level_nodes = root.nodes_at_level(level)
-    nei = neighbor_lists(root)[level]
-    ints = interaction_lists(root)[level]
+    lists = build_lists(root)
 
-    for i, alpha in enumerate(level_nodes):
-        nei_ids = {id(b) for b in nei[i]}
-        int_ids = {id(b) for b in ints[i]}
+    for alpha in level_nodes:
+        nei_ids = {id(b) for b in lists.nei[alpha]}
+        int_ids = {id(b) for b in lists.interaction[alpha]}
 
         # Disjoint.
         assert nei_ids.isdisjoint(int_ids)
 
-        for beta in nei[i]:
+        for beta in lists.nei[alpha]:
             assert not is_admissible(alpha, beta, DEFAULT_ETA)
-        for beta in ints[i]:
+        for beta in lists.interaction[alpha]:
             assert is_admissible(alpha, beta, DEFAULT_ETA)
 
 
@@ -198,11 +202,12 @@ def test_underlying_lists_disjoint_complete_cover(shape: tuple[int, ...], m: int
 def test_constraint_different_levels_raises() -> None:
     mesh = _grid_mesh(8, 8)
     root = build_tree(mesh, m=2)
+    lists = build_lists(root)
     alpha = root.nodes_at_level(_deepest_level(root))[0]
     beta = root.nodes_at_level(_deepest_level(root) - 1)[0]
 
     with pytest.raises(ValueError):
-        build_sampling_constraint(alpha, beta, root)
+        build_sampling_constraint(alpha, beta, lists)
 
 
 # ---------------------------------------------------------------------------
@@ -217,3 +222,28 @@ def test_sampling_constraint_default_zero_boxes_empty() -> None:
     constraint = SamplingConstraint(alpha=alpha, beta=alpha)
     assert constraint.zero_boxes == []
     np.testing.assert_array_equal(constraint.zero_cols, np.array([], dtype=np.intp))
+
+
+# ---------------------------------------------------------------------------
+# Perf guard (Task F.2, Finding 8): build_sampling_constraint is a plain
+# lookup against a precomputed TreeLists, not a per-pair recomputation.
+# ---------------------------------------------------------------------------
+
+
+def test_build_sampling_constraint_perf_all_admissible_pairs_64x64_grid() -> None:
+    mesh = _grid_mesh(64, 64)
+    root = build_tree(mesh, m=4)
+    lists = build_lists(root)
+    level_nodes = root.nodes_at_level(_deepest_level(root))
+
+    pairs = [(alpha, beta) for alpha in level_nodes for beta in lists.interaction[alpha]]
+    assert len(pairs) > 0
+
+    t0 = time.perf_counter()
+    for alpha, beta in pairs:
+        build_sampling_constraint(alpha, beta, lists)
+    elapsed = time.perf_counter() - t0
+
+    assert (
+        elapsed < 2.0
+    ), f"build_sampling_constraint over {len(pairs)} pairs took {elapsed:.2f}s, want < 2s"

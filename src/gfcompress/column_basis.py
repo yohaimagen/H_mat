@@ -36,7 +36,7 @@ from numpy.typing import NDArray
 
 from gfcompress.fixed_pattern import build_admissible_test_matrices
 from gfcompress.geometry import FaultMesh
-from gfcompress.interactions import interaction_lists
+from gfcompress.interactions import TreeLists
 from gfcompress.operators import MatVecOperator
 from gfcompress.peeling import Factors, peeled_matvec
 from gfcompress.randomized import orth
@@ -65,6 +65,7 @@ class ColumnBasis:
 def column_bases(
     operator: MatVecOperator,
     root: TreeNode,
+    lists: TreeLists,
     mesh: FaultMesh,
     level: int,
     factors: Factors,
@@ -79,6 +80,9 @@ def column_bases(
         operator: The black-box operator `A` (accessed only via
             `operator.matvec`, through `peeled_matvec`).
         root: Root of the geometric cluster tree.
+        lists: Precomputed `TreeLists` (`gfcompress.interactions.build_lists`)
+            for the tree rooted at `root`; supplies `L^int` without
+            recomputing it.
         mesh: The `FaultMesh` underlying `root` (provides `n_cols` for sizing
             the test matrices).
         level: The tree level whose admissible pairs (`L^int`, Task 1.5) are
@@ -100,23 +104,22 @@ def column_bases(
         `(len(alpha.row_indices), k)`.
     """
     level_nodes = root.nodes_at_level(level)
-    il = interaction_lists(root)[level]
 
     test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=seed)
 
     # Map each box (by identity) to the Y sample from the Omega whose
     # active_boxes include it -- Eq. 4.4 guarantees this Omega is unique per
     # box.
-    y_for_box: dict[int, NDArray[np.floating]] = {}
+    y_for_box: dict[TreeNode, NDArray[np.floating]] = {}
     for tm in test_matrices:
         y = peeled_matvec(operator, tm.omega, factors)
         for box in tm.active_boxes:
-            y_for_box[id(box)] = y
+            y_for_box[box] = y
 
     result: list[ColumnBasis] = []
-    for i, alpha in enumerate(level_nodes):
-        for beta in il[i]:
-            y = y_for_box[id(beta)]
+    for alpha in level_nodes:
+        for beta in lists.interaction[alpha]:
+            y = y_for_box[beta]
             y_alpha = y[alpha.row_indices, :]
             u = orth(y_alpha, k)
             result.append(ColumnBasis(alpha=alpha, beta=beta, u=u))
