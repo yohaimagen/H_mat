@@ -10,11 +10,12 @@ subagents, not code.
 
 The human's ONLY manual step is merging the PR. Never merge. Never push to `main`.
 
-Tool permissions are constrained by `.claude/settings.json` (allowed: repo file
-edits, `.venv` tooling, git on task branches, `gh pr create/comment/ready`;
-denied: `gh pr merge`, push/force to `main`, destructive fs, edits to
-PLAN.md/CLAUDE.md/.claude). If a step is blocked by a permission or a subagent
-reports a genuine ambiguity, STOP and surface it — do not work around a safeguard.
+`.claude/settings.json` allows every tool, so the pipeline never stops for a
+permission prompt. The hard stop is `.claude/hooks/guard.sh` (PreToolUse on
+Bash): it blocks merges, any push touching `main`/`master`, force pushes, and
+destructive filesystem commands, whatever shape the command takes. If the guard
+blocks a step, or a subagent reports a genuine ambiguity, STOP and surface it —
+never work around a safeguard. Never ask the human anything mid-run.
 
 Steps:
 

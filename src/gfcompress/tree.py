@@ -8,7 +8,8 @@ row/column index sets (`row_indices`/`col_indices`, via
 geometry (`bounding_box`, `center`, `diam`), and parent/child links.
 
 This module provides only the node container, geometry helpers, and
-traversal utilities. The recursive bisection builder is Task 1.3.
+traversal utilities. The level-synchronous bisection builder lives in
+`build_tree.py` (Task F.1).
 """
 
 from __future__ import annotations

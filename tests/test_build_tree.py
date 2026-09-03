@@ -333,6 +333,29 @@ def test_uniform_depth_planar_fault_3d(m: int) -> None:
     _assert_dyadic_grid_invariant(root)
 
 
+def _realistic_planar_fault_mesh_3d(
+    nx: int = 16, ny: int = 16, spacing: float = 200.0
+) -> FaultMesh:
+    """A planar fault at realistic-magnitude depth (z=5000 m): regression
+    fixture for the underflow guard incorrectly vetoing refinement on a
+    large-magnitude degenerate (constant-z) axis (FIXPLAN F.1 review)."""
+    xs, ys = np.meshgrid(np.arange(nx, dtype=float), np.arange(ny, dtype=float), indexing="ij")
+    centroids = np.stack(
+        [xs.ravel() * spacing, ys.ravel() * spacing, np.full(nx * ny, 5000.0)], axis=1
+    )
+    L = np.full(centroids.shape[0], 0.5 * spacing)
+    return FaultMesh(centroids=centroids, L=L)
+
+
+def test_uniform_depth_realistic_magnitude_planar_fault_3d() -> None:
+    mesh = _realistic_planar_fault_mesh_3d()
+    m = 1
+    root = build_tree(mesh, m=m)
+    _assert_uniform_leaf_depth(root)
+    _assert_dyadic_grid_invariant(root)
+    assert max(leaf.patch_indices.shape[0] for leaf in root.leaves()) <= m
+
+
 # ---------------------------------------------------------------------------
 # Critical invariant: leaf row/col index sets exactly partition {0..dof*N-1}.
 # ---------------------------------------------------------------------------

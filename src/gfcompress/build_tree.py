@@ -47,6 +47,7 @@ bound, so building stops and the current frontier is final.
 from __future__ import annotations
 
 import itertools
+import warnings
 
 import numpy as np
 from numpy.typing import NDArray
@@ -84,7 +85,15 @@ def build_tree(mesh: FaultMesh, m: int, max_depth: int = 64) -> TreeNode:
         raise ValueError(f"m must be >= 1, got {m}")
 
     all_patches = np.arange(mesh.n_patches, dtype=np.intp)
-    root_cell = _root_domain_box(mesh.centroids)
+    centroids = mesh.centroids
+    # Axes along which every centroid coincides (e.g. a planar fault's
+    # constant depth) never separate points and get a tiny cosmetic fallback
+    # width in `_root_domain_box`; that width is unrelated to the actual
+    # point spread and must never be allowed to trip the underflow guard
+    # below, or a large-magnitude constant coordinate (e.g. z=5000) rounds
+    # `mid` to `lo` on the very first split and halts the whole build.
+    degenerate_axis = (centroids.max(axis=0) - centroids.min(axis=0)) <= 0
+    root_cell = _root_domain_box(centroids)
     root = make_node(mesh, all_patches, level=0, parent=None)
     _set_cell_geometry(root, root_cell)
     root.index_in_level = 0
@@ -94,11 +103,11 @@ def build_tree(mesh: FaultMesh, m: int, max_depth: int = 64) -> TreeNode:
     while (
         any(node.patch_indices.shape[0] > m for node in level_nodes)
         and depth < max_depth
-        and not _cell_underflowed(level_nodes)
+        and not _cell_underflowed(level_nodes, degenerate_axis)
     ):
         next_level: list[TreeNode] = []
         for node in level_nodes:
-            partitions = _bisect_cell(mesh.centroids, node.patch_indices, node.bounding_box)
+            partitions = _bisect_cell(centroids, node.patch_indices, node.bounding_box)
             children = []
             for child_patches, child_cell in partitions:
                 child = make_node(mesh, child_patches, level=node.level + 1, parent=node)
@@ -111,25 +120,42 @@ def build_tree(mesh: FaultMesh, m: int, max_depth: int = 64) -> TreeNode:
         level_nodes = next_level
         depth += 1
 
+    if any(node.patch_indices.shape[0] > m for node in level_nodes):
+        warnings.warn(
+            f"build_tree: stopped with leaves holding > m={m} patches "
+            f"(max_depth={max_depth} reached or a cell underflowed); "
+            "the tree is not fully refined.",
+            stacklevel=2,
+        )
+
     return root
 
 
-def _cell_underflowed(level_nodes: list[TreeNode]) -> bool:
+def _cell_underflowed(level_nodes: list[TreeNode], degenerate_axis: NDArray[np.bool_]) -> bool:
     """Whether bisecting any node's cell at its geometric midpoint would be a
-    floating-point no-op along some axis (`mid == lo` or `mid == hi`), i.e.
-    the cell has underflowed to (numerically) zero width.
+    floating-point no-op along some non-degenerate axis (`mid == lo` or
+    `mid == hi`), i.e. the cell has underflowed to (numerically) zero width.
+
+    Axes in `degenerate_axis` (constant across every centroid, e.g. a planar
+    fault's depth) are excluded: their cell width is a cosmetic fallback
+    (see `_root_domain_box`), never shrinks the point spread, and must not
+    veto refinement along the other, genuinely discriminating axes.
 
     Args:
         level_nodes: Nodes of the current frontier, about to be bisected.
+        degenerate_axis: Boolean mask, shape `(d,)`, `True` for axes along
+            which every centroid coincides.
 
     Returns:
-        `True` if any node's cell cannot be meaningfully bisected further.
+        `True` if any node's cell cannot be meaningfully bisected further
+        along some non-degenerate axis.
     """
     for node in level_nodes:
         lo = node.bounding_box[:, 0]
         hi = node.bounding_box[:, 1]
         mid = 0.5 * (lo + hi)
-        if np.any(mid == lo) or np.any(mid == hi):
+        stuck = (mid == lo) | (mid == hi)
+        if np.any(stuck & ~degenerate_axis):
             return True
     return False
 
@@ -170,7 +196,12 @@ def _root_domain_box(centroids: NDArray[np.float64]) -> NDArray[np.float64]:
     span = maxs - mins
     # Guard against a zero-width axis (all centroids share that coordinate)
     # by giving it a tiny nonzero width so midpoint splits are well defined.
-    eps = np.where(span > 0, span * 1e-9, 1e-12)
+    # Scaled to the coordinate's own magnitude (not a bare 1e-12), since a
+    # fixed absolute epsilon is meaningless once coordinates are far from
+    # the origin (e.g. z=5000 m): this width is purely cosmetic geometry for
+    # a degenerate axis and is excluded from the underflow guard regardless.
+    fallback = np.maximum(np.abs(mins), 1.0) * 1e-9
+    eps = np.where(span > 0, span * 1e-9, fallback)
     return np.stack([mins, maxs + eps], axis=1)
 
 
