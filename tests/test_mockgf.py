@@ -10,11 +10,26 @@ rank (decaying singular values), while near-diagonal blocks must not be.
 
 from __future__ import annotations
 
+import time
+
 import numpy as np
+from numpy.typing import NDArray
 
 from gfcompress.geometry import FaultMesh
 from gfcompress.mockgf import MockGF, kernel_block
 from gfcompress.operators import MatVecOperator
+
+
+def _assemble_loop(mesh: FaultMesh, eps: float = 1e-3) -> NDArray[np.float64]:
+    """Scalar reference assembly: `N^2` calls to `kernel_block`, patch-major."""
+    dof_row, dof_col = mesh.dof_row, mesh.dof_col
+    a = np.empty((mesh.n_rows, mesh.n_cols), dtype=np.float64)
+    for i in range(mesh.n_patches):
+        for j in range(mesh.n_patches):
+            a[dof_row * i : dof_row * (i + 1), dof_col * j : dof_col * (j + 1)] = kernel_block(
+                mesh.centroids[i], mesh.centroids[j], dof_row, dof_col, eps
+            )
+    return a
 
 
 def _grid_mesh(*shape: int, spacing: float = 1.0, origin: float = 0.0) -> FaultMesh:
@@ -106,6 +121,26 @@ def test_mockgf_shape_3d_is_3n_by_2n() -> None:
     n = mesh.n_patches
     op = MockGF(mesh)
     assert op.shape == (3 * n, 2 * n)
+
+
+def test_vectorized_assembly_matches_scalar_reference_2d() -> None:
+    mesh = _grid_mesh(4, 4)
+    np.testing.assert_allclose(MockGF(mesh).A, _assemble_loop(mesh), rtol=1e-14, atol=0.0)
+
+
+def test_vectorized_assembly_matches_scalar_reference_3d() -> None:
+    mesh = _grid_mesh(3, 3, 3)
+    np.testing.assert_allclose(MockGF(mesh).A, _assemble_loop(mesh), rtol=1e-14, atol=0.0)
+
+
+def test_assembly_of_1024_patch_mesh_is_fast() -> None:
+    mesh = _grid_mesh(32, 32)
+    assert mesh.n_patches == 1024
+    start = time.perf_counter()
+    op = MockGF(mesh)
+    elapsed = time.perf_counter() - start
+    assert op.shape == (2048, 1024)
+    assert elapsed < 1.0, f"assembly took {elapsed:.3f}s"
 
 
 def test_matvec_matches_dense_assembly_2d() -> None:

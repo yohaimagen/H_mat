@@ -162,22 +162,38 @@ class MockGF(MatVecOperator):
 def _assemble(mesh: FaultMesh, eps: float) -> NDArray[np.float64]:
     """Assemble the dense patch-major-flattened operator `A` for `mesh`.
 
+    Vectorized equivalent of the `N^2` scalar `kernel_block` calls: with
+    `X = mesh.centroids`, `diff[i, j] = X[i] - X[j]` (shape `(N, N, d)`),
+    `r = ||diff||`, `denom = r + eps`, the full kernel tensor is
+
+        T[i, j] = (I_d + diff[i, j] diff[i, j]^T / denom^2) / denom^d
+
+    of shape `(N, N, d, d)`. Keeping its first `dof_col` columns and
+    transposing to `(N, d, N, dof_col)` before reshaping yields the
+    patch-major flattening (`dof_row` consecutive rows and `dof_col`
+    consecutive columns per patch).
+
     Args:
         mesh: The `FaultMesh` providing centroids, `dof_row`, `dof_col`.
-        eps: Regularization length scale passed to `kernel_block`.
+        eps: Regularization length scale (as in `kernel_block`).
 
     Returns:
         Dense array of shape `(mesh.n_rows, mesh.n_cols)`.
     """
     n = mesh.n_patches
+    d = mesh.d
     dof_row = mesh.dof_row
     dof_col = mesh.dof_col
-    a = np.empty((mesh.n_rows, mesh.n_cols), dtype=np.float64)
-    for i in range(n):
-        x = mesh.centroids[i]
-        row_slice = slice(dof_row * i, dof_row * (i + 1))
-        for j in range(n):
-            y = mesh.centroids[j]
-            col_slice = slice(dof_col * j, dof_col * (j + 1))
-            a[row_slice, col_slice] = kernel_block(x, y, dof_row, dof_col, eps)
+
+    x = np.asarray(mesh.centroids, dtype=np.float64)
+    diff = x[:, None, :] - x[None, :, :]
+    denom = np.linalg.norm(diff, axis=2) + eps
+
+    tensor = diff[:, :, :, None] * diff[:, :, None, :] / denom[:, :, None, None] ** 2
+    tensor += np.eye(d)
+    tensor /= denom[:, :, None, None] ** d
+
+    a: NDArray[np.float64] = (
+        tensor[:, :, :, :dof_col].transpose(0, 2, 1, 3).reshape(dof_row * n, dof_col * n)
+    )
     return a
