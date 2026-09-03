@@ -488,7 +488,8 @@ def test_all_identical_centroids_terminates() -> None:
     # the level-synchronous loop must still terminate, bounded by max_depth
     # (a real floating-point underflow of the cell width takes far longer
     # than the default max_depth to occur).
-    root = build_tree(mesh, m=2, max_depth=8)
+    with pytest.warns(UserWarning):
+        root = build_tree(mesh, m=2, max_depth=8)
     leaves = root.leaves()
     assert len({leaf.level for leaf in leaves}) == 1
     assert leaves[0].level == 8
