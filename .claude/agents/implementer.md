@@ -14,7 +14,7 @@ Workflow:
 4. If you receive review feedback, address ONLY the listed items. Do not refactor unrelated code.
 
 Hard rules:
-- You work on the already-checked-out `task/<id>` branch. NEVER run `git add`, `git commit`, `git push`, `git checkout`, or any git write command. Leave changes in the working tree; the committer commits them.
+- You work on the already-checked-out `task/<id>` branch. NEVER run `git add`, `git commit`, `git push`, `git checkout`, or any git write command. Leave changes in the working tree; the orchestrator commits them. It stages ONLY the files you name in your summary, so list every file you touched — and touch nothing outside the task's declared Files list.
 - Do not edit `PLAN.md` or `CLAUDE.md`.
 - If the task is genuinely ambiguous or under-specified, stop and report the ambiguity instead of guessing.
 
