@@ -1,6 +1,8 @@
-"""Tests for the geometric bisection tree builder (Task 1.3)."""
+"""Tests for the geometric bisection tree builder (Task 1.3 / F.1)."""
 
 import numpy as np
+import pytest
+from numpy.typing import NDArray
 
 from gfcompress.build_tree import build_tree
 from gfcompress.geometry import FaultMesh
@@ -59,9 +61,8 @@ def test_leaves_respect_min_size_2d() -> None:
 
     for leaf in root.leaves():
         assert leaf.is_leaf
-        # Either small enough to stop, or splitting failed to make progress
-        # (which cannot happen for distinct random points).
-        assert leaf.patch_indices.shape[0] < m
+        # Continuation rule is `> m` (paper): a leaf holds `<= m` patches.
+        assert leaf.patch_indices.shape[0] <= m
 
 
 def test_leaves_respect_min_size_3d() -> None:
@@ -70,7 +71,18 @@ def test_leaves_respect_min_size_3d() -> None:
     root = build_tree(mesh, m=m)
 
     for leaf in root.leaves():
-        assert leaf.patch_indices.shape[0] < m
+        assert leaf.patch_indices.shape[0] <= m
+
+
+def test_index_in_level_matches_nodes_at_level_position() -> None:
+    mesh = _random_mesh(d=2, n=53, seed=13)
+    root = build_tree(mesh, m=4)
+
+    for level_nodes in root.iter_levels():
+        level = level_nodes[0].level
+        by_level = root.nodes_at_level(level)
+        for node in level_nodes:
+            assert node.index_in_level == by_level.index(node)
 
 
 def test_internal_nodes_have_up_to_2_pow_d_children() -> None:
@@ -81,7 +93,11 @@ def test_internal_nodes_have_up_to_2_pow_d_children() -> None:
         for level_nodes in root.iter_levels():
             for node in level_nodes:
                 if not node.is_leaf:
-                    assert 1 < len(node.children) <= max_children
+                    # A node can have exactly one child when its own
+                    # bisection makes no local progress but the level
+                    # continues because sibling subtrees still need it
+                    # (uniform-depth, level-synchronous refinement).
+                    assert 1 <= len(node.children) <= max_children
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +254,86 @@ def test_uniform_grid_produces_perfect_dyadic_grid() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Uniform depth + dyadic-grid invariant (Task F.1): every leaf lands at the
+# same level `L`, and every node's cell is a grid-aligned dyadic sub-box of
+# the root domain, on uniform grids, clustered point sets, and non-uniform
+# (e.g. planar-fault) 3D point sets alike.
+# ---------------------------------------------------------------------------
+
+
+def _two_cluster_mesh_2d(seed: int = 30) -> FaultMesh:
+    rng = np.random.default_rng(seed)
+    lower = rng.uniform(0.0, 0.1, size=(40, 2))
+    upper = rng.uniform(0.9, 1.0, size=(40, 2))
+    centroids = np.concatenate([lower, upper], axis=0)
+    L = np.full(centroids.shape[0], 0.01)
+    return FaultMesh(centroids=centroids, L=L)
+
+
+def _planar_fault_mesh_3d(seed: int = 31, n: int = 60) -> FaultMesh:
+    rng = np.random.default_rng(seed)
+    xy = rng.uniform(0.0, 1.0, size=(n, 2))
+    z = np.full((n, 1), 0.3)
+    centroids = np.concatenate([xy, z], axis=1)
+    L = np.full(n, 0.05)
+    return FaultMesh(centroids=centroids, L=L)
+
+
+def _assert_uniform_leaf_depth(root: TreeNode) -> None:
+    levels = {leaf.level for leaf in root.leaves()}
+    assert len(levels) == 1
+
+
+def _assert_dyadic_grid_invariant(root: TreeNode) -> None:
+    root_box = root.bounding_box
+    root_lo = root_box[:, 0]
+    root_width = root_box[:, 1] - root_box[:, 0]
+
+    widths_by_level: dict[int, NDArray[np.float64]] = {}
+
+    def check(node: TreeNode) -> None:
+        cell_width = node.bounding_box[:, 1] - node.bounding_box[:, 0]
+        scale = root_width / (2**node.level)
+        k = (node.bounding_box[:, 0] - root_lo) / scale
+        np.testing.assert_allclose(k, np.round(k), atol=1e-9)
+
+        prev = widths_by_level.get(node.level)
+        if prev is None:
+            widths_by_level[node.level] = cell_width
+        else:
+            np.testing.assert_allclose(cell_width, prev, atol=1e-9)
+
+        for child in node.children:
+            check(child)
+
+    check(root)
+
+
+@pytest.mark.parametrize("m", [1, 2, 4, 10])
+def test_uniform_depth_uniform_grid(m: int) -> None:
+    mesh = _grid_mesh_2d(8, 8)
+    root = build_tree(mesh, m=m)
+    _assert_uniform_leaf_depth(root)
+    _assert_dyadic_grid_invariant(root)
+
+
+@pytest.mark.parametrize("m", [1, 2, 4, 10])
+def test_uniform_depth_two_cluster(m: int) -> None:
+    mesh = _two_cluster_mesh_2d()
+    root = build_tree(mesh, m=m)
+    _assert_uniform_leaf_depth(root)
+    _assert_dyadic_grid_invariant(root)
+
+
+@pytest.mark.parametrize("m", [1, 2, 4, 10])
+def test_uniform_depth_planar_fault_3d(m: int) -> None:
+    mesh = _planar_fault_mesh_3d()
+    root = build_tree(mesh, m=m)
+    _assert_uniform_leaf_depth(root)
+    _assert_dyadic_grid_invariant(root)
+
+
+# ---------------------------------------------------------------------------
 # Critical invariant: leaf row/col index sets exactly partition {0..dof*N-1}.
 # ---------------------------------------------------------------------------
 
@@ -323,6 +419,19 @@ def test_internal_node_indices_are_union_of_children() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_exactly_m_points_is_a_single_leaf() -> None:
+    mesh = _random_mesh(d=2, n=5, seed=14)
+    root = build_tree(mesh, m=5)
+    assert root.is_leaf
+    assert root.level == 0
+
+
+def test_m_plus_one_points_splits() -> None:
+    mesh = _random_mesh(d=2, n=6, seed=14)
+    root = build_tree(mesh, m=5)
+    assert not root.is_leaf
+
+
 def test_single_patch_mesh_is_a_leaf() -> None:
     mesh = _random_mesh(d=2, n=1, seed=11)
     root = build_tree(mesh, m=1)
@@ -348,12 +457,16 @@ def test_degenerate_collinear_centroids_terminates() -> None:
     _check_leaf_index_partition(root, mesh)
 
 
-def test_all_identical_centroids_terminates_as_single_leaf() -> None:
+def test_all_identical_centroids_terminates() -> None:
     centroids = np.zeros((5, 2))
     L = np.full(5, 0.1)
     mesh = FaultMesh(centroids=centroids, L=L)
-    root = build_tree(mesh, m=2)
-    # No axis can separate identical points: split makes no progress, so the
-    # root remains a single leaf despite having >= m patches.
-    assert root.is_leaf
+    # No axis can separate identical points, so nothing ever drops to <= m;
+    # the level-synchronous loop must still terminate, bounded by max_depth
+    # (a real floating-point underflow of the cell width takes far longer
+    # than the default max_depth to occur).
+    root = build_tree(mesh, m=2, max_depth=8)
+    leaves = root.leaves()
+    assert len({leaf.level for leaf in leaves}) == 1
+    assert leaves[0].level == 8
     _check_leaf_index_partition(root, mesh)

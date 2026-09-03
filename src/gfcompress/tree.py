@@ -22,9 +22,14 @@ from numpy.typing import NDArray
 from gfcompress.geometry import FaultMesh
 
 
-@dataclass
+@dataclass(eq=False)
 class TreeNode:
     """A node of the geometric cluster tree.
+
+    `eq=False` keeps the dataclass-generated `__eq__`/`__hash__` off and
+    falls back to `object`'s identity-based versions, so nodes are hashable
+    (usable as dict keys / set members) and two distinct nodes are never
+    equal even if their fields happen to coincide.
 
     Attributes:
         patch_indices: Integer array of patch indices covered by this node,
@@ -41,6 +46,9 @@ class TreeNode:
         diam: Diameter (Euclidean length of the bounding-box diagonal).
         parent: Parent node, or `None` for the root.
         children: Child nodes (empty for a leaf).
+        index_in_level: This node's position in `root.nodes_at_level(level)`,
+            set by the tree builder. Defaults to `-1` for nodes constructed
+            outside of `build_tree` (e.g. directly via `make_node`).
     """
 
     patch_indices: NDArray[np.intp]
@@ -52,6 +60,7 @@ class TreeNode:
     diam: float
     parent: TreeNode | None = None
     children: list[TreeNode] = field(default_factory=list)
+    index_in_level: int = -1
 
     @property
     def is_leaf(self) -> bool:
