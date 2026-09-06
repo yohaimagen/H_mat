@@ -23,13 +23,14 @@ from numpy.typing import NDArray
 
 from gfcompress.build_tree import build_tree
 from gfcompress.column_basis import column_bases
+from gfcompress.compress import compress_level
 from gfcompress.fixed_pattern import build_admissible_test_matrices
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists, build_lists
 from gfcompress.mockgf import MockGF
 from gfcompress.operators import MatVecOperator
 from gfcompress.peeling import BlockFactor, peeled_rmatvec
-from gfcompress.row_basis import RowBasis, compress_level, core_matrices, row_bases
+from gfcompress.row_basis import RowBasis, core_matrices, row_bases
 from gfcompress.tree import TreeNode
 
 
