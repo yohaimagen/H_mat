@@ -119,7 +119,15 @@ def compress(
             supplies `n_rows`/`n_cols` and the tree's index expansion).
         m: Leaf stop threshold for `build_tree` (a node with `<= m` patches
             does not need further splitting).
-        k: Target rank for each admissible block's factorization.
+        k: Target rank for each admissible block's factorization. Must
+            satisfy `k <= dof_col * min_leaf_patches`, where
+            `min_leaf_patches` is the smallest leaf box's patch count over
+            the whole tree (the binding constraint comes from the row-basis
+            path's `orth(z_beta, k)` call, `z_beta` having only
+            `dof_col * |beta|` rows for the narrowest box `beta` reached at
+            any compressed level, leaf level included) -- `k` and `m` are
+            therefore coupled: increasing `m` (coarser leaves) is what
+            allows a larger `k`.
         p: Oversampling parameter. Defaults to `0`.
         seed: Optional base seed forwarded to every level's test matrices.
         sampling: Test-matrix strategy. Only `"fixed"` (the default) is
@@ -129,7 +137,9 @@ def compress(
         The compressed `HMatrix`.
 
     Raises:
-        ValueError: If `sampling` is not `"fixed"`.
+        ValueError: If `sampling` is not `"fixed"`, or if `k` exceeds
+            `dof_col * min_leaf_patches` (raised from `randomized.orth`, not
+            from `compress` itself).
     """
     if sampling not in SUPPORTED_SAMPLING:
         raise ValueError(
