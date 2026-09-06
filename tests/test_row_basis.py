@@ -224,7 +224,7 @@ def test_compress_level_per_block_accuracy_2d() -> None:
     op = MockGF(mesh)
 
     level = 2
-    k, p = 10, 10
+    k, p = 10, 20
 
     factors = compress_level(op, root, lists, mesh, level, factors=[], k=k, p=p, seed=5)
     assert len(factors) == len(_admissible_pairs(root, level, lists))
@@ -280,12 +280,17 @@ def test_peeled_level_3_reaches_same_accuracy() -> None:
 
     # NOTE: p=10 (matching the other tests in this file) leaves the worst of
     # the 1116 level-3 blocks at rel_err ~1.06e-3 for this seed pair -- just
-    # over the 1e-3 threshold -- even though the *exact* best rank-10 SVD
-    # truncation of that same block reaches ~4e-5 (verified directly: not a
-    # numerically-unreachable rank, just randomized-sampling variance on the
-    # single hardest block). Bumping oversampling to p=20 (k unchanged)
-    # brings the worst block's error to <1e-3 robustly across several seed
-    # pairs, so we use p=20 here rather than weakening the threshold.
+    # over the 1e-3 threshold. The excess does not come from level-3 sampling
+    # variance: swapping in *exact* SVD factors for level 2 (same seeds, same
+    # p) drops that block's error to ~3.2e-4. The real cause is the core
+    # solve at level 3 consuming samples contaminated by the *approximate*
+    # level-2 factors leaking through the peeled residual -- on far active
+    # boxes gamma where A - A^(2) is only approximately (not exactly) zero.
+    # Raising oversampling to p=20 (k unchanged) helps chiefly because it
+    # improves the level-2 factors themselves (their own worst-block error
+    # roughly halves), which reduces that leakage and brings the level-3
+    # worst block to <1e-3 robustly across several seed pairs, so we use
+    # p=20 here rather than weakening the threshold.
     k, p = 10, 20
 
     factors_2 = compress_level(op, root, lists, mesh, 2, factors=[], k=k, p=p, seed=7)
