@@ -1,4 +1,5 @@
-"""Per-level column bases `U_{alpha,beta}` for admissible blocks (Task 5.2).
+"""Per-level column bases `U_{alpha,beta}` for admissible blocks (Task 5.2,
+revised by Task F.5).
 
 This is the first of the three per-level compression passes of Stage 5
 (`column_bases` here, `row_bases` in Task 5.3, `core_matrices` in Task 5.4).
@@ -6,21 +7,28 @@ For tree level `l`, with the low-rank factors of levels `2, ..., l-1` already
 stored as a `gfcompress.peeling.Factors` list:
 
 1. Build the level's fixed `6x...x6` periodic admissible test matrices
-   `Omega` (Task 4.2, `gfcompress.fixed_pattern.build_admissible_test_matrices`)
-   -- per CLAUDE.md, these satisfy the Eq. 4.4 sampling constraints for every
-   admissible pair `(alpha, beta)` at `l` and are reused verbatim, not
-   reinvented.
+   `Omega` (Task 4.4, `gfcompress.fixed_pattern.build_admissible_test_matrices`
+   with `side="col"`) -- per CLAUDE.md, these satisfy the Eq. 4.4 sampling
+   constraints for every admissible pair `(alpha, beta)` at `l` and are reused
+   verbatim, not reinvented.
 2. For each such `Omega`, compute the level-`l` column sample
    `Y = (A - A^{(l-1)}) @ Omega` via `gfcompress.peeling.peeled_matvec`
-   (Task 5.1).
+   (Task 5.1) -- exactly one peeled matvec of width `k + p` per emitted
+   `Omega`.
 3. For every admissible pair `(alpha, beta)` at `l` (from `L^int`, Task 1.5),
    look up the unique `Omega`/`Y` whose active boxes include `beta` (Eq. 4.4
    guarantees `beta`'s columns of that `Omega` are an independent Gaussian
    block and every other box interacting with `alpha` is zeroed there),
    restrict to `alpha`'s row-index set `I_alpha = alpha.row_indices`
    (`Y(I_alpha, :)`), and set `U_{alpha,beta} = qr(Y(I_alpha, :), k)`
-   (`gfcompress.randomized.orth`, Task 3.1) -- an orthonormal basis for the
-   block's (approximate rank-`k`) column space.
+   (`gfcompress.randomized.orth`, Task 3.1, pivoted) -- an orthonormal basis
+   for the block's (approximate rank-`k`) column space.
+
+Per Eq. 4.3, the core-matrix solve (Task 5.4/5.5) also needs `Y(I_alpha, :)`
+itself (not just its orthonormalization) and the Gaussian sketch block
+`G_beta` used to generate it -- `two_sample_compress`/`core_matrix_solve`
+(`gfcompress.randomized`) consume exactly these. `ColumnBasis` therefore
+retains both, rather than discarding them once `U` is formed.
 
 Per CLAUDE.md's shape conventions, `Y` lives in `A`'s range
 (`R^{dof_row * N}`), so `I_alpha` must be `alpha`'s `dof_row`-expanded
@@ -46,7 +54,8 @@ from gfcompress.tree import TreeNode
 @dataclass(frozen=True)
 class ColumnBasis:
     """Column-space basis `U_{alpha,beta}` for one admissible block `(alpha,
-    beta)` at a single level.
+    beta)` at a single level, plus the raw sample/sketch quantities Eq. 4.3's
+    core-matrix solve needs.
 
     Attributes:
         alpha: The row box. `alpha.row_indices` (length `dof_row * |alpha|`)
@@ -55,11 +64,20 @@ class ColumnBasis:
             indexes the global col space `{0, ..., n_cols - 1}`.
         u: Orthonormal column-space basis `U_{alpha,beta}`, shape
             `(len(alpha.row_indices), k)`, satisfying `u.conj().T @ u ~= I_k`.
+        y_alpha: The column sample restricted to `alpha`'s rows,
+            `Y(I_alpha, :) = (A - A^{(l-1)})(I_alpha, I_beta) @ G_beta`, shape
+            `(len(alpha.row_indices), k + p)` -- `U`'s un-orthonormalized
+            source, and the `Y(I_alpha, :)` of Eq. 4.3.
+        g_beta: The Gaussian sketch block used to generate `y_alpha`,
+            `tm.blocks[beta]`, shape `(len(beta.col_indices), k + p)` -- the
+            `G_beta` of Eq. 4.3.
     """
 
     alpha: TreeNode
     beta: TreeNode
     u: NDArray[np.float64]
+    y_alpha: NDArray[np.float64]
+    g_beta: NDArray[np.float64]
 
 
 def column_bases(
@@ -105,16 +123,18 @@ def column_bases(
     """
     level_nodes = root.nodes_at_level(level)
 
-    test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=seed)
+    test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=seed, side="col")
 
-    # Map each box (by identity) to the Y sample from the Omega whose
-    # active_boxes include it -- Eq. 4.4 guarantees this Omega is unique per
-    # box.
-    y_for_box: dict[TreeNode, NDArray[np.floating]] = {}
+    # Map each box (by identity) to the Y sample and G_beta block from the
+    # Omega whose active_boxes include it -- Eq. 4.4 guarantees this Omega is
+    # unique per box.
+    y_for_box: dict[TreeNode, NDArray[np.float64]] = {}
+    g_for_box: dict[TreeNode, NDArray[np.float64]] = {}
     for tm in test_matrices:
-        y = peeled_matvec(operator, tm.omega, factors)
+        y = np.asarray(peeled_matvec(operator, tm.omega, factors), dtype=np.float64)
         for box in tm.active_boxes:
             y_for_box[box] = y
+            g_for_box[box] = tm.blocks[box]
 
     result: list[ColumnBasis] = []
     for alpha in level_nodes:
@@ -122,7 +142,9 @@ def column_bases(
             y = y_for_box[beta]
             y_alpha = y[alpha.row_indices, :]
             u = orth(y_alpha, k)
-            result.append(ColumnBasis(alpha=alpha, beta=beta, u=u))
+            result.append(
+                ColumnBasis(alpha=alpha, beta=beta, u=u, y_alpha=y_alpha, g_beta=g_for_box[beta])
+            )
 
     return result
 
