@@ -76,3 +76,18 @@ matvec/rmatvec only.
 - On approval the pipeline posts a final "what was implemented and how" comment
   and marks the PR **ready for review**. **A human merges the PR to `main`** — no
   agent merges, and nothing is pushed directly to `main`.
+- Every final PR comment **opens with a `## Plain-language summary`** section,
+  before the technical breakdown. Audience: a scientist who knows linear algebra
+  and geophysics but has not read Levitt & Martinsson and is not tracking this
+  repo's task graph. Two or three short paragraphs, no bullet lists.
+  - Say what this task actually *does* in the compression scheme, in words:
+    what quantity it computes, and what that quantity is for. Prefer "the
+    block's dominant row directions" over "`V_{α,β} = qr(Z(I_β,:), k)`". Introduce
+    a symbol only when it earns its place, and gloss it when you do.
+  - Put it in context: which part of the overall algorithm this is, what had to
+    exist before it, and what it unlocks next. The reader should learn where the
+    piece sits without reconstructing the plan.
+  - State what is *not* yet true — the honest limits (accuracy achieved, what
+    remains unimplemented, any assumption the tests lean on). A summary that
+    reads as unqualified success when the numbers are marginal is a failure of
+    this section, not a polish issue.
