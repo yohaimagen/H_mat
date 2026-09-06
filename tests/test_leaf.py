@@ -200,6 +200,42 @@ def test_extract_leaves_exact_factors_2d() -> None:
         np.testing.assert_allclose(leaf.block, expected, rtol=1e-8, atol=1e-8)
 
 
+def test_extract_leaves_exact_factors_clustered_2d() -> None:
+    """A two-cluster (non-uniform) mesh, where leaf boxes have varying
+    `w_beta < w_max`. Guards against F.4's shared column slot: extracting
+    only the first `w_beta` columns of the padded probe result (rather than
+    the full `w_max`-wide slot) rather than a fixed `w_max` width for every
+    box -- a bug invisible on any uniform-grid fixture, where `w_beta ==
+    w_max` for every box."""
+    rng = np.random.default_rng(0)
+    cluster_a = rng.uniform(0.0, 0.3, size=(60, 2))
+    cluster_b = rng.uniform(0.7, 1.0, size=(60, 2))
+    centroids = np.vstack([cluster_a, cluster_b])
+    lengths = np.full(centroids.shape[0], 0.01)
+    mesh = FaultMesh(centroids=centroids, L=lengths)
+    root = build_tree(mesh, m=6)
+    lists = build_lists(root)
+    op = MockGF(mesh)
+    L = _deepest_level(root)
+
+    # Self-verifying: if a future fixture change made every leaf box the same
+    # width again, this would fail loudly instead of silently losing coverage
+    # of the `w_beta < w_max` branch.
+    widths = {len(box.col_indices) for box in root.nodes_at_level(L)}
+    assert len(widths) > 1, "fixture must produce leaf boxes of varying width"
+
+    factors = _exact_factors(op, root, lists)
+    assert factors, "expected admissible blocks to peel"
+
+    leaves = extract_leaves(op, root, lists, mesh, L, factors)
+    assert len(leaves) == len(_all_neighbor_pairs(root, L, lists))
+    assert len(leaves) > 0
+
+    for leaf in leaves:
+        expected = op.block(leaf.alpha.patch_indices, leaf.beta.patch_indices)
+        np.testing.assert_allclose(leaf.block, expected, rtol=1e-8, atol=1e-8)
+
+
 def test_extract_leaves_exact_factors_3d() -> None:
     mesh = _grid_mesh(4, 4, 4)
     root = build_tree(mesh, m=2)
