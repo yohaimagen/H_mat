@@ -8,9 +8,11 @@ values -- full-rank SVDs for admissible blocks, the true dense sub-block for
 leaves -- so `dot`/`rdot` are checked against `MockGF.A`/`MockGF.A.conj().T`
 to round-off, isolating `HMatrix`'s own indexing/association from far-field
 approximation error (the sharp test the task calls for). A second pair of
-tests instead builds a `HMatrix` from real `compress_level` (`k < rank`)
-factors, to confirm the real, non-exact pipeline reaches a sane accuracy
-too.
+tests instead builds a `HMatrix` from real `compress_level` factors, to
+confirm the real, non-exact pipeline reaches a sane accuracy too. Truncation
+(`k < rank`) is only genuinely exercised at the coarser admissible levels
+(e.g. level 2); finer levels can have blocks small enough that `k` already
+equals the full rank.
 """
 
 from __future__ import annotations
@@ -254,7 +256,7 @@ def test_rdot_is_the_true_adjoint_not_dot_of_transpose() -> None:
 
 def test_dot_matches_dense_reference_real_factors_2d() -> None:
     # Same mesh/m/k/p as test_leaf.py's test_extract_leaves_matches_mockgf_2d
-    # (validated there: k < rank at every level, per-block rel_err < 5e-2).
+    # (validated there: k < rank at level 2, per-block rel_err < 5e-2).
     mesh = _grid_mesh(16, 16)
     root = build_tree(mesh, m=4)
     lists = build_lists(root)
@@ -265,6 +267,7 @@ def test_dot_matches_dense_reference_real_factors_2d() -> None:
     factors = _compress_all_levels(op, root, lists, mesh, L, k, p, seed=11)
     leaves = extract_leaves(op, root, lists, mesh, L, factors)
     hmat = HMatrix(root=root, mesh=mesh, factors=factors, leaves=leaves)
+    _assert_complete_disjoint_cover(hmat, mesh.n_patches)
 
     rng = np.random.default_rng(12)
     x = rng.standard_normal(mesh.n_cols)
@@ -274,12 +277,24 @@ def test_dot_matches_dense_reference_real_factors_2d() -> None:
     rel_err_rdot = np.linalg.norm(hmat.rdot(y) - op.A.conj().T @ y) / np.linalg.norm(
         op.A.conj().T @ y
     )
-    assert rel_err_dot < 5e-2, f"rel_err_dot={rel_err_dot}"
-    assert rel_err_rdot < 5e-2, f"rel_err_rdot={rel_err_rdot}"
+    assert rel_err_dot < 1e-7, f"rel_err_dot={rel_err_dot}"
+    assert rel_err_rdot < 1e-7, f"rel_err_rdot={rel_err_rdot}"
+
+    # MockGF's near-diagonal self-interaction dominates ‖A x‖ (~1/eps larger
+    # than the far field), so an absolute error threshold alone cannot
+    # certify that the compressed far field (the admissible factors) is
+    # doing anything: a leaves-only HMatrix would also pass it. Require the
+    # full HMatrix to beat a leaves-only approximation by a wide margin.
+    leaves_only = HMatrix(root=root, mesh=mesh, factors=[], leaves=leaves)
+    rel_err_leaves_only = np.linalg.norm(leaves_only.dot(x) - op.A @ x) / np.linalg.norm(op.A @ x)
+    assert (
+        rel_err_dot * 10 < rel_err_leaves_only
+    ), f"rel_err_dot={rel_err_dot}, rel_err_leaves_only={rel_err_leaves_only}"
 
 
 def test_dot_matches_dense_reference_real_factors_3d() -> None:
-    # Same mesh/m/k/p as test_leaf.py's test_extract_leaves_matches_mockgf_3d.
+    # Same mesh/m/k/p as test_leaf.py's test_extract_leaves_matches_mockgf_3d
+    # (validated there: k < rank at level 2, per-block rel_err < 5e-2).
     mesh = _grid_mesh(8, 8, 8)
     root = build_tree(mesh, m=8)
     lists = build_lists(root)
@@ -290,6 +305,7 @@ def test_dot_matches_dense_reference_real_factors_3d() -> None:
     factors = _compress_all_levels(op, root, lists, mesh, L, k, p, seed=13)
     leaves = extract_leaves(op, root, lists, mesh, L, factors)
     hmat = HMatrix(root=root, mesh=mesh, factors=factors, leaves=leaves)
+    _assert_complete_disjoint_cover(hmat, mesh.n_patches)
 
     rng = np.random.default_rng(14)
     x = rng.standard_normal(mesh.n_cols)
@@ -299,8 +315,19 @@ def test_dot_matches_dense_reference_real_factors_3d() -> None:
     rel_err_rdot = np.linalg.norm(hmat.rdot(y) - op.A.conj().T @ y) / np.linalg.norm(
         op.A.conj().T @ y
     )
-    assert rel_err_dot < 5e-2, f"rel_err_dot={rel_err_dot}"
-    assert rel_err_rdot < 5e-2, f"rel_err_rdot={rel_err_rdot}"
+    assert rel_err_dot < 1e-9, f"rel_err_dot={rel_err_dot}"
+    assert rel_err_rdot < 1e-9, f"rel_err_rdot={rel_err_rdot}"
+
+    # MockGF's near-diagonal self-interaction dominates ‖A x‖ (~1/eps larger
+    # than the far field), so an absolute error threshold alone cannot
+    # certify that the compressed far field (the admissible factors) is
+    # doing anything: a leaves-only HMatrix would also pass it. Require the
+    # full HMatrix to beat a leaves-only approximation by a wide margin.
+    leaves_only = HMatrix(root=root, mesh=mesh, factors=[], leaves=leaves)
+    rel_err_leaves_only = np.linalg.norm(leaves_only.dot(x) - op.A @ x) / np.linalg.norm(op.A @ x)
+    assert (
+        rel_err_dot * 10 < rel_err_leaves_only
+    ), f"rel_err_dot={rel_err_dot}, rel_err_leaves_only={rel_err_leaves_only}"
 
 
 # ---------------------------------------------------------------------------
