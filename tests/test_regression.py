@@ -88,14 +88,18 @@ def _predicted_counts(mesh: FaultMesh, m: int, k: int, p: int) -> int:
     root = build_tree(mesh, m)
     leaf_level = _deepest_level(root)
 
+    d = mesh.d
     total = 0
     for level in range(2, leaf_level + 1):
         omegas = build_admissible_test_matrices(root, level, mesh, k, p, side="col")
         psis = build_admissible_test_matrices(root, level, mesh, k, p, side="row")
+        assert len(omegas) <= 6**d
+        assert len(psis) <= 6**d
         total += (len(omegas) + len(psis)) * (k + p)
 
     leaf_tms = build_leaf_test_matrices(root, leaf_level, mesh)
     w_max = max(len(box.col_indices) for box in root.nodes_at_level(leaf_level))
+    assert len(leaf_tms) * w_max <= 3**d * w_max
     total += len(leaf_tms) * w_max
 
     return total
@@ -175,7 +179,7 @@ def test_k_precondition_boundary_16x16_m4() -> None:
         compress(op, mesh, m=4, k=bound + 1, p=0, seed=0, sampling="fixed")
         raise AssertionError(f"expected ValueError for k={bound + 1} > bound={bound}")
     except ValueError as exc:
-        assert str(bound) in str(exc), f"expected bound {bound} in error message: {exc}"
+        assert f"[0, {bound}]" in str(exc), f"expected bound {bound} in error message: {exc}"
 
 
 # ---------------------------------------------------------------------------
@@ -232,9 +236,10 @@ def test_k_sweep_monotonic_error_and_exact_matvec_counts() -> None:
 
 def test_p_sweep_monotonic_error_and_exact_matvec_counts() -> None:
     """Same 32x32/m=16 fixture, k=8 fixed, sweeping oversampling p. Measured
-    (seeds 0-3, k=8): rel_err ~1.7e-6-1.2e-5 (p=0) down to ~1.3-1.4e-9
-    (p=16), monotonically non-increasing at every seed tried (0-3; 2 seeds
-    asserted here to bound runtime)."""
+    (seeds 0-9, k=8): rel_err ~1.7e-6-1.1e-4 (p=0, not discriminating -- see
+    the in-test comment below) down to ~1.3-1.4e-9 (p=16), monotonically
+    non-increasing at every seed tried (0-9; 2 seeds asserted here to bound
+    runtime)."""
     mesh = _grid_mesh(32, 32)
     m, k = 16, 8
     ps = [0, 2, 4, 8, 16]
@@ -256,11 +261,12 @@ def test_p_sweep_monotonic_error_and_exact_matvec_counts() -> None:
                 f"seed={seed}: error increased going p={ps[i]} -> p={ps[i + 1]}: "
                 f"{errs[i]} -> {errs[i + 1]}"
             )
-        # Discriminating check: p=0 (the worst point) still beats a
-        # leaves-only baseline by a wide margin (measured leaves_only
-        # ~7.2e-6 vs. p=0 rel_err ~1.7e-6-1.2e-5 -- borderline at p=0 alone,
-        # so the real discriminating comparison is p=16's ~1.4e-9, three
-        # orders of magnitude below leaves-only).
+        # p=0 is NOT a discriminating point: measured rel_err 1.7e-6-1.1e-4
+        # across seeds 0-9 vs. leaves_only 7.2e-6, i.e. at p=0 the compressed
+        # far field can be *worse* than dropping it entirely. The
+        # discriminating comparison is therefore p=16 (~1.4e-9, three orders
+        # below leaves-only); p=0 contributes only the start of the monotone
+        # trend and its exact matvec count.
         op = MockGF(mesh)
         hmat = compress(op, mesh, m=m, k=k, p=ps[-1], seed=seed, sampling="fixed")
         leaves_only = HMatrix(root=hmat.root, mesh=mesh, factors=[], leaves=hmat.leaves)
