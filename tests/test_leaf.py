@@ -28,6 +28,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from gfcompress.build_tree import build_tree
+from gfcompress.compress import compress_level
 from gfcompress.fixed_pattern import LEAF_PERIOD
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists, build_lists
@@ -35,7 +36,6 @@ from gfcompress.leaf import DenseLeaf, extract_leaves
 from gfcompress.mockgf import MockGF
 from gfcompress.operators import MatVecOperator
 from gfcompress.peeling import BlockFactor, Factors
-from gfcompress.row_basis import compress_level
 from gfcompress.tree import TreeNode
 
 

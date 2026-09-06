@@ -1,5 +1,5 @@
-"""Per-level row bases `V_{alpha,beta}`, core matrices `B_{alpha,beta}`, and
-the `compress_level` driver (Task 5.3, revised by Task F.5/F.4/FIXPLAN #4/#6).
+"""Per-level row bases `V_{alpha,beta}` and core matrices `B_{alpha,beta}`
+(Task 5.3, revised by Task F.5/F.4/FIXPLAN #4/#6).
 
 This is the mirror of Task 5.2/F.5's `gfcompress.column_basis.column_bases`
 through `peeled_rmatvec` (Task 5.1) with the `side="row"` fixed periodic test
@@ -29,10 +29,10 @@ Per Eq. 4.3, the core-matrix solve also needs the Gaussian sketch block
 `gfcompress.randomized.core_matrix_solve` (Eq. 4.3) into one `BlockFactor`
 per admissible pair.
 
-`compress_level` is the body of Algorithm 4.1's level loop: `column_bases` +
-`row_bases` + `core_matrices`. It issues exactly `n_Omega + n_Psi <= 2 * 6**d`
-products of width `k + p` (`n_Omega` matvecs from `column_bases`, `n_Psi`
-rmatvecs from `row_bases`).
+`compress_level` (Algorithm 4.1's level loop: `column_bases` + `row_bases` +
+`core_matrices`) has moved to `gfcompress.compress` (Task 5.6): a module named
+after this one pass should not also export the level driver that combines it
+with `column_basis`'s pass and the outer loop.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from gfcompress.column_basis import ColumnBasis, column_bases
+from gfcompress.column_basis import ColumnBasis
 from gfcompress.fixed_pattern import build_admissible_test_matrices
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists
@@ -176,42 +176,4 @@ def core_matrices(col_bases: list[ColumnBasis], row_bases_: list[RowBasis]) -> F
     return result
 
 
-def compress_level(
-    operator: MatVecOperator,
-    root: TreeNode,
-    lists: TreeLists,
-    mesh: FaultMesh,
-    level: int,
-    factors: Factors,
-    k: int,
-    p: int = 0,
-    seed: int | None = None,
-) -> list[BlockFactor]:
-    """Compress every admissible pair `(alpha, beta)` at `level` (Algorithm
-    4.1's level loop): `column_bases` + `row_bases` + `core_matrices`.
-
-    Args:
-        operator: The black-box operator `A` (accessed only via `matvec`/
-            `rmatvec`).
-        root: Root of the geometric cluster tree.
-        lists: Precomputed `TreeLists`.
-        mesh: The `FaultMesh` underlying `root`.
-        level: The tree level whose admissible pairs are compressed.
-        factors: Flat list of `BlockFactor`s for levels `2, ..., level - 1`.
-        k: Target rank for each block's factorization.
-        p: Oversampling parameter. Defaults to `0`.
-        seed: Optional base seed forwarded to both `column_bases` and
-            `row_bases`.
-
-    Returns:
-        A `Factors` list (one `BlockFactor` per admissible pair at `level`).
-        Issues exactly `n_Omega + n_Psi <= 2 * 6 ** mesh.d` products of width
-        `k + p` with `A`/`A*` (one peeled matvec per `Omega`, one peeled
-        rmatvec per `Psi`).
-    """
-    cb = column_bases(operator, root, lists, mesh, level, factors, k, p, seed=seed)
-    rb = row_bases(operator, root, lists, mesh, level, factors, k, p, seed=seed)
-    return core_matrices(cb, rb)
-
-
-__all__ = ["RowBasis", "compress_level", "core_matrices", "row_bases"]
+__all__ = ["RowBasis", "core_matrices", "row_bases"]

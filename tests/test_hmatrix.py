@@ -20,13 +20,13 @@ from __future__ import annotations
 import numpy as np
 
 from gfcompress.build_tree import build_tree
+from gfcompress.compress import compress_level
 from gfcompress.geometry import FaultMesh
 from gfcompress.hmatrix import HMatrix
 from gfcompress.interactions import TreeLists, build_lists
 from gfcompress.leaf import DenseLeaf, extract_leaves
 from gfcompress.mockgf import MockGF
 from gfcompress.peeling import BlockFactor, Factors
-from gfcompress.row_basis import compress_level
 from gfcompress.tree import TreeNode
 
 
