@@ -23,12 +23,15 @@ width 16 patches), giving comfortable headroom at both compressed levels: 2
 either level's block rank.
 
 3D: PLAN.md's `8x8x8, m=8` is REJECTED. That grid has depth 2, so its only
-compressed level (2) *is* the leaf level and is reached with `factors=[]`
-(nothing peeled yet) -- `compress()` never exercises cross-level peeling
-(subtracting already-compressed coarser factors before sampling a finer
-level, `peeling.apply_truncated`), which is exactly the mechanism an
-Algorithm-4.1 integration test needs to exercise. A uniform-depth-3 fixture
-is required instead. The tree bisects all `d` axes every level (Task
+compressed level (2) *is* the leaf level, reached with `factors=[]` (nothing
+peeled yet). `extract_leaves` does call `peeling.apply_truncated` there, so
+cross-level peeling is not entirely unexercised on this fixture -- but the
+level-LOOP peeling that Algorithm 4.1 (Sec. 4.1.2) actually needs an
+integration test to cover -- forming `A - A^{(l-1)}` for a strictly finer
+admissible level, i.e. subtracting one or more already-compressed coarser
+levels' factors before sampling the next one -- never runs, because there is
+only one compressed level. A uniform-depth-3 fixture is required instead. The
+tree bisects all `d` axes every level (Task
 F.1), so for a depth-3 CUBE, `N = leaf_width * 8**3` regardless of shape;
 the smallest cube with `leaf_width` large enough for genuine `k < rank`
 (`16x16x16`, `N=4096`) measured ~2.7 GB peak RSS to assemble `MockGF`'s dense
@@ -44,7 +47,11 @@ then 4), but at half `16x16x16`'s patch count, because the tree's `N` vs.
 exhaustively below, not assumed -- Task 5.5's finding was that unverified
 "`k < rank` at every level" claims are exactly what slips through): the
 worst-case `sigma_(k+1)/sigma_1` measured is ~0.09 at level 2 and ~0.05 at
-level 3. `compress()` still costs ~30s here: `peeling.apply_truncated`
+level 3 -- level 3's blocks are only 12x8 (`dof_row=3, dof_col=2`), so `k=6`
+drops just 2 of 8 singular values there; `k < rank` genuinely holds, but this
+is a much weaker low-rank statement than the 2D fixture's (gaps of 1.4e-4 /
+4.1e-5), and the numbers below should not be read as evidence of strong 3D
+rank decay. `compress()` still costs ~30s here: `peeling.apply_truncated`
 reconstructs each already-compressed level from its full factor list on
 *every* probe column, so its cost is `O(N)` per probe regardless of `N`'s
 size -- a genuinely multi-level 3D fixture is inherently more expensive here
@@ -169,6 +176,10 @@ def test_integration_3d() -> None:
     root = build_tree(mesh, m)
     lists = build_lists(root)
     assert _deepest_level(root) == 3
+    # max_gap=0.15: loose relative to 2D's 1e-2 because level-3 blocks are
+    # only 12x8, so k=6 leaves just 2 singular values to drop (see module
+    # docstring) -- k < rank genuinely holds, but this is a much weaker
+    # low-rank statement than 2D's.
     _assert_genuine_truncation(op, root, lists, levels=(2, 3), k=k, max_gap=0.15)
 
     counting_op = CountingOperator(op)
@@ -178,12 +189,22 @@ def test_integration_3d() -> None:
 
     rel_err = relative_error(hmat, op, seed=1)
     tol = 1e-8
-    assert rel_err < tol, f"rel_err={rel_err} (measured ~8e-10), tol={tol}"
+    # tol=1e-8 is a sanity bound only here, not a discriminating assertion:
+    # the leaves-only baseline (below) sits at ~1.16e-8, just 16% above it,
+    # so a compressor that dropped the whole far field would slip past this
+    # line too. The ratio assertion below is the real check. Worst rel_err
+    # observed across compress seeds 0-3 is ~1.18e-9.
+    assert rel_err < tol, f"rel_err={rel_err} (measured ~1e-9), tol={tol}"
 
     leaves_only = HMatrix(root=hmat.root, mesh=mesh, factors=[], leaves=hmat.leaves)
     rel_err_leaves_only = relative_error(leaves_only, op, seed=1)
+    # Ratio bar is 5x here, not 2D's 10x: at level 2 sigma_(k+1)/sigma_1 ~
+    # 0.09 caps the achievable ratio at ~1/0.09 ~= 11x, so a 10x bar sits
+    # above the structural mean and inside seed-to-seed noise (measured
+    # 9.78x-14.79x across compress seeds 0-3). 5x still fails a leaves-only
+    # regression (ratio ~= 1) and holds across all measured seeds.
     assert (
-        rel_err * 10 < rel_err_leaves_only
+        rel_err * 5 < rel_err_leaves_only
     ), f"rel_err={rel_err}, rel_err_leaves_only={rel_err_leaves_only}"
 
     _log_metrics("3D 8x16x16 m=8 k=6 p=6", hmat, mesh, counting_op, setup_time)
