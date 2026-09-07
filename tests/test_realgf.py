@@ -134,10 +134,14 @@ def test_header_size_mismatch_raises(tmp_path: Path) -> None:
 def _tiny_synthetic_dataset(
     tmp_path: Path,
 ) -> tuple[Path, Path, NDArray[np.intp], NDArray[np.intp]]:
-    n_elements, nbf, dof_row, dof_col = 2, 3, 3, 2
-    n_patches = n_elements * nbf  # 4
-    n_rows = dof_row * n_patches  # 12
-    n_cols = dof_col * n_patches  # 8
+    # nbf must differ from both dof_row and dof_col: the within-element
+    # (comp, bf) permutation is a dof x nbf transpose, which is self-inverse
+    # (and so fails to catch a swapped permutation direction) exactly when
+    # nbf == dof_row or nbf == dof_col.
+    n_elements, nbf, dof_row, dof_col = 2, 4, 3, 2
+    n_patches = n_elements * nbf  # 8
+    n_rows = dof_row * n_patches  # 24
+    n_cols = dof_col * n_patches  # 16
 
     # CSV: raw col c -> (element, comp, bf) via c = e*(comps*nbf) + comp*nbf + bf.
     rows_csv = []
@@ -174,6 +178,13 @@ def _tiny_synthetic_dataset(
     row_pm_to_raw_expected = np.empty(n_rows, dtype=np.intp)
     row_pm_to_raw_expected[row_target] = np.arange(n_rows)
 
+    # Guard: a self-inverse permutation can't distinguish forward from
+    # inverse, so it can't catch a swapped matvec/rmatvec direction (see the
+    # comment above `nbf`). Fail loudly at collection time if either
+    # permutation is accidentally self-inverse again.
+    assert not np.array_equal(col_pm_to_raw_expected, np.argsort(col_pm_to_raw_expected))
+    assert not np.array_equal(row_pm_to_raw_expected, np.argsort(row_pm_to_raw_expected))
+
     values = (100 * np.arange(n_rows)[:, None] + np.arange(n_cols)[None, :]).astype(np.float64)
     mat_path = tmp_path / "mat.bin"
     _write_petsc_mat(mat_path, values)
@@ -186,7 +197,7 @@ def test_realgf_tiny_synthetic_permutation_matches_hand_derived(tmp_path: Path) 
 
     gf = RealGF(mat_path, csv_path)
 
-    assert gf.shape == (18, 12)
+    assert gf.shape == (24, 16)
     assert gf.dof_row == 3
     assert gf.dof_col == 2
     np.testing.assert_array_equal(gf.row_pm_to_raw, row_expected)
@@ -197,19 +208,19 @@ def test_realgf_tiny_synthetic_matvec_rmatvec_match_dense(tmp_path: Path) -> Non
     mat_path, csv_path, row_expected, col_expected = _tiny_synthetic_dataset(tmp_path)
     gf = RealGF(mat_path, csv_path)
 
-    raw_values = (100 * np.arange(18)[:, None] + np.arange(12)[None, :]).astype(np.float64)
+    raw_values = (100 * np.arange(24)[:, None] + np.arange(16)[None, :]).astype(np.float64)
     dense_pm = raw_values[np.ix_(row_expected, col_expected)]
     reference = DenseOperator(dense_pm)
 
     rng = np.random.default_rng(0)
-    omega = rng.standard_normal((12, 3))
-    psi = rng.standard_normal((18, 3))
+    omega = rng.standard_normal((16, 3))
+    psi = rng.standard_normal((24, 3))
 
     np.testing.assert_allclose(gf.matvec(omega), reference.matvec(omega))
     np.testing.assert_allclose(gf.rmatvec(psi), reference.rmatvec(psi))
 
     # Single-vector form too.
-    omega1 = rng.standard_normal(12)
+    omega1 = rng.standard_normal(16)
     np.testing.assert_allclose(gf.matvec(omega1), reference.matvec(omega1))
 
 
@@ -217,7 +228,7 @@ def test_load_coords_csv_col_permutation_is_bijection(tmp_path: Path) -> None:
     _, csv_path, _, col_expected = _tiny_synthetic_dataset(tmp_path)
     coords = _load_coords_csv(csv_path)
     np.testing.assert_array_equal(coords.col_pm_to_raw, col_expected)
-    assert coords.centroids.shape == (6, 3)
+    assert coords.centroids.shape == (8, 3)
 
 
 def test_row_pm_to_raw_permutation_is_bijection() -> None:
