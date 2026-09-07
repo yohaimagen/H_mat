@@ -44,7 +44,7 @@ F.5  # done 99fd50a 2026-09-06
 
 # Stage 6: end-to-end validation (fixed-pattern path)
 6.1  # done 2990cb4 2026-09-06
-6.2
+6.2  # done c071b36 2026-09-06
 
 # Stage 7: graph-coloring optimization
 7.1
