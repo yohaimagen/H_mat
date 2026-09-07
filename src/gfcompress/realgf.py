@@ -33,35 +33,50 @@ patch-major flattening: `element*(comps*nbf) + bf*comps + comp`. For columns
 this is confirmed directly from the CSV (BP7: `slip_comp` changes every `nbf`
 columns; BP3 is trivially patch-major already, `dof_col = 1`). Rows have no
 CSV, so the same blocked layout is *assumed* for rows and validated here by a
-falsifiable check (see `tests/test_realgf.py::test_row_layout_evidence_*`
-and the measurement below): for column `j`, `argmax_row |A[:, j]|` should land
-on the blocked prediction `patch_id(j)*dof_row + comp` (within one basis
-function's worth of rows -- the physical kernel peak need not sit exactly on
-the algebraic self-node), and clearly closer to that prediction than to the
-prediction a "file order is already patch-major" (wrong) permutation would
-give.
+falsifiable check (see `tests/test_realgf.py::test_row_layout_evidence_*` and
+the measurement below): for a probed patch, the block-norm of `A[:, j]` over
+patch-sized row blocks should (a) decay with centroid distance from the
+probed patch -- measured as the Spearman rank correlation `rho` between
+distance and block-norm, which should be strongly negative -- and (b) be
+largest on the probed patch's own (near-diagonal) block. Two wrong hypotheses
+are checked as nulls: "file order is already patch-major" (no row
+permutation), and "file order is comp-major globally" (all patches of
+component 0, then all of component 1, ...).
 
-Measured evidence (2026-09-07, `real_gfs/`): at the domain ends the argmax
-lands *exactly* on the blocked prediction (BP3 col 0 -> row 7 of 8-block
-[6,7]; BP3 col 13999 -> row 27999 of block [27998,27999]; BP7 col 0 -> row 10
-of block [9,10,11]); in the interior it lands within 2-3 rows of the block
-center, i.e. still inside or adjacent to the predicted `dof_row`-wide block,
-while the "already patch-major" (wrong) prediction for the same columns is
-tens of thousands of rows away. Both datasets independently confirm the
-blocked-row hypothesis at every column probed; no probe found a mismatch.
-This is evidence *for* the blocked hypothesis, gathered by direct
+Measured evidence (2026-09-07, `real_gfs/`, both datasets, several probed
+patches): under the blocked-row hypothesis, `rho` in `[-0.996, -0.96]` and
+the probed patch's own block is the argmax or within rank 2 of it, at every
+probe on both datasets. Under the "already patch-major" null, `rho` is
+markedly weaker, `[-0.51, -0.25]`, and the near-diagonal rank is far worse
+(up to ~3965 of 5520 on BP7). Under the "comp-major globally" null, `rho` is
+essentially zero (`|rho| < 0.1` at every probe on both datasets) -- the
+scrambling destroys the decay signal entirely, even though the near-diagonal
+rank under this null is noisy rather than uniformly bad (it can land near 0
+by chance on some probes, since with only `dof_row` groups there are few ways
+to scramble). `rho` is therefore the reliable discriminator for this null;
+both wrong hypotheses are clearly distinguishable from the blocked hypothesis
+by `rho` alone on both datasets; no probe found a mismatch under the blocked
+hypothesis. This is evidence *for* the blocked hypothesis, gathered by direct
 measurement, not proof for every one of the 14000/16560 columns -- treat any
 future compression result on real data whose accuracy looks anomalously poor
 as reason to re-run this check first.
 
 `L` (patch characteristic length)
 ----------------------------------
-`L` feeds `diam`, which feeds admissibility (`dist >= eta * max(diam_a,
-diam_b)`), so it silently reclassifies near/far blocks. GLL nodes cluster at
-element edges, so true nearest-neighbour spacing varies by an order of
-magnitude *within one element* -- a poor default, since it hands wildly
-different lengths to physically equivalent nodes. Three candidates are
-implemented (`patch_length_candidates`):
+`FaultMesh.L` is a per-patch length that (per `CLAUDE.md` and the plan) is
+*intended* to feed `diam`, which feeds admissibility (`dist >= eta *
+max(diam_a, diam_b)`). **As of this task, it does not**: `TreeNode.diam`/
+`bounding_box` are computed from patch centroids alone
+(`tree.py::_compute_geometry`) and then overwritten by the dyadic cell
+(`build_tree.py`); `is_admissible` reads only `bounding_box`/`diam`
+(`interactions.py`). Nothing outside `geometry.py` reads `mesh.L`, so
+`l_method` currently has no effect on which blocks the compressor treats as
+near/far -- it is stored on the mesh for a downstream task to consume, not
+wired into admissibility yet. GLL nodes cluster at element edges, so true
+nearest-neighbour spacing varies by an order of magnitude *within one
+element* -- a poor default for whenever `L` does get consumed, since it would
+hand wildly different lengths to physically equivalent nodes. Three
+candidates are implemented (`patch_length_candidates`):
 
 - `"representative"` (**default**): `element_diam / nbf`, uniform across an
   element's nodes.
@@ -74,15 +89,18 @@ give each node a length tied to local mesh resolution, not to where within
 the element it happens to sit) while being cheaper to compute and stable
 under GLL clustering, and it avoids `"element"`'s over-conservatism.
 
-Measured sensitivity (near-neighbour admissible fraction, eta=0.5, k=30
-nearest neighbours, both datasets, see `tests/test_realgf.py::
-test_L_candidate_sensitivity_*`): `"representative"` and `"voronoi"` agree to
+Measured sensitivity is a **proxy**, not a measurement of the compressor's
+actual admissible/inadmissible split (since `L` is not yet wired into
+`diam`): the fraction of a patch's `k=30` nearest neighbours that a direct
+patch-pair test `dist >= eta * max(L_i, L_j)` (eta=0.5) would call
+admissible, computed independently of the tree (see `tests/test_realgf.py::
+test_L_candidate_sensitivity_*`). `"representative"` and `"voronoi"` agree to
 within a few percent (BP3: 0.991 vs 0.991; BP7: 0.931 vs 0.931), while
 `"element"` differs sharply (BP3: 0.801; BP7: 0.302) -- using the full
-element size for every node classifies far more near-neighbour pairs as
+element size for every node would classify far more near-neighbour pairs as
 inadmissible, especially on BP7 where element sizes vary ~6x across the
-mesh. The split **is** materially sensitive to this choice; `"element"` is
-not a safe substitute for the default.
+mesh. The proxy split **is** materially sensitive to this choice; `"element"`
+would not be a safe substitute for the default once `L` is consumed.
 """
 
 from __future__ import annotations

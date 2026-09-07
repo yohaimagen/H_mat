@@ -134,7 +134,7 @@ def test_header_size_mismatch_raises(tmp_path: Path) -> None:
 def _tiny_synthetic_dataset(
     tmp_path: Path,
 ) -> tuple[Path, Path, NDArray[np.intp], NDArray[np.intp]]:
-    n_elements, nbf, dof_row, dof_col = 2, 2, 3, 2
+    n_elements, nbf, dof_row, dof_col = 2, 3, 3, 2
     n_patches = n_elements * nbf  # 4
     n_rows = dof_row * n_patches  # 12
     n_cols = dof_col * n_patches  # 8
@@ -186,7 +186,7 @@ def test_realgf_tiny_synthetic_permutation_matches_hand_derived(tmp_path: Path) 
 
     gf = RealGF(mat_path, csv_path)
 
-    assert gf.shape == (12, 8)
+    assert gf.shape == (18, 12)
     assert gf.dof_row == 3
     assert gf.dof_col == 2
     np.testing.assert_array_equal(gf.row_pm_to_raw, row_expected)
@@ -197,19 +197,19 @@ def test_realgf_tiny_synthetic_matvec_rmatvec_match_dense(tmp_path: Path) -> Non
     mat_path, csv_path, row_expected, col_expected = _tiny_synthetic_dataset(tmp_path)
     gf = RealGF(mat_path, csv_path)
 
-    raw_values = (100 * np.arange(12)[:, None] + np.arange(8)[None, :]).astype(np.float64)
+    raw_values = (100 * np.arange(18)[:, None] + np.arange(12)[None, :]).astype(np.float64)
     dense_pm = raw_values[np.ix_(row_expected, col_expected)]
     reference = DenseOperator(dense_pm)
 
     rng = np.random.default_rng(0)
-    omega = rng.standard_normal((8, 3))
-    psi = rng.standard_normal((12, 3))
+    omega = rng.standard_normal((12, 3))
+    psi = rng.standard_normal((18, 3))
 
     np.testing.assert_allclose(gf.matvec(omega), reference.matvec(omega))
     np.testing.assert_allclose(gf.rmatvec(psi), reference.rmatvec(psi))
 
     # Single-vector form too.
-    omega1 = rng.standard_normal(8)
+    omega1 = rng.standard_normal(12)
     np.testing.assert_allclose(gf.matvec(omega1), reference.matvec(omega1))
 
 
@@ -217,7 +217,7 @@ def test_load_coords_csv_col_permutation_is_bijection(tmp_path: Path) -> None:
     _, csv_path, _, col_expected = _tiny_synthetic_dataset(tmp_path)
     coords = _load_coords_csv(csv_path)
     np.testing.assert_array_equal(coords.col_pm_to_raw, col_expected)
-    assert coords.centroids.shape == (4, 3)
+    assert coords.centroids.shape == (6, 3)
 
 
 def test_row_pm_to_raw_permutation_is_bijection() -> None:
@@ -281,27 +281,41 @@ def test_bp7_permutation_roundtrips() -> None:
     assert not np.array_equal(gf.col_pm_to_raw, np.arange(gf.shape[1]))
 
 
-def _row_layout_probe(gf: RealGF, patch: int) -> tuple[float, float, int, int]:
+def _row_layout_probe(gf: RealGF, patch: int) -> tuple[float, float, float, int, int, int]:
     """Discriminating check (Finding C): |A| decay with centroid distance,
     and near-diagonal dominance, under the applied (correct) row
-    permutation vs. the "file order is already patch-major" (wrong) one.
+    permutation vs. two wrong hypotheses: "file order is already
+    patch-major" (`wrong`), and "file order is comp-major globally", i.e.
+    all patches of component 0, then all of component 1, ... (`compmajor`).
 
-    Returns `(rho_correct, rho_wrong, rank_correct, rank_wrong)` where
-    `rank` is how many patches have a *larger* block-norm than the probed
-    patch's own block (0 = exact argmax).
+    Returns `(rho_correct, rho_wrong, rho_compmajor, rank_correct,
+    rank_wrong, rank_compmajor)` where `rank` is how many patches have a
+    *larger* block-norm than the probed patch's own block (0 = exact
+    argmax).
     """
+    n_patches = gf.mesh.n_patches
     raw_col = gf.col_pm_to_raw[patch * gf.dof_col]
     col_raw = np.asarray(gf.mat[:, raw_col])
     col_correct = col_raw[gf.row_pm_to_raw]
     block_correct = np.abs(col_correct.reshape(-1, gf.dof_row)).max(axis=1)
     block_wrong = np.abs(col_raw.reshape(-1, gf.dof_row)).max(axis=1)
+    block_compmajor = np.abs(col_raw.reshape(gf.dof_row, n_patches)).max(axis=0)
 
     dist = np.linalg.norm(gf.mesh.centroids - gf.mesh.centroids[patch], axis=1)
     rho_correct, _ = spearmanr(dist, block_correct)
     rho_wrong, _ = spearmanr(dist, block_wrong)
+    rho_compmajor, _ = spearmanr(dist, block_compmajor)
     rank_correct = int((block_correct > block_correct[patch]).sum())
     rank_wrong = int((block_wrong > block_wrong[patch]).sum())
-    return float(rho_correct), float(rho_wrong), rank_correct, rank_wrong
+    rank_compmajor = int((block_compmajor > block_compmajor[patch]).sum())
+    return (
+        float(rho_correct),
+        float(rho_wrong),
+        float(rho_compmajor),
+        rank_correct,
+        rank_wrong,
+        rank_compmajor,
+    )
 
 
 @_needs_bp3
@@ -309,12 +323,17 @@ def test_row_layout_evidence_bp3() -> None:
     gf = RealGF(_BP3_MAT, _BP3_CSV)
     probes = [0, 7000, 13999]
     for patch in probes:
-        rho_c, rho_w, rank_c, rank_w = _row_layout_probe(gf, patch)
+        rho_c, rho_w, rho_cm, rank_c, _rank_w, _rank_cm = _row_layout_probe(gf, patch)
         # Correct permutation: strong decay, near-diagonal dominant.
         assert rho_c < -0.85, f"patch {patch}: rho_correct={rho_c}"
         assert rank_c <= 5, f"patch {patch}: rank_correct={rank_c}"
         # Wrong ("already patch-major") permutation: measurably weaker.
         assert rho_w > rho_c + 0.3, f"patch {patch}: rho_wrong={rho_w} not weaker than {rho_c}"
+        # Wrong ("comp-major globally") permutation: no measurable decay
+        # (rank alone is not a reliable discriminator here: with only
+        # `dof_row` groups, the near-diagonal block can land back near rank
+        # 0 by chance under this null on some probes).
+        assert abs(rho_cm) < 0.15, f"patch {patch}: rho_compmajor={rho_cm}"
 
 
 @_needs_bp7
@@ -322,10 +341,13 @@ def test_row_layout_evidence_bp7() -> None:
     gf = RealGF(_BP7_MAT, _BP7_CSV)
     probes = [0, 2760, 5519]
     for patch in probes:
-        rho_c, rho_w, rank_c, rank_w = _row_layout_probe(gf, patch)
+        rho_c, rho_w, rho_cm, rank_c, _rank_w, _rank_cm = _row_layout_probe(gf, patch)
         assert rho_c < -0.85, f"patch {patch}: rho_correct={rho_c}"
         assert rank_c <= 5, f"patch {patch}: rank_correct={rank_c}"
         assert rho_w > rho_c + 0.2, f"patch {patch}: rho_wrong={rho_w} not weaker than {rho_c}"
+        # Wrong ("comp-major globally") permutation: no measurable decay
+        # (rank alone is not a reliable discriminator here, see BP3 above).
+        assert abs(rho_cm) < 0.15, f"patch {patch}: rho_compmajor={rho_cm}"
 
 
 def _near_neighbor_admissible_fraction(
