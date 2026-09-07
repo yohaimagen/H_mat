@@ -46,6 +46,16 @@ F.5  # done 99fd50a 2026-09-06
 6.1  # done 2990cb4 2026-09-06
 6.2  # done c071b36 2026-09-06
 
+# Stage R: validation on real GF data (see REALGF_PLAN.md)
+R.1
+R.2
+R.3
+R.4
+R.5
+R.6
+R.7
+R.8
+
 # Stage 7: graph-coloring optimization
 7.1
 7.2
