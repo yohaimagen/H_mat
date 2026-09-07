@@ -11,3 +11,6 @@ dist/
 venv/
 .coverage
 htmlcov/
+
+# Real Green's function datasets (6.5 GB, see REALGF_PLAN.md)
+real_gfs/

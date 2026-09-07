@@ -493,3 +493,29 @@ the ids. Run in order; each is one PR off `main`.
   Revises Tasks 4.2/4.3/2.2. Details: `FIXPLAN.md` §F.4.
 * **Task F.5: `column_bases` retains `Y(I_α,:)` and `G_β`; real low-rank tests.**
   Revises Task 5.2. Details: `FIXPLAN.md` §F.5.
+
+---
+
+## Stage R: Validation against real Green's functions (SCEC/SEAS BP3, BP7)
+**Objective:** Compress two real elastostatic GF operators on geometry we did
+not choose, and record accuracy, sampling cost, memory and apply cost. Full
+task blocks (scope, steps, tests, acceptance) live in **`REALGF_PLAN.md`**; the
+entries here exist so the `/task` pipeline can resolve the ids. `R.1` is
+independent of the `R.2 -> R.3 -> R.4 -> R.5` chain; `R.6` needs both.
+
+* **Task R.1: PETSc/CSV reader and `RealGF` operator.**
+  Resolves Finding C (patch-major dof layout). Details: `REALGF_PLAN.md` §R.1.
+* **Task R.2: PCA alignment, degenerate-axis dropping, tree/dof decoupling.**
+  Resolves Finding B. Details: `REALGF_PLAN.md` §R.2.
+* **Task R.3: Renumber patches into cluster-tree order.**
+  Resolves Finding D. Details: `REALGF_PLAN.md` §R.3.
+* **Task R.4: Re-evaluate Finding A on the fixed tree.**
+  Measurement only, no production code. Details: `REALGF_PLAN.md` §R.4.
+* **Task R.5: Per-block rank clamping, scoped by R.4.**
+  Resolves what survives of Finding A. Details: `REALGF_PLAN.md` §R.5.
+* **Task R.6: Subset extraction and fast real-data tests.**
+  Details: `REALGF_PLAN.md` §R.6.
+* **Task R.7: Parameter behaviour on real geometry; pick the operating point.**
+  Details: `REALGF_PLAN.md` §R.7.
+* **Task R.8: Full-scale BP3/BP7 runs and `real_gfs/RESULTS.md`.**
+  Details: `REALGF_PLAN.md` §R.8.
