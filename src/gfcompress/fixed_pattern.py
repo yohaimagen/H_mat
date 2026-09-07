@@ -238,7 +238,7 @@ def build_admissible_test_matrices(
     Returns:
         A list of `PeriodicTestMatrix`, one per non-empty pattern cell, in a
         deterministic order (pattern cells sorted lexicographically). At most
-        `6 ** mesh.d` entries.
+        `6 ** mesh.tree_dim` entries.
 
     Raises:
         ValueError: If `side` is not `"col"` or `"row"`.
@@ -357,7 +357,7 @@ def build_leaf_test_matrices(
     Returns:
         A list of `PeriodicLeafTestMatrix`, one per non-empty leaf pattern
         cell, in a deterministic order (pattern cells sorted
-        lexicographically). At most `3 ** mesh.d` entries.
+        lexicographically). At most `3 ** mesh.tree_dim` entries.
     """
     level_nodes = root.nodes_at_level(level)
 

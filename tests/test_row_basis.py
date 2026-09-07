@@ -186,7 +186,7 @@ def test_rmatvec_count_matches_test_matrix_count() -> None:
     k, p = 2, 2
 
     test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=3, side="row")
-    assert len(test_matrices) <= 6**mesh.d
+    assert len(test_matrices) <= 6**mesh.tree_dim
 
     row_bases(counting_op, root, lists, mesh, level, factors=[], k=k, p=p, seed=3)
 
@@ -326,8 +326,8 @@ def test_compress_level_matvec_budget() -> None:
 
     compress_level(counting_op, root, lists, mesh, level, factors=[], k=k, p=p, seed=9)
 
-    assert counting_op.matvec_calls <= 6**mesh.d
-    assert counting_op.rmatvec_calls <= 6**mesh.d
-    assert counting_op.matvec_calls + counting_op.rmatvec_calls <= 2 * 6**mesh.d
+    assert counting_op.matvec_calls <= 6**mesh.tree_dim
+    assert counting_op.rmatvec_calls <= 6**mesh.tree_dim
+    assert counting_op.matvec_calls + counting_op.rmatvec_calls <= 2 * 6**mesh.tree_dim
     assert counting_op.matvec_columns == counting_op.matvec_calls * (k + p)
     assert counting_op.rmatvec_columns == counting_op.rmatvec_calls * (k + p)

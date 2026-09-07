@@ -202,7 +202,7 @@ def test_matvec_count_matches_test_matrix_count() -> None:
     k, p = 2, 2
 
     test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=3, side="col")
-    assert len(test_matrices) <= 6**mesh.d
+    assert len(test_matrices) <= 6**mesh.tree_dim
 
     column_bases(counting_op, root, lists, mesh, level, factors=[], k=k, p=p, seed=3)
 

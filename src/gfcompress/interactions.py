@@ -42,22 +42,27 @@ from gfcompress.tree import TreeNode
 #: Default strong-admissibility separation parameter for `is_admissible`.
 #:
 #: On the fixed uniform dyadic grid built by `build_tree`, same-level boxes
-#: are congruent axis-aligned cells of side `s`, so `diam = s * sqrt(d)`. A
-#: box `beta` in `alpha`'s interaction list (a child of a neighbor of
-#: `alpha`'s parent that is *not* itself a neighbor of `alpha`) is separated
-#: from `alpha` by a gap of at least one cell width `s` along some axis, i.e.
+#: are congruent axis-aligned cells of side `s` in the **tree's own**
+#: dimension `d_t = mesh.tree_dim` (Task R.2 decouples this from the elastic
+#: problem's `dof_row`; a reduced-dimension tree, e.g. a PCA-aligned 1D fault,
+#: has `d_t = 1` while `dof_row` stays 2), so `diam = s * sqrt(d_t)`. A box
+#: `beta` in `alpha`'s interaction list (a child of a neighbor of `alpha`'s
+#: parent that is *not* itself a neighbor of `alpha`) is separated from
+#: `alpha` by a gap of at least one cell width `s` along some axis, i.e.
 #: `dist(alpha, beta) >= s`. Hence
 #:
-#:     dist(alpha, beta) / max(diam(alpha), diam(beta)) >= 1 / sqrt(d)
+#:     dist(alpha, beta) / max(diam(alpha), diam(beta)) >= 1 / sqrt(d_t)
 #:
-#: which is `1/sqrt(2) ~= 0.707` in 2D and `1/sqrt(3) ~= 0.577` in 3D. Any
-#: `beta` in `L^nei(alpha)` (including `alpha` itself) touches or overlaps
-#: `alpha`, so `dist == 0` and is inadmissible for *any* `eta > 0`.
+#: which is `1/sqrt(1) = 1.0` for a 1D tree, `1/sqrt(2) ~= 0.707` for 2D, and
+#: `1/sqrt(3) ~= 0.577` for 3D. Any `beta` in `L^nei(alpha)` (including
+#: `alpha` itself) touches or overlaps `alpha`, so `dist == 0` and is
+#: inadmissible for *any* `eta > 0`.
 #:
-#: `DEFAULT_ETA = 0.5` is `<= 1/sqrt(d)` for both `d in {2, 3}`, so it
-#: classifies every interaction-list box as admissible and every neighbor box
-#: as inadmissible -- the geometric predicate and the combinatorial
-#: interaction-list/neighbor-list split agree exactly on this grid.
+#: `DEFAULT_ETA = 0.5` is `<= 1/sqrt(d_t)` for every `d_t in {1, 2, 3}` this
+#: package supports, so it classifies every interaction-list box as
+#: admissible and every neighbor box as inadmissible -- the geometric
+#: predicate and the combinatorial interaction-list/neighbor-list split agree
+#: exactly on this grid, at any tree dimension.
 DEFAULT_ETA = 0.5
 
 

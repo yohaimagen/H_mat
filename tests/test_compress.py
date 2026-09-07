@@ -171,7 +171,7 @@ def _predicted_counts(
 def test_matvec_count_matches_exact_prediction_2d() -> None:
     mesh = _grid_mesh(16, 16)
     m, k, p, seed = 4, 4, 4, 3
-    d = mesh.d
+    d = mesh.tree_dim
 
     predicted_total, per_level, leaf_probe_width, w_max = _predicted_counts(mesh, m, k, p)
 
@@ -196,7 +196,7 @@ def test_matvec_count_matches_exact_prediction_2d() -> None:
 def test_matvec_count_matches_exact_prediction_3d() -> None:
     mesh = _grid_mesh(8, 8, 8)
     m, k, p, seed = 8, 8, 8, 4
-    d = mesh.d
+    d = mesh.tree_dim
 
     predicted_total, per_level, leaf_probe_width, w_max = _predicted_counts(mesh, m, k, p)
 

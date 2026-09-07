@@ -270,11 +270,11 @@ def test_extract_leaves_probe_width_bounded_2d() -> None:
 
     level_nodes = root.nodes_at_level(L)
     w_max = max(len(box.col_indices) for box in level_nodes)
-    bound = LEAF_PERIOD**mesh.d * w_max
+    bound = LEAF_PERIOD**mesh.tree_dim * w_max
 
     extract_leaves(counting_op, root, lists, mesh, L, factors=[])
 
-    assert counting_op.matvec_calls <= LEAF_PERIOD**mesh.d
+    assert counting_op.matvec_calls <= LEAF_PERIOD**mesh.tree_dim
     assert counting_op.matvec_columns <= bound
     # The bound must not degrade to O(N): far below one column per box.
     assert counting_op.matvec_columns < mesh.n_cols
@@ -290,11 +290,11 @@ def test_extract_leaves_probe_width_bounded_3d() -> None:
 
     level_nodes = root.nodes_at_level(L)
     w_max = max(len(box.col_indices) for box in level_nodes)
-    bound = LEAF_PERIOD**mesh.d * w_max
+    bound = LEAF_PERIOD**mesh.tree_dim * w_max
 
     extract_leaves(counting_op, root, lists, mesh, L, factors=[])
 
-    assert counting_op.matvec_calls <= LEAF_PERIOD**mesh.d
+    assert counting_op.matvec_calls <= LEAF_PERIOD**mesh.tree_dim
     assert counting_op.matvec_columns <= bound
     assert counting_op.matvec_columns < mesh.n_cols
 
