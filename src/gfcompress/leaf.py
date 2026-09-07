@@ -99,9 +99,9 @@ def extract_leaves(
         A list of `DenseLeaf`, one per pair `(alpha, beta)` with `alpha`
         ranging over `root.nodes_at_level(level)` and `beta` over
         `lists.nei[alpha]` (in that nested order). Issues exactly one peeled
-        matvec per emitted leaf test matrix (`<= 3 ** mesh.d`), each of width
+        matvec per emitted leaf test matrix (`<= 3 ** mesh.tree_dim`), each of width
         `w_max = max_beta len(beta.col_indices)`, for a total probe width
-        `<= 3 ** mesh.d * w_max`.
+        `<= 3 ** mesh.tree_dim * w_max`.
     """
     level_nodes = root.nodes_at_level(level)
 

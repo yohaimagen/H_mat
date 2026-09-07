@@ -77,7 +77,7 @@ def compress_level(
 
     Returns:
         A `Factors` list (one `BlockFactor` per admissible pair at `level`).
-        Issues exactly `n_Omega + n_Psi <= 2 * 6 ** mesh.d` products of width
+        Issues exactly `n_Omega + n_Psi <= 2 * 6 ** mesh.tree_dim` products of width
         `k + p` with `A`/`A*` (one peeled matvec per `Omega`, one peeled
         rmatvec per `Psi`).
     """

@@ -73,6 +73,15 @@ def _grid_mesh(*shape: int, spacing: float = 1.0) -> FaultMesh:
     return FaultMesh(centroids=centroids, L=lengths)
 
 
+def _line_mesh(n: int, spacing: float = 1.0, dof_row: int = 2) -> FaultMesh:
+    """Build a `FaultMesh` whose centroids form a 1D line (`tree_dim=1`),
+    with an explicit `dof_row` decoupled from the tree dimension (Task R.2)
+    -- the BP3-like case (1D fault, 2D elasticity)."""
+    centroids = (np.arange(n, dtype=float) * spacing)[:, None]
+    lengths = np.full(n, 0.1 * spacing)
+    return FaultMesh(centroids=centroids, L=lengths, dof_row=dof_row)
+
+
 def _deepest_level(root: object) -> int:
     deepest = 0
     for level_nodes in root.iter_levels():  # type: ignore[attr-defined]
@@ -88,7 +97,7 @@ def _predicted_counts(mesh: FaultMesh, m: int, k: int, p: int) -> int:
     root = build_tree(mesh, m)
     leaf_level = _deepest_level(root)
 
-    d = mesh.d
+    d = mesh.tree_dim
     total = 0
     for level in range(2, leaf_level + 1):
         omegas = build_admissible_test_matrices(root, level, mesh, k, p, side="col")
@@ -156,6 +165,20 @@ def test_eta_sweep_consistency_3d() -> None:
     bound = (1.0 / np.sqrt(d)) * (1.0 - 1e-9)
     etas = [0.1, 0.3, DEFAULT_ETA, bound]
     _assert_eta_consistent(_grid_mesh(8, 8, 8), m=8, etas=etas)
+
+
+def test_eta_sweep_consistency_1d() -> None:
+    # Task R.2, part 1b: DEFAULT_ETA's `<= 1/sqrt(d_t)` justification is
+    # restated against the *tree* dimension `d_t`, not the elastic one.
+    # Here `d_t=1` (`1/sqrt(1) = 1.0`) while `dof_row=2` (2D elasticity),
+    # the BP3-like decoupled case.
+    d_t = 1
+    bound = (1.0 / np.sqrt(d_t)) * (1.0 - 1e-9)
+    etas = [0.1, 0.3, DEFAULT_ETA, bound]
+    mesh = _line_mesh(64, dof_row=2)
+    assert mesh.tree_dim == 1
+    assert mesh.dof_row == 2
+    _assert_eta_consistent(mesh, m=4, etas=etas)
 
 
 # ---------------------------------------------------------------------------

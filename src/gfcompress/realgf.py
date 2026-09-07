@@ -419,8 +419,10 @@ class RealGF(MatVecOperator):
             `rmatvec`.
         mesh: `FaultMesh` of the `N` patch centroids, with `L` from
             `l_method`.
-        dof_row: Row dofs per patch (`= mesh.d`).
-        dof_col: Column dofs per patch (`= mesh.d - 1`).
+        dof_row: Row dofs per patch (`= mesh.dof_row`, the elastic problem
+            dimension; the CSV/PETSc real-data meshes are always full-ambient,
+            i.e. `mesh.tree_dim == mesh.dof_row`).
+        dof_col: Column dofs per patch (`= mesh.dof_row - 1`).
         row_pm_to_raw: Patch-major row index -> raw file row index, shape
             `(n_rows,)`.
         col_pm_to_raw: Patch-major column index -> raw file column index,

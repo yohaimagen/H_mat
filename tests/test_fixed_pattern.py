@@ -150,7 +150,7 @@ def test_admissible_test_matrices_coverage_2d_wraparound() -> None:
     seed = 12345
     test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=seed)
 
-    d = mesh.d
+    d = mesh.tree_dim
     assert len(test_matrices) <= PERIOD**d
 
     # Every emitted Omega has the right shape.
@@ -216,7 +216,7 @@ def test_admissible_test_matrices_row_side_coverage_2d() -> None:
     k, p = 3, 2
     test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=5, side="row")
 
-    assert len(test_matrices) <= PERIOD**mesh.d
+    assert len(test_matrices) <= PERIOD**mesh.tree_dim
     for tm in test_matrices:
         assert tm.omega.shape == (mesh.n_rows, k + p)
 
@@ -306,7 +306,7 @@ def test_admissible_test_matrices_3d_smoke() -> None:
     k, p = 2, 1
     test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=7)
 
-    d = mesh.d
+    d = mesh.tree_dim
     assert len(test_matrices) <= PERIOD**d
 
     for tm in test_matrices:
@@ -432,7 +432,7 @@ def test_leaf_test_matrices_shared_slots_and_isolation_2d() -> None:
     assert 2**level >= 4
 
     test_matrices = build_leaf_test_matrices(root, level, mesh)
-    d = mesh.d
+    d = mesh.tree_dim
     w_max = max(len(box.col_indices) for box in level_nodes)
 
     assert len(test_matrices) <= LEAF_PERIOD**d
@@ -545,7 +545,7 @@ def test_leaf_test_matrices_3d_smoke() -> None:
     test_matrices = build_leaf_test_matrices(root, level, mesh)
     w_max = max(len(box.col_indices) for box in level_nodes)
 
-    assert len(test_matrices) <= LEAF_PERIOD**mesh.d
+    assert len(test_matrices) <= LEAF_PERIOD**mesh.tree_dim
     for tm in test_matrices:
         assert tm.omega.shape == (mesh.n_cols, w_max)
 
