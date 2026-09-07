@@ -47,7 +47,7 @@ F.5  # done 99fd50a 2026-09-06
 6.2  # done c071b36 2026-09-06
 
 # Stage R: validation on real GF data (see REALGF_PLAN.md)
-R.1
+R.1  # done 024ae97 2026-09-07
 R.2
 R.3
 R.4
