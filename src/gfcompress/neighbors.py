@@ -1,4 +1,4 @@
-"""Neighbor lists `L^nei` over the geometric cluster tree (Task 1.4).
+"""Neighbor lists `L^nei` over the geometric cluster tree (Task C.1).
 
 Per CLAUDE.md, all combinatorics (neighbors, interaction lists, admissibility,
 coloring, peeling) run on the `N` boxes of the single geometric cluster tree

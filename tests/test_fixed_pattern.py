@@ -34,6 +34,7 @@ A_{alpha,beta}`.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from gfcompress.build_tree import build_tree
 from gfcompress.fixed_pattern import (
@@ -56,12 +57,12 @@ from gfcompress.tree import TreeNode
 
 def _grid_mesh(*shape: int, spacing: float = 1.0) -> FaultMesh:
     """Build a `FaultMesh` whose centroids form a regular grid of the given
-    `shape` (length `d`, `d in (2, 3)`), with unit spacing along each axis."""
+    `shape` (length `d in {1, 2, 3}`), with unit spacing along each axis."""
     axes = [np.arange(n, dtype=float) * spacing for n in shape]
     mesh_grids = np.meshgrid(*axes, indexing="ij")
     centroids = np.stack([g.ravel() for g in mesh_grids], axis=1)
     L = np.full(centroids.shape[0], 0.1 * spacing)
-    return FaultMesh(centroids=centroids, L=L)
+    return FaultMesh(centroids=centroids, L=L, dof_row=max(2, len(shape)))
 
 
 def _deepest_level(root: TreeNode) -> int:
@@ -203,6 +204,27 @@ def test_admissible_test_matrices_coverage_2d_wraparound() -> None:
             n_checked += 1
 
     assert n_checked > 0
+
+
+@pytest.mark.parametrize("tree_dim", [1, 2, 3])
+def test_period_six_wraparound_isolates_each_admissible_probe(tree_dim: int) -> None:
+    """A wrapped period-6 class has no second box in any sampling window."""
+    mesh = _grid_mesh(*(8,) * tree_dim)
+    root = build_tree(mesh, m=1)
+    level = _deepest_level(root)
+    level_nodes = root.nodes_at_level(level)
+    assert 2**level > PERIOD
+
+    matrices = build_admissible_test_matrices(root, level, mesh, k=1, seed=7)
+    assert any(len(tm.active_boxes) > 1 for tm in matrices)
+    box_to_matrix = {id(box): tm for tm in matrices for box in tm.active_boxes}
+    lists = build_lists(root)
+
+    for alpha in level_nodes:
+        window = {*lists.nei[alpha], *lists.interaction[alpha]}
+        for beta in window:
+            active = set(box_to_matrix[id(beta)].active_boxes)
+            assert active & window == {beta}
 
 
 # ---------------------------------------------------------------------------
@@ -486,6 +508,27 @@ def test_leaf_test_matrices_shared_slots_and_isolation_2d() -> None:
             n_checked += 1
 
     assert n_checked > 0
+
+
+@pytest.mark.parametrize("tree_dim", [1, 2, 3])
+def test_period_three_wraparound_isolates_each_leaf_probe(tree_dim: int) -> None:
+    """A wrapped period-3 class has no second box in a leaf neighbor list."""
+    mesh = _grid_mesh(*(4,) * tree_dim)
+    root = build_tree(mesh, m=1)
+    level = _deepest_level(root)
+    level_nodes = root.nodes_at_level(level)
+    assert 2**level > LEAF_PERIOD
+
+    matrices = build_leaf_test_matrices(root, level, mesh)
+    assert any(len(tm.active_boxes) > 1 for tm in matrices)
+    box_to_matrix = {id(box): tm for tm in matrices for box in tm.active_boxes}
+    neighbors = build_lists(root).nei
+
+    for alpha in level_nodes:
+        window = set(neighbors[alpha])
+        for beta in window:
+            active = set(box_to_matrix[id(beta)].active_boxes)
+            assert active & window == {beta}
 
 
 # ---------------------------------------------------------------------------

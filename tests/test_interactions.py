@@ -55,12 +55,12 @@ from gfcompress.tree import TreeNode
 
 def _grid_mesh(*shape: int, spacing: float = 1.0) -> FaultMesh:
     """Build a `FaultMesh` whose centroids form a regular grid of the given
-    `shape` (length `d`, `d in (2, 3)`), with unit spacing along each axis."""
+    `shape` (length `d in {1, 2, 3}`), with unit spacing along each axis."""
     axes = [np.arange(n, dtype=float) * spacing for n in shape]
     mesh_grids = np.meshgrid(*axes, indexing="ij")
     centroids = np.stack([g.ravel() for g in mesh_grids], axis=1)
     L = np.full(centroids.shape[0], 0.1 * spacing)
-    return FaultMesh(centroids=centroids, L=L)
+    return FaultMesh(centroids=centroids, L=L, dof_row=max(2, len(shape)))
 
 
 def _deepest_level(root: TreeNode) -> int:
@@ -254,6 +254,27 @@ def test_admissibility_symmetric() -> None:
     level_nodes = root.nodes_at_level(_deepest_level(root))
     for alpha, beta in itertools.product(level_nodes, repeat=2):
         assert is_admissible(alpha, beta, DEFAULT_ETA) == is_admissible(beta, alpha, DEFAULT_ETA)
+
+
+@pytest.mark.parametrize("tree_dim", [1, 2, 3])
+def test_interaction_separation_has_dyadic_lower_bound(tree_dim: int) -> None:
+    """Each interaction pair is separated by at least one cell width."""
+    mesh = _grid_mesh(*(8,) * tree_dim)
+    root = build_tree(mesh, m=1)
+    lists = build_lists(root)
+    lower_bound = 1.0 / np.sqrt(tree_dim)
+
+    checked = 0
+    for level_nodes in root.iter_levels():
+        for alpha in level_nodes:
+            for beta in lists.interaction[alpha]:
+                separation = box_dist(alpha.bounding_box, beta.bounding_box) / max(
+                    alpha.diam, beta.diam
+                )
+                assert separation >= lower_bound - 1e-12
+                checked += 1
+
+    assert checked > 0
 
 
 # ---------------------------------------------------------------------------

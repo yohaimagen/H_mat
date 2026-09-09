@@ -4,12 +4,12 @@ A single geometric cluster tree over the `N` patch centroids serves as both
 the row tree and the column tree. Each node holds the set of
 patch indices it covers (`patch_indices`) plus their patch-major flattened
 row/column index sets (`row_indices`/`col_indices`, via
-`FaultMesh.patch_to_rows`/`patch_to_cols`), axis-aligned bounding-box
-geometry (`bounding_box`, `center`, `diam`), and parent/child links.
+`FaultMesh.patch_to_rows`/`patch_to_cols`), axis-aligned cell geometry
+(`bounding_box`, `center`, `diam`), and parent/child links.
 
 This module provides only the node container, geometry helpers, and
 traversal utilities. The level-synchronous bisection builder lives in
-`build_tree.py` (Task F.1).
+`build_tree.py` (Task C.1).
 """
 
 from __future__ import annotations
@@ -41,8 +41,10 @@ class TreeNode:
             patch-major block-interleaved), shape
             `(dof_col * n_patches_in_node,)`.
         level: Depth of this node in the tree (root is level 0).
-        bounding_box: Axis-aligned bounding box of the node's patch
-            centroids, shape `(d, 2)` with `bounding_box[i] = (min_i, max_i)`.
+        bounding_box: Axis-aligned dyadic cell used by a tree built with
+            `build_tree`, shape `(d, 2)` with `bounding_box[i] = (lo_i,
+            hi_i)`. Nodes made directly by `make_node` instead use the
+            shrink-wrapped centroid bounds.
         center: Center of the bounding box, shape `(d,)`.
         diam: Diameter (Euclidean length of the bounding-box diagonal).
         parent: Parent node, or `None` for the root.
@@ -122,7 +124,7 @@ def make_node(
     parent: TreeNode | None = None,
 ) -> TreeNode:
     """Construct a `TreeNode` for the given patch subset, computing its
-    row/column index sets and bounding-box geometry from `mesh`.
+    row/column index sets and shrink-wrapped centroid geometry from `mesh`.
 
     Args:
         mesh: The `FaultMesh` providing centroids and index-expansion
@@ -133,8 +135,9 @@ def make_node(
         parent: Parent node, or `None` for the root.
 
     Returns:
-        A `TreeNode` with `children=[]`; the caller (recursive builder) is
-        responsible for attaching children.
+        A `TreeNode` with `children=[]`; `build_tree` replaces its
+        shrink-wrapped geometry with the corresponding dyadic cell before
+        attaching it to the tree.
     """
     patch_indices = np.asarray(patch_indices, dtype=np.intp).reshape(-1)
     row_indices = mesh.patch_to_rows(patch_indices)

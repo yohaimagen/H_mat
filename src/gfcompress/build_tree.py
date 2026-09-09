@@ -1,17 +1,22 @@
 """Level-synchronous geometric bisection builder for the dual-index cluster
-tree (Task F.1, revising Task 1.3).
+tree (Task C.1).
 
 Splitting strategy
 -------------------
-This follows the construction in Levitt & Martinsson (2024), §3 (p.5):
-the domain is refined as a **fixed uniform dyadic grid**. Level 0 is a padded
+This implementation uses the paper's dyadic construction in Levitt &
+Martinsson (2024), §3 (p.5), with one simplifying adaptation:
+**level-synchronous subdivision to a common leaf depth**. This is the
+implementation's choice for its neighbor/interaction and leaf-sampling
+machinery, not a universal requirement of the paper.
+
+The domain is refined as a **fixed uniform dyadic grid**. Level 0 is a padded
 physical hypercube enclosing the centroids. The boxes belonging to level
 `l + 1` are obtained by bisecting
 *every* box of level `l` (not just the ones that still need splitting) along
 every spatial axis at that box's **geometric midpoint** (not the median of
 its points), producing up to `2^d` smaller boxes. Boxes that contain no
 points are omitted. Because every node at a level is bisected in lock-step,
-**all leaves end up at the same uniform depth `L`** -- a property the
+**this implementation's leaves end up at the same uniform depth `L`** -- a property the
 neighbor/interaction-list machinery (Tasks 1.4/1.5) and Alg. 4.1's "neighbor
 pairs in level `L`" rely on.
 
@@ -59,12 +64,15 @@ from gfcompress.tree import TreeNode, make_node
 def build_tree(mesh: FaultMesh, m: int, max_depth: int = 64) -> TreeNode:
     """Build the geometric bisection cluster tree over `mesh`'s patches.
 
-    Implements the fixed uniform dyadic-grid refinement of Levitt &
-    Martinsson (2024), §3, as a level-synchronous loop: level `l + 1` is
+    Implements fixed uniform dyadic-grid refinement inspired by Levitt &
+    Martinsson (2024), §3, as this implementation's level-synchronous loop:
+    level `l + 1` is
     obtained by bisecting *every* box of level `l` along every spatial axis
     at its geometric midpoint, forming up to `2^d` children each. Boxes
     containing no patches are omitted. The loop continues while any node
-    still holds `> m` patches, so all leaves land at the same uniform depth.
+    still holds `> m` patches, so this implementation's leaves land at a
+    common depth. This common-depth policy is a simplifying implementation
+    adaptation, not a universal paper requirement.
 
     Args:
         mesh: The `FaultMesh` providing centroids, `d`, and the

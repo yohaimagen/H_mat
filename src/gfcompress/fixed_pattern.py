@@ -1,6 +1,5 @@
-"""Fixed periodic admissible test matrices (`<= 6^d`, paper Sec. 4.1.4, Task 4.2)
-and fixed periodic leaf/inadmissible test matrices (`<= 3^d`, Sec. 4.1.3,
-Task 4.3).
+"""Fixed periodic admissible test matrices (`<= 6^d`, paper Sec. 4.1.4)
+and fixed periodic leaf/inadmissible test matrices (`<= 3^d`, Sec. 4.1.3).
 
 Per Levitt & Martinsson (2024), Sec. 4.1.4, the boxes at a level of the
 geometric cluster tree live on a common dyadic grid of `2^level` cells per
@@ -142,17 +141,11 @@ class PeriodicTestMatrix:
 
 
 def grid_coordinates(node: TreeNode, root: TreeNode) -> tuple[int, ...]:
-    """Compute `node`'s dyadic grid coordinates `(i_0, ..., i_{d-1})`.
+    """Return `node`'s stored dyadic grid coordinates `(i_0, ..., i_{d-1})`.
 
-    `node.bounding_box` is a cell of the dyadic grid obtained by subdividing
-    `root.bounding_box` into `2**node.level` equal cells per axis (see
-    `gfcompress.build_tree.build_tree`). The grid coordinate along axis `a` is
-
-        i_a = round((node.bounding_box[a, 0] - root.bounding_box[a, 0]) / cell_width_a)
-
-    where `cell_width_a = (root.bounding_box[a, 1] - root.bounding_box[a, 0])
-    / 2**node.level`. Rounding guards against floating-point error in the
-    bisection arithmetic.
+    `build_tree` assigns exact integer cell coordinates while subdividing the
+    padded root hypercube. Reusing those integers avoids reconstructing a
+    coordinate from floating-point cell geometry.
 
     Args:
         node: The node whose grid coordinates are computed.
