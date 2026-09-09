@@ -50,6 +50,9 @@ class TreeNode:
         index_in_level: This node's position in `root.nodes_at_level(level)`,
             set by the tree builder. Defaults to `-1` for nodes constructed
             outside of `build_tree` (e.g. directly via `make_node`).
+        cell_coords: Integer coordinate of this occupied cell in the level's
+            dyadic grid. The root is `(0, ..., 0)`; nodes constructed outside
+            `build_tree` leave this empty.
     """
 
     patch_indices: NDArray[np.intp]
@@ -62,6 +65,7 @@ class TreeNode:
     parent: TreeNode | None = None
     children: list[TreeNode] = field(default_factory=list)
     index_in_level: int = -1
+    cell_coords: tuple[int, ...] = ()
 
     @property
     def is_leaf(self) -> bool:
@@ -122,7 +126,8 @@ def make_node(
 
     Args:
         mesh: The `FaultMesh` providing centroids and index-expansion
-            helpers.
+    helpers.  Nodes made outside the dyadic builder have no cell coordinate;
+    `build_tree` assigns the integer coordinate of every occupied dyadic cell.
         patch_indices: Integer array of patch indices covered by the node.
         level: Depth of the node in the tree.
         parent: Parent node, or `None` for the root.

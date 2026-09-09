@@ -15,11 +15,8 @@ p.6), for a box `alpha`:
   the Euclidean gap distance between the two axis-aligned bounding boxes (zero
   if they touch or overlap) and `diam` is `TreeNode.diam`.
 
-These two notions are *combinatorially* consistent on the fixed uniform dyadic
-grid produced by `build_tree`/`gfcompress.build_tree`: for the right choice of
-`eta`, every box in `L^int(alpha)` tests admissible against `alpha` and every
-box in `L^nei(alpha)` tests inadmissible. See `DEFAULT_ETA` below for the
-value used and why.
+The interaction list is the production partition.  `is_admissible` is a
+geometric diagnostic for that partition; it does not select blocks at runtime.
 
 The `1/(r + gamma*L)^d` physics decay of the Green's function is used *only*
 by `suggest_eta` to recommend a separation parameter from a target relative
@@ -94,11 +91,11 @@ def box_dist(box_a: NDArray[np.float64], box_b: NDArray[np.float64]) -> float:
 
 
 def is_admissible(alpha: TreeNode, beta: TreeNode, eta: float = DEFAULT_ETA) -> bool:
-    """Strong-admissibility predicate `dist(alpha, beta) >= eta * max(diam)`.
+    """Diagnostic strong-admissibility predicate.
 
-    This is the *only* admissibility gate used in this package (per
-    CLAUDE.md): it is purely geometric and never replaced by a block-norm or
-    physics-decay threshold.
+    Production block selection is the dyadic interaction-list partition,
+    rather than this geometric predicate.  This helper verifies the expected
+    separation of those blocks and is never a runtime gate.
 
     Args:
         alpha: First box.
@@ -178,7 +175,7 @@ class TreeLists:
     interaction: dict[TreeNode, list[TreeNode]]
 
 
-def build_lists(root: TreeNode, tol: float = 1e-9) -> TreeLists:
+def build_lists(root: TreeNode) -> TreeLists:
     """Build the neighbor and interaction lists for the whole tree once.
 
     Downstream code (`gfcompress.sampling.build_sampling_constraint`,
@@ -188,12 +185,10 @@ def build_lists(root: TreeNode, tol: float = 1e-9) -> TreeLists:
 
     Args:
         root: Root of the geometric cluster tree (e.g. from `build_tree`).
-        tol: Adjacency tolerance forwarded to `neighbor_lists`.
-
     Returns:
         A `TreeLists` with both maps.
     """
-    nei = neighbor_lists(root, tol=tol)
+    nei = neighbor_lists(root)
     interaction = interaction_lists(root, nei)
     return TreeLists(nei=nei, interaction=interaction)
 

@@ -357,6 +357,31 @@ def test_fig3_tessellation_3d() -> None:
                 assert is_admissible(alpha, beta, DEFAULT_ETA)
 
 
+@pytest.mark.parametrize("tree_dim", [1, 2, 3])
+def test_interactions_and_leaf_neighbors_cover_every_patch_pair_once(tree_dim: int) -> None:
+    shape = (8,) * tree_dim
+    if tree_dim == 1:
+        mesh = FaultMesh(centroids=np.arange(8, dtype=float)[:, None], L=np.ones(8), dof_row=2)
+    else:
+        mesh = _grid_mesh(*shape)
+    root = build_tree(mesh, m=1)
+    lists = build_lists(root)
+    leaf_level = _deepest_level(root)
+    coverage = np.zeros((mesh.n_patches, mesh.n_patches), dtype=np.intp)
+
+    for level_nodes in root.iter_levels():
+        if level_nodes[0].level < 2:
+            continue
+        for alpha in level_nodes:
+            for beta in lists.interaction[alpha]:
+                coverage[np.ix_(alpha.patch_indices, beta.patch_indices)] += 1
+    for alpha in root.nodes_at_level(leaf_level):
+        for beta in lists.nei[alpha]:
+            coverage[np.ix_(alpha.patch_indices, beta.patch_indices)] += 1
+
+    np.testing.assert_array_equal(coverage, np.ones_like(coverage))
+
+
 # ---------------------------------------------------------------------------
 # Window: L^nei | L^int spans grid offsets -3..+2 (Task F.2, Finding 7)
 # ---------------------------------------------------------------------------

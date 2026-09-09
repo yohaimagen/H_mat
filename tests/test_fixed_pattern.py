@@ -93,6 +93,14 @@ def test_grid_coordinates_distinct_and_in_range() -> None:
         seen.add(coords)
 
 
+def test_grid_coordinates_are_the_tree_integer_coordinates() -> None:
+    mesh = _grid_mesh(8, 8)
+    root = build_tree(mesh, m=2)
+    for level_nodes in root.iter_levels():
+        for node in level_nodes:
+            assert grid_coordinates(node, root) == node.cell_coords
+
+
 def test_pattern_cell_is_elementwise_mod_period() -> None:
     mesh = _grid_mesh(8, 8)
     root = build_tree(mesh, m=2)

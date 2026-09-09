@@ -4,9 +4,9 @@ tree (Task F.1, revising Task 1.3).
 Splitting strategy
 -------------------
 This follows the construction in Levitt & Martinsson (2024), §3 (p.5):
-the domain is refined as a **fixed uniform dyadic grid**. Level 0 consists of
-a single box -- the root's bounding box, computed once from all of `mesh`'s
-centroids. The boxes belonging to level `l + 1` are obtained by bisecting
+the domain is refined as a **fixed uniform dyadic grid**. Level 0 is a padded
+physical hypercube enclosing the centroids. The boxes belonging to level
+`l + 1` are obtained by bisecting
 *every* box of level `l` (not just the ones that still need splitting) along
 every spatial axis at that box's **geometric midpoint** (not the median of
 its points), producing up to `2^d` smaller boxes. Boxes that contain no
@@ -97,6 +97,7 @@ def build_tree(mesh: FaultMesh, m: int, max_depth: int = 64) -> TreeNode:
     root = make_node(mesh, all_patches, level=0, parent=None)
     _set_cell_geometry(root, root_cell)
     root.index_in_level = 0
+    root.cell_coords = (0,) * mesh.tree_dim
 
     level_nodes = [root]
     depth = 0
@@ -109,9 +110,13 @@ def build_tree(mesh: FaultMesh, m: int, max_depth: int = 64) -> TreeNode:
         for node in level_nodes:
             partitions = _bisect_cell(centroids, node.patch_indices, node.bounding_box)
             children = []
-            for child_patches, child_cell in partitions:
+            for child_patches, child_cell, half in partitions:
                 child = make_node(mesh, child_patches, level=node.level + 1, parent=node)
                 _set_cell_geometry(child, child_cell)
+                child.cell_coords = tuple(
+                    2 * coord + direction
+                    for coord, direction in zip(node.cell_coords, half, strict=True)
+                )
                 children.append(child)
             node.children = children
             next_level.extend(children)
@@ -189,27 +194,28 @@ def _root_domain_box(centroids: NDArray[np.float64]) -> NDArray[np.float64]:
         centroids: Centroids of all patches, shape `(N, d)`.
 
     Returns:
-        Array of shape `(d, 2)`, `box[i] = (lo_i, hi_i)`.
+        Array of shape `(d, 2)`, enclosing the centroids with one common
+        physical side length in all retained coordinates.
     """
     mins = centroids.min(axis=0)
     maxs = centroids.max(axis=0)
-    span = maxs - mins
-    # Guard against a zero-width axis (all centroids share that coordinate)
-    # by giving it a tiny nonzero width so midpoint splits are well defined.
-    # Scaled to the coordinate's own magnitude (not a bare 1e-12), since a
-    # fixed absolute epsilon is meaningless once coordinates are far from
-    # the origin (e.g. z=5000 m): this width is purely cosmetic geometry for
-    # a degenerate axis and is excluded from the underflow guard regardless.
-    fallback = np.maximum(np.abs(mins), 1.0) * 1e-9
-    eps = np.where(span > 0, span * 1e-9, fallback)
-    return np.stack([mins, maxs + eps], axis=1)
+    center = 0.5 * (mins + maxs)
+    span = float(np.max(maxs - mins))
+    if span == 0.0:
+        # A point cloud still needs a representable cell for the depth guard.
+        span = float(np.maximum(np.max(np.abs(center)), 1.0) * 1e-9)
+    # The next representable side length makes the physical cube padded while
+    # preserving one metric scale along every retained tree axis.
+    side = np.nextafter(span, np.inf)
+    half_side = 0.5 * side
+    return np.stack([center - half_side, center + half_side], axis=1)
 
 
 def _bisect_cell(
     centroids: NDArray[np.float64],
     patch_indices: NDArray[np.intp],
     cell: NDArray[np.float64],
-) -> list[tuple[NDArray[np.intp], NDArray[np.float64]]]:
+) -> list[tuple[NDArray[np.intp], NDArray[np.float64], tuple[int, ...]]]:
     """Bisect `cell` along every axis at its geometric midpoint, partitioning
     `patch_indices` into the resulting `2^d` sub-cells by centroid.
 
@@ -234,7 +240,7 @@ def _bisect_cell(
     # axis's midpoint, 1 if on the upper (>= mid) side.
     side = (pts >= mid[None, :]).astype(np.intp)
 
-    partitions: list[tuple[NDArray[np.intp], NDArray[np.float64]]] = []
+    partitions: list[tuple[NDArray[np.intp], NDArray[np.float64], tuple[int, ...]]] = []
     for half in itertools.product((0, 1), repeat=d):
         half_arr = np.array(half, dtype=np.intp)
         mask = np.all(side == half_arr[None, :], axis=1)
@@ -246,5 +252,5 @@ def _bisect_cell(
                 child_cell[axis] = (lo[axis], mid[axis])
             else:
                 child_cell[axis] = (mid[axis], hi[axis])
-        partitions.append((patch_indices[mask], child_cell))
+        partitions.append((patch_indices[mask], child_cell, tuple(int(x) for x in half_arr)))
     return partitions

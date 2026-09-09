@@ -356,6 +356,40 @@ def test_uniform_depth_realistic_magnitude_planar_fault_3d() -> None:
     assert max(leaf.patch_indices.shape[0] for leaf in root.leaves()) <= m
 
 
+@pytest.mark.parametrize("tree_dim", [1, 2, 3])
+def test_padded_root_is_a_physical_hypercube(tree_dim: int) -> None:
+    axes = [np.linspace(-3.0, 7.0, 8)]
+    axes.extend(np.linspace(100.0 + i, 101.0 + i, 8) for i in range(1, tree_dim))
+    centroids = np.stack(axes, axis=1)
+    mesh = FaultMesh(centroids=centroids, L=np.ones(8), dof_row=max(2, tree_dim))
+    root = build_tree(mesh, m=1)
+
+    side_lengths = root.bounding_box[:, 1] - root.bounding_box[:, 0]
+    np.testing.assert_allclose(side_lengths, side_lengths[0], rtol=2e-15, atol=0.0)
+    assert np.all(centroids >= root.bounding_box[:, 0])
+    assert np.all(centroids <= root.bounding_box[:, 1])
+
+
+def test_translation_and_scaling_preserve_dyadic_partition() -> None:
+    rng = np.random.default_rng(98)
+    centroids = rng.uniform(-1.0, 1.0, size=(48, 2))
+    original = FaultMesh(centroids=centroids, L=np.ones(48))
+    transformed = FaultMesh(centroids=37.0 * centroids + np.array([1e6, -2e6]), L=np.ones(48))
+
+    original_root = build_tree(original, m=3)
+    transformed_root = build_tree(transformed, m=3)
+    assert [node.cell_coords for nodes in original_root.iter_levels() for node in nodes] == [
+        node.cell_coords for nodes in transformed_root.iter_levels() for node in nodes
+    ]
+    original_patches = [
+        tuple(node.patch_indices) for nodes in original_root.iter_levels() for node in nodes
+    ]
+    transformed_patches = [
+        tuple(node.patch_indices) for nodes in transformed_root.iter_levels() for node in nodes
+    ]
+    assert original_patches == transformed_patches
+
+
 # ---------------------------------------------------------------------------
 # Critical invariant: leaf row/col index sets exactly partition {0..dof*N-1}.
 # ---------------------------------------------------------------------------

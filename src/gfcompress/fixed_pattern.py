@@ -162,20 +162,9 @@ def grid_coordinates(node: TreeNode, root: TreeNode) -> tuple[int, ...]:
     Returns:
         Tuple of `d` integers, each in `{0, ..., 2**node.level - 1}`.
     """
-    level = node.level
-    n_cells = 2**level
-    d = root.bounding_box.shape[0]
-
-    coords = []
-    for axis in range(d):
-        root_lo = root.bounding_box[axis, 0]
-        root_hi = root.bounding_box[axis, 1]
-        cell_width = (root_hi - root_lo) / n_cells
-        raw = (node.bounding_box[axis, 0] - root_lo) / cell_width
-        i_a = int(round(raw))
-        coords.append(i_a)
-
-    return tuple(coords)
+    if len(node.cell_coords) != len(root.cell_coords):
+        raise ValueError("node does not carry a dyadic cell coordinate")
+    return node.cell_coords
 
 
 def pattern_cell(node: TreeNode, root: TreeNode) -> tuple[int, ...]:
