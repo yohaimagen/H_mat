@@ -100,7 +100,7 @@ def build_tree(mesh: FaultMesh, m: int, max_depth: int = 64) -> TreeNode:
     # point spread and must never be allowed to trip the underflow guard
     # below, or a large-magnitude constant coordinate (e.g. z=5000) rounds
     # `mid` to `lo` on the very first split and halts the whole build.
-    degenerate_axis = (centroids.max(axis=0) - centroids.min(axis=0)) <= 0
+    degenerate_axis = centroids.max(axis=0) == centroids.min(axis=0)
     root_cell = _root_domain_box(centroids)
     root = make_node(mesh, all_patches, level=0, parent=None)
     _set_cell_geometry(root, root_cell)
@@ -166,7 +166,7 @@ def _cell_underflowed(level_nodes: list[TreeNode], degenerate_axis: NDArray[np.b
     for node in level_nodes:
         lo = node.bounding_box[:, 0]
         hi = node.bounding_box[:, 1]
-        mid = 0.5 * (lo + hi)
+        mid = _midpoint(lo, hi)
         stuck = (mid == lo) | (mid == hi)
         if np.any(stuck & ~degenerate_axis):
             return True
@@ -184,7 +184,7 @@ def _set_cell_geometry(node: TreeNode, cell: NDArray[np.float64]) -> None:
             hi_i)`.
     """
     node.bounding_box = cell
-    node.center = 0.5 * (cell[:, 0] + cell[:, 1])
+    node.center = _midpoint(cell[:, 0], cell[:, 1])
     node.diam = float(np.linalg.norm(cell[:, 1] - cell[:, 0]))
 
 
@@ -204,16 +204,40 @@ def _root_domain_box(centroids: NDArray[np.float64]) -> NDArray[np.float64]:
     """
     mins = centroids.min(axis=0)
     maxs = centroids.max(axis=0)
-    center = 0.5 * (mins + maxs)
-    span = float(np.max(maxs - mins))
+    with np.errstate(over="ignore"):
+        spans = maxs - mins
+    if not np.all(np.isfinite(spans)):
+        raise ValueError("centroid extent cannot be represented by a finite root hypercube")
+    center = _midpoint(mins, maxs)
+    span = float(np.max(spans))
     if span == 0.0:
         # A point cloud still needs a representable cell for the depth guard.
         span = float(np.maximum(np.max(np.abs(center)), 1.0) * 1e-9)
-    # The next representable side length makes the physical cube padded while
-    # preserving one metric scale along every retained tree axis.
+    # Increase the common side by the few ULPs needed to make the rounded
+    # endpoints enclose every extreme coordinate. Computing the midpoint as
+    # `lo + (hi - lo) / 2` avoids overflow for large positive coordinates.
     side = np.nextafter(span, np.inf)
-    half_side = 0.5 * side
-    return np.stack([center - half_side, center + half_side], axis=1)
+    while np.isfinite(side):
+        half_side = 0.5 * side
+        lo = center - half_side
+        hi = center + half_side
+        if (
+            np.all(np.isfinite(lo))
+            and np.all(np.isfinite(hi))
+            and np.all(lo <= mins)
+            and np.all(hi >= maxs)
+        ):
+            return np.stack([lo, hi], axis=1)
+        next_side = np.nextafter(side, np.inf)
+        if next_side == side:
+            break
+        side = next_side
+    raise ValueError("centroids cannot be enclosed by a finite padded root hypercube")
+
+
+def _midpoint(lo: NDArray[np.float64], hi: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Return a finite midpoint when the interval extent is representable."""
+    return lo + 0.5 * (hi - lo)
 
 
 def _bisect_cell(
@@ -238,7 +262,7 @@ def _bisect_cell(
     d = cell.shape[0]
     lo = cell[:, 0]
     hi = cell[:, 1]
-    mid = 0.5 * (lo + hi)
+    mid = _midpoint(lo, hi)
 
     pts = centroids[patch_indices]
     # side[:, axis] = 0 if centroid is on the lower (< mid) side of that

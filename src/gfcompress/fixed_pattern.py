@@ -149,8 +149,8 @@ def grid_coordinates(node: TreeNode, root: TreeNode) -> tuple[int, ...]:
 
     Args:
         node: The node whose grid coordinates are computed.
-        root: Root of the geometric cluster tree (provides the level-0 domain
-            box).
+        root: Root of the geometric cluster tree, used to validate the
+            coordinate dimensionality.
 
     Returns:
         Tuple of `d` integers, each in `{0, ..., 2**node.level - 1}`.

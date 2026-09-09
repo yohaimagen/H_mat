@@ -63,16 +63,12 @@ as reason to re-run this check first.
 
 `L` (patch characteristic length)
 ----------------------------------
-`FaultMesh.L` is a per-patch length that (per `CLAUDE.md` and the plan) is
-*intended* to feed `diam`, which feeds admissibility (`dist >= eta *
-max(diam_a, diam_b)`). **As of this task, it does not**: `TreeNode.diam`/
-`bounding_box` are computed from patch centroids alone
-(`tree.py::_compute_geometry`) and then overwritten by the dyadic cell
-(`build_tree.py`); `is_admissible` reads only `bounding_box`/`diam`
-(`interactions.py`). Nothing outside `geometry.py` reads `mesh.L`, so
-`l_method` currently has no effect on which blocks the compressor treats as
-near/far -- it is stored on the mesh for a downstream task to consume, not
-wired into admissibility yet. GLL nodes cluster at element edges, so true
+`FaultMesh.L` is per-patch mesh metadata. It does not control the production
+block partition: that partition is defined by the dyadic interaction lists
+and leaf neighbors. `TreeNode.diam`/`bounding_box` are computed from patch
+centroids and then overwritten by the dyadic cell; nothing outside
+`geometry.py` reads `mesh.L`, so `l_method` has no effect on near/far blocks.
+It is not a deferred eta-split control. GLL nodes cluster at element edges, so true
 nearest-neighbour spacing varies by an order of magnitude *within one
 element* -- a poor default for whenever `L` does get consumed, since it would
 hand wildly different lengths to physically equivalent nodes. Three

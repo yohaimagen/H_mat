@@ -36,15 +36,17 @@ formed is the `MockGF` test double and the dense near-field leaf blocks.
   row sampling and column sampling are not interchangeable. Respect this
   everywhere; do not assume square.
 
-## Admissibility — geometric, paper-faithful
-- Strong admissibility: a block `(α,β)` is admissible iff
-  `dist(α,β) ≥ η · max(diam α, diam β)`, equivalently the boxes are in each
-  other's interaction lists.
-- The `1/r^d` physics decay is used ONLY to choose/sanity-check `η`. Never use a
-  block-norm threshold as a standalone admissibility test — it breaks the
-  level-nested structure peeling depends on.
-- At every level the admissible (interaction-list) and inadmissible (neighbor)
-  blocks must form a COMPLETE, DISJOINT cover. Tests should assert this.
+## Admissibility — dyadic, paper-faithful
+- The dyadic interaction-list partition is the production far-field gate;
+  neighbor lists define the near field. `is_admissible` and `eta` are
+  diagnostics only and do not add or remove production pairs.
+- The `1/r^d` physics decay may sanity-check `eta`; never use a block-norm
+  threshold as an admissibility rule — it breaks the level-nested structure
+  peeling depends on.
+- At an intermediate level, neighbors plus interactions are a complete,
+  disjoint cover only of children of the parent-neighborhood. The global exact
+  cover is interactions across levels plus leaf neighbors. Tests should assert
+  both the appropriate local and global properties.
 
 ## Scope
 - Format is **non-uniform H¹ only**. Uniform H¹ (§4.2) and H² (§4.3) are OUT of

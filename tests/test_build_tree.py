@@ -370,6 +370,33 @@ def test_padded_root_is_a_physical_hypercube(tree_dim: int) -> None:
     assert np.all(centroids <= root.bounding_box[:, 1])
 
 
+def test_padded_root_handles_large_finite_coordinates_and_splits() -> None:
+    centroids = np.array([[1.0e308], [1.1e308]])
+    mesh = FaultMesh(centroids=centroids, L=np.ones(2), dof_row=2)
+    root = build_tree(mesh, m=1)
+
+    assert np.all(np.isfinite(root.bounding_box))
+    assert np.all(centroids >= root.bounding_box[:, 0])
+    assert np.all(centroids <= root.bounding_box[:, 1])
+    assert len(root.children) == 2
+
+
+def test_padded_root_encloses_upper_extreme_after_rounding() -> None:
+    centroids = np.array([[-10.0], [-7.6]])
+    mesh = FaultMesh(centroids=centroids, L=np.ones(2), dof_row=2)
+    root = build_tree(mesh, m=1)
+
+    assert root.bounding_box[0, 1] >= centroids[:, 0].max()
+
+
+def test_unrepresentable_root_extent_is_rejected() -> None:
+    centroids = np.array([[-1.0e308], [1.0e308]])
+    mesh = FaultMesh(centroids=centroids, L=np.ones(2), dof_row=2)
+
+    with pytest.raises(ValueError, match="finite root hypercube"):
+        build_tree(mesh, m=1)
+
+
 def test_translation_and_scaling_preserve_dyadic_partition() -> None:
     rng = np.random.default_rng(98)
     centroids = rng.uniform(-1.0, 1.0, size=(48, 2))

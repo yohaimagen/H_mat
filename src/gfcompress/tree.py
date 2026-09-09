@@ -127,9 +127,10 @@ def make_node(
     row/column index sets and shrink-wrapped centroid geometry from `mesh`.
 
     Args:
-        mesh: The `FaultMesh` providing centroids and index-expansion
-    helpers.  Nodes made outside the dyadic builder have no cell coordinate;
-    `build_tree` assigns the integer coordinate of every occupied dyadic cell.
+        mesh: The `FaultMesh` providing centroids and index-expansion helpers.
+            Nodes made outside the dyadic builder have no cell coordinate;
+            `build_tree` assigns the integer coordinate of every occupied
+            dyadic cell.
         patch_indices: Integer array of patch indices covered by the node.
         level: Depth of the node in the tree.
         parent: Parent node, or `None` for the root.
@@ -176,6 +177,6 @@ def _compute_geometry(
     mins = centroids.min(axis=0)
     maxs = centroids.max(axis=0)
     bounding_box = np.stack([mins, maxs], axis=1)
-    center = 0.5 * (mins + maxs)
+    center = mins + 0.5 * (maxs - mins)
     diam = float(np.linalg.norm(maxs - mins))
     return bounding_box, center, diam
