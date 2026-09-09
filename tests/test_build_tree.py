@@ -397,6 +397,14 @@ def test_unrepresentable_root_extent_is_rejected() -> None:
         build_tree(mesh, m=1)
 
 
+def test_extreme_coincident_point_is_rejected_without_ulp_search() -> None:
+    value = np.finfo(float).max
+    mesh = FaultMesh(centroids=np.array([[value], [value]]), L=np.ones(2), dof_row=2)
+
+    with pytest.raises(ValueError, match="finite padded root hypercube"):
+        build_tree(mesh, m=1)
+
+
 def test_translation_and_scaling_preserve_dyadic_partition() -> None:
     rng = np.random.default_rng(98)
     centroids = rng.uniform(-1.0, 1.0, size=(48, 2))

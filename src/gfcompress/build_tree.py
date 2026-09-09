@@ -196,8 +196,8 @@ def _root_domain_box(centroids: NDArray[np.float64]) -> NDArray[np.float64]:
     """Compute the root domain box `[lo, hi]^d` enclosing all `centroids`.
 
     The cube is centered on the centroid bounding box and uses the largest
-    physical span on every axis. Its side is moved to the next representable
-    float so points on an extreme remain inside the padded root.
+    physical span on every axis. A fixed ULP-scale guard margin keeps every
+    extreme inside the finite padded root.
 
     Args:
         centroids: Centroids of all patches, shape `(N, d)`.
@@ -217,25 +217,22 @@ def _root_domain_box(centroids: NDArray[np.float64]) -> NDArray[np.float64]:
     if span == 0.0:
         # A point cloud still needs a representable cell for the depth guard.
         span = float(np.maximum(np.max(np.abs(center)), 1.0) * 1e-9)
-    # Increase the common side by the few ULPs needed to make the rounded
-    # endpoints enclose every extreme coordinate. Computing the midpoint as
-    # `lo + (hi - lo) / 2` avoids overflow for large positive coordinates.
-    side = np.nextafter(span, np.inf)
-    while np.isfinite(side):
+    # Construct one common-side candidate with a fixed guard for endpoint
+    # rounding. This is deliberately bounded: a finite padded cube either
+    # exists at this representable scale or is rejected without scanning ULPs.
+    with np.errstate(over="ignore"):
+        endpoint_ulp = float(np.max(np.maximum(np.abs(np.spacing(center)), np.spacing(span))))
+        side = np.nextafter(span + 4.0 * endpoint_ulp, np.inf)
         half_side = 0.5 * side
         lo = center - half_side
         hi = center + half_side
-        if (
-            np.all(np.isfinite(lo))
-            and np.all(np.isfinite(hi))
-            and np.all(lo <= mins)
-            and np.all(hi >= maxs)
-        ):
-            return np.stack([lo, hi], axis=1)
-        next_side = np.nextafter(side, np.inf)
-        if next_side == side:
-            break
-        side = next_side
+    if (
+        np.all(np.isfinite(lo))
+        and np.all(np.isfinite(hi))
+        and np.all(lo <= mins)
+        and np.all(hi >= maxs)
+    ):
+        return np.stack([lo, hi], axis=1)
     raise ValueError("centroids cannot be enclosed by a finite padded root hypercube")
 
 
