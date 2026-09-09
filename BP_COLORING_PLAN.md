@@ -13,17 +13,18 @@ of rank-structured matrices accelerated with graph coloring*, especially
 Algorithm 2.1 and §4.1 / Algorithm 4.1. The local reference is named
 `Levitt_N_Martinsson_2018.pdf`, but its publication year is 2024.
 
-**Status:** implementation plan, not a report of completed work. Existing code
-is reused and repaired; completed historical tasks are not reimplemented.
-Current work includes the fixed-pattern compressor, the R.1 real-data reader,
-and an R.2 branch with PCA/tree-dimensionality changes and uncommitted edits.
-Reconcile that work before starting the tasks below; do not overwrite it.
+**Activation:** C.0 activated this document as the authoritative execution plan
+for C.0-C.18. Existing code is reused and repaired; completed historical tasks
+are not reimplemented. The fixed-pattern compressor and R.1 real-data reader
+are reusable history. R.2 remains inherited batch work: its committed revision
+is retained and its uncommitted `geometry.py` / `test_geometry.py` fixes are
+preserved for completion by C.2, not duplicated by C.0.
 
-**Relationship to earlier plans.** Once activated by Task C.0, this plan replaces
-the remaining execution sequence in `REALGF_PLAN.md` and Stage 7 of `plan.md`,
-and adds the necessary corrections to Stages 1–6. Earlier plans remain the
-historical record. Do not execute both sequences in parallel or duplicate R.2.
-This document's creation alone does not change `tasks.txt` or task dispatch.
+**Relationship to earlier plans.** This plan replaces the remaining execution
+sequence in `REALGF_PLAN.md` and Stage 7 of `plan.md`, and adds the necessary
+corrections to Stages 1–6. Earlier plans remain the historical record. Do not
+execute both sequences in parallel or duplicate R.2. `tasks.txt` now lists the
+C-series in dependency order, and task routing resolves C.x to this document.
 
 ---
 

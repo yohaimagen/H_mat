@@ -46,7 +46,9 @@ F.5  # done 99fd50a 2026-09-06
 6.1  # done 2990cb4 2026-09-06
 6.2  # done c071b36 2026-09-06
 
-# Stage R: validation on real GF data (see REALGF_PLAN.md)
+# Stage R: historical real-GF sequence (see REALGF_PLAN.md)
+# R.2-R.8 are retained for history but are superseded by the active C-series
+# after C.0. Do not dispatch them in parallel with the C-series.
 R.1  # done 024ae97 2026-09-07
 R.2
 R.3
@@ -56,9 +58,32 @@ R.6
 R.7
 R.8
 
-# Stage 7: graph-coloring optimization
+# Stage 7: historical graph-coloring sequence (see plan.md), superseded by C.12-C.18.
 7.1
 7.2
 7.3
 7.4
 7.5
+
+# Active BP3/BP7 sequence (BP_COLORING_PLAN.md). Execute strictly in order.
+# C.0 activates this sequence; C.12-C.18 remain gated on the accepted C.11
+# fixed baselines and are listed here for routing only.
+C.0
+C.1
+C.2
+C.3
+C.4
+C.5
+C.6
+C.7
+C.8
+C.9
+C.10
+C.11
+C.12
+C.13
+C.14
+C.15
+C.16
+C.17
+C.18
