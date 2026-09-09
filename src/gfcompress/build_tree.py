@@ -183,12 +183,9 @@ def _set_cell_geometry(node: TreeNode, cell: NDArray[np.float64]) -> None:
 def _root_domain_box(centroids: NDArray[np.float64]) -> NDArray[np.float64]:
     """Compute the root domain box `[lo, hi]^d` enclosing all `centroids`.
 
-    The upper edge of each axis is nudged up by a tiny relative amount so
-    that points lying exactly on the global maximum are consistently
-    assigned to the *lower* half-cell at every split (the dyadic split rule
-    used by `_bisect_cell` is `coord < mid` -> lower, `coord >= mid` ->
-    upper), matching the half-open `[lo, hi)` convention for all but the
-    final cell.
+    The cube is centered on the centroid bounding box and uses the largest
+    physical span on every axis. Its side is moved to the next representable
+    float so points on an extreme remain inside the padded root.
 
     Args:
         centroids: Centroids of all patches, shape `(N, d)`.
@@ -225,7 +222,7 @@ def _bisect_cell(
         cell: The cell to bisect, shape `(d, 2)`, `cell[i] = (lo_i, hi_i)`.
 
     Returns:
-        A list of `(child_patch_indices, child_cell)` pairs, one per
+        A list of `(child_patch_indices, child_cell, half)` triples, one per
         non-empty sub-cell of the `2 x ... x 2` (`d` axes) dyadic refinement
         of `cell`. Sub-cells with no centroids are omitted, so the result has
         between `1` and `2^d` entries.

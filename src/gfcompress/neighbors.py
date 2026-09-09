@@ -79,6 +79,7 @@ def neighbor_lists(root: TreeNode) -> dict[TreeNode, list[TreeNode]]:
 
     Args:
         root: Root of the geometric cluster tree (e.g. from `build_tree`).
+
     Returns:
         A flat mapping `node -> [neighbor nodes, including the node itself]`,
         with one entry per node in the tree.
