@@ -4,6 +4,8 @@
 
 - Authorized range: C.0 through C.5 only.
 - Branch: `codex/c0-c5-fixed-foundations`.
+- Aggregate draft PR: https://github.com/yohaimagen/H_mat/pull/28.
+- Dataset path: `real_gfs` links to `/Users/ymagen/work/H_mat/real_gfs`, used read-only.
 - Starting batch revision: `b0a67f678077083c6c4b416ea8022b5cb9c19c6c`.
 - Main at batch start: `b034c33` (R.1 merged).
 - Historical planning revision included by the batch base: `295ab81`.
@@ -39,11 +41,15 @@ activation has not been established and is not claimed as enforcement.
 
 | Task | Implementer revision | Sol review | Validation | Next action |
 | --- | --- | --- | --- | --- |
-| C.0 | pending orchestrator commit | pending | documentation/configuration validation pending | review C.0 only |
+| C.0 | 886dbb7 | APPROVED, no fixes | routing/TOML/ignore/diff validators passed | proceed C.1 |
 | C.1-C.5 | not started | not started | not run | await preceding Sol approval |
 
 ## Baseline and usage record
 
-Baseline test/check results are pending the orchestrator's concurrent run; do
-not infer them from this ledger. Initial account-wide usage snapshot: 11%
+Working-tree baseline (includes preserved dirty R.2 corrections): 305 passed in
+109.23s with single-thread BLAS, NumPy 2.4.6 / SciPy 1.17.1. Ruff and Black pass;
+mypy passes 19 source files. Initial NumPy 2.5.3 stubs failed against the
+project Python 3.10 type target; environment aligned with source versions, no
+project configuration workaround. Editable import verified from this checkout.
+This is not committed-revision production evidence for C.0. Initial account-wide usage snapshot: 11%
 primary and 23% weekly. Record subsequent snapshots as account-wide observations.
