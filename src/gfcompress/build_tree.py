@@ -75,7 +75,7 @@ def build_tree(mesh: FaultMesh, m: int, max_depth: int = 64) -> TreeNode:
     adaptation, not a universal paper requirement.
 
     Args:
-        mesh: The `FaultMesh` providing centroids, `d`, and the
+        mesh: The `FaultMesh` providing centroids, `tree_dim`, and the
             `patch_to_rows`/`patch_to_cols` index-expansion helpers.
         m: Leaf stop threshold: a node with `<= m` patches does not need
             further splitting (paper's `> m` continuation rule). Must be
@@ -185,7 +185,11 @@ def _set_cell_geometry(node: TreeNode, cell: NDArray[np.float64]) -> None:
     """
     node.bounding_box = cell
     node.center = _midpoint(cell[:, 0], cell[:, 1])
-    node.diam = float(np.linalg.norm(cell[:, 1] - cell[:, 0]))
+    with np.errstate(over="ignore"):
+        diam = float(np.hypot.reduce(cell[:, 1] - cell[:, 0]))
+    if not np.isfinite(diam):
+        raise ValueError("dyadic cell diagonal cannot be represented as a finite float")
+    node.diam = diam
 
 
 def _root_domain_box(centroids: NDArray[np.float64]) -> NDArray[np.float64]:

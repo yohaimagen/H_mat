@@ -81,8 +81,12 @@ def box_dist(box_a: NDArray[np.float64], box_b: NDArray[np.float64]) -> float:
     lo_a, hi_a = box_a[:, 0], box_a[:, 1]
     lo_b, hi_b = box_b[:, 0], box_b[:, 1]
 
-    gap = np.maximum(np.maximum(lo_a - hi_b, lo_b - hi_a), 0.0)
-    return float(np.linalg.norm(gap))
+    with np.errstate(over="ignore"):
+        gap = np.maximum(np.maximum(lo_a - hi_b, lo_b - hi_a), 0.0)
+        dist = float(np.hypot.reduce(gap))
+    if not np.isfinite(dist):
+        raise ValueError("box separation cannot be represented as a finite float")
+    return dist
 
 
 def is_admissible(alpha: TreeNode, beta: TreeNode, eta: float = DEFAULT_ETA) -> bool:

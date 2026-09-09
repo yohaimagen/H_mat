@@ -277,6 +277,28 @@ def test_interaction_separation_has_dyadic_lower_bound(tree_dim: int) -> None:
     assert checked > 0
 
 
+def test_large_finite_coordinate_interactions_have_finite_geometry() -> None:
+    centroids = np.linspace(1.0e308, 1.1e308, 8)[:, None]
+    mesh = FaultMesh(centroids=centroids, L=np.ones(8), dof_row=2)
+    root = build_tree(mesh, m=1)
+    lists = build_lists(root)
+
+    assert all(np.isfinite(node.diam) for nodes in root.iter_levels() for node in nodes)
+
+    checked = 0
+    for level_nodes in root.iter_levels():
+        for alpha in level_nodes:
+            for beta in lists.interaction[alpha]:
+                dist = box_dist(alpha.bounding_box, beta.bounding_box)
+                ratio = dist / max(alpha.diam, beta.diam)
+                assert np.isfinite(dist)
+                assert np.isfinite(ratio)
+                assert ratio >= 1.0 - 1e-12
+                checked += 1
+
+    assert checked > 0
+
+
 # ---------------------------------------------------------------------------
 # "Fig. 3" tessellation: small uniform grid, complete + disjoint admissibility
 # cover at the deepest level.

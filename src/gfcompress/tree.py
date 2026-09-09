@@ -176,7 +176,13 @@ def _compute_geometry(
         raise ValueError(f"centroids must have shape (n, d) with n >= 1, got {centroids.shape}")
     mins = centroids.min(axis=0)
     maxs = centroids.max(axis=0)
+    with np.errstate(over="ignore"):
+        spans = maxs - mins
+    if not np.all(np.isfinite(spans)):
+        raise ValueError("bounding-box extent cannot be represented as a finite float")
     bounding_box = np.stack([mins, maxs], axis=1)
-    center = mins + 0.5 * (maxs - mins)
-    diam = float(np.linalg.norm(maxs - mins))
+    center = mins + 0.5 * spans
+    diam = float(np.hypot.reduce(spans))
+    if not np.isfinite(diam):
+        raise ValueError("bounding-box diagonal cannot be represented as a finite float")
     return bounding_box, center, diam

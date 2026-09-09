@@ -70,8 +70,7 @@ centroids and then overwritten by the dyadic cell; nothing outside
 `geometry.py` reads `mesh.L`, so `l_method` has no effect on near/far blocks.
 It is not a deferred eta-split control. GLL nodes cluster at element edges, so true
 nearest-neighbour spacing varies by an order of magnitude *within one
-element* -- a poor default for whenever `L` does get consumed, since it would
-hand wildly different lengths to physically equivalent nodes. Three
+element*. Three
 candidates are implemented (`patch_length_candidates`):
 
 - `"representative"` (**default**): `element_diam / nbf`, uniform across an
@@ -85,18 +84,18 @@ give each node a length tied to local mesh resolution, not to where within
 the element it happens to sit) while being cheaper to compute and stable
 under GLL clustering, and it avoids `"element"`'s over-conservatism.
 
-Measured sensitivity is a **proxy**, not a measurement of the compressor's
-actual admissible/inadmissible split (since `L` is not yet wired into
-`diam`): the fraction of a patch's `k=30` nearest neighbours that a direct
-patch-pair test `dist >= eta * max(L_i, L_j)` (eta=0.5) would call
-admissible, computed independently of the tree (see `tests/test_realgf.py::
-test_L_candidate_sensitivity_*`). `"representative"` and `"voronoi"` agree to
+Measured sensitivity is an **independent proxy experiment**, not a
+measurement of the compressor's actual partition: it counts the fraction of
+a patch's `k=30` nearest neighbours that a direct patch-pair test
+`dist >= eta * max(L_i, L_j)` (eta=0.5) would call admissible, independently
+of the tree (see `tests/test_realgf.py::test_L_candidate_sensitivity_*`).
+`"representative"` and `"voronoi"` agree to
 within a few percent (BP3: 0.991 vs 0.991; BP7: 0.931 vs 0.931), while
 `"element"` differs sharply (BP3: 0.801; BP7: 0.302) -- using the full
 element size for every node would classify far more near-neighbour pairs as
 inadmissible, especially on BP7 where element sizes vary ~6x across the
-mesh. The proxy split **is** materially sensitive to this choice; `"element"`
-would not be a safe substitute for the default once `L` is consumed.
+mesh. The proxy result is materially sensitive to this choice; it does not
+change or predict a production partition.
 """
 
 from __future__ import annotations
