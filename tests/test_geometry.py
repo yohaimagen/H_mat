@@ -429,6 +429,30 @@ def test_pca_align_extreme_finite_scales_are_stable(scale: float) -> None:
     )
 
 
+@pytest.mark.filterwarnings("error")
+def test_pca_align_handles_finite_clouds_near_max_float_without_overflow() -> None:
+    offset = 1e308
+    step = np.spacing(offset)
+    cloud = np.array(
+        [[offset - step, offset], [offset, offset], [offset + step, offset]], dtype=np.float64
+    )
+    result = pca_align(cloud)
+
+    assert np.isfinite(result.mean).all()
+    assert np.isfinite(result.centroids).all()
+    assert np.isfinite(result.singular_values).all()
+    assert np.isfinite(result.absolute_projection_residual)
+    assert np.isfinite(result.relative_projection_residual)
+
+
+@pytest.mark.filterwarnings("error")
+def test_pca_align_handles_constant_cloud_near_max_float_without_overflow() -> None:
+    result = pca_align(np.full((4, 2), 1e308))
+    assert np.isfinite(result.mean).all()
+    assert np.isfinite(result.centroids).all()
+    assert np.isfinite(result.singular_values).all()
+
+
 @pytest.mark.parametrize(
     ("cloud", "expected_kept"),
     [

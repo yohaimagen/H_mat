@@ -54,6 +54,7 @@ from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists, build_lists
 from gfcompress.mockgf import MockGF
 from gfcompress.peeling import BlockFactor, Factors, peeled_matvec
+from gfcompress.randomized import gaussian
 from gfcompress.sampling import build_sampling_constraint
 from gfcompress.tree import TreeNode
 
@@ -465,6 +466,33 @@ def test_sketch_seed_losslessly_distinguishes_large_and_negative_integers() -> N
     cell = next(iter(zero))
     assert not np.array_equal(zero[cell], large[cell])
     assert not np.array_equal(negative[cell], positive[cell])
+
+
+def test_sketch_seed_has_unambiguous_arbitrary_size_cell_coordinates() -> None:
+    """Cell-word boundaries prevent formerly concatenated coordinates aliasing."""
+    first = (1, 2**32)
+    second = (1 + 2**32, 0)
+    assert _block_seed(7, 3, "col", first) != _block_seed(7, 3, "col", second)
+
+    # The seeds drive different actual Gaussian sketches, not merely distinct
+    # integer labels.
+    assert not np.array_equal(
+        gaussian(3, 2, 1, seed=_block_seed(7, 3, "col", first)),
+        gaussian(3, 2, 1, seed=_block_seed(7, 3, "col", second)),
+    )
+
+
+def test_unseeded_probe_properties_share_one_ephemeral_stream() -> None:
+    mesh = _grid_mesh(8, 8)
+    root = build_tree(mesh, m=2)
+    level = _deepest_level(root)
+    probe = build_admissible_test_matrices(root, level, mesh, k=2, p=1)[0]
+
+    omega = probe.omega
+    blocks = probe.blocks
+    for box, block in blocks.items():
+        np.testing.assert_array_equal(block, omega[box.col_indices, :])
+    np.testing.assert_array_equal(omega, probe.omega)
 
 
 def test_sketch_assignment_is_independent_of_tree_traversal() -> None:

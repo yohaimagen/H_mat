@@ -87,12 +87,15 @@ This keeps each `Omega` as narrow as a single box (`w_max` columns, not
 extraction costs at most `3**d * w_max` matvecs.
 
 `build_leaf_test_matrices` likewise emits descriptions, realizing one `Omega`
-at a time for each non-empty leaf pattern cell (at most `3**d`).
+at a time for each non-empty leaf pattern cell (at most `3**d`). The read-off
+is an original dense block only when the already-peeled far-field factors are
+exact; otherwise this residual sample inherits their approximation error.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import secrets
+from dataclasses import dataclass, field
 from typing import Literal
 
 import numpy as np
@@ -140,6 +143,14 @@ class PeriodicTestMatrix:
     seed: int | None
     level: int
     side: Side
+    _stream_seed: int = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        # An unseeded description still owns one stream. Keeping just this
+        # scalar lets diagnostic properties agree without retaining a probe.
+        object.__setattr__(
+            self, "_stream_seed", secrets.randbits(64) if self.seed is None else self.seed
+        )
 
     def realize(self) -> RealizedPeriodicTestMatrix:
         """Materialize this probe and its independent active-box sketches."""
@@ -151,7 +162,7 @@ class PeriodicTestMatrix:
                 len(indices),
                 self.k,
                 self.p,
-                seed=_block_seed(self.seed, self.level, self.side, box.cell_coords),
+                seed=_block_seed(self._stream_seed, self.level, self.side, box.cell_coords),
             )
             omega[indices, :] = block
             blocks[box] = block
@@ -356,17 +367,25 @@ def _block_seed(seed: int | None, level: int, side: Side, cell: tuple[int, ...])
     cell)`, rather than the order in which groups or boxes happen to be
     visited. The signed Python integer is losslessly encoded as a sign and
     little-endian 32-bit words; this does not depend on Python's randomized
-    hash implementation or alias integers modulo a machine word.
+    hash implementation or alias integers modulo a machine word. Every cell
+    coordinate carries its own sign-and-word-count boundary, so arbitrary-size
+    signed tuples cannot be confused by concatenation.
     """
     if seed is None:
         return None
     base = int(seed)
-    magnitude = abs(base)
-    words: list[int] = []
-    while magnitude:
-        words.append(magnitude & 0xFFFFFFFF)
-        magnitude >>= 32
-    entropy = [int(base < 0), len(words), *words, int(level), 0 if side == "col" else 1, *cell]
+
+    def encode(value: int) -> list[int]:
+        magnitude = abs(int(value))
+        words: list[int] = []
+        while magnitude:
+            words.append(magnitude & 0xFFFFFFFF)
+            magnitude >>= 32
+        return [int(value < 0), len(words), *words]
+
+    entropy = [*encode(base), int(level), 0 if side == "col" else 1, len(cell)]
+    for coordinate in cell:
+        entropy.extend(encode(coordinate))
     state = np.random.SeedSequence(entropy).generate_state(2, dtype=np.uint32)
     return int(state[0]) | (int(state[1]) << 32)
 
@@ -445,7 +464,8 @@ def build_leaf_test_matrices(
     `L^nei(alpha)` (including `alpha` itself) active in the emitted `Omega`
     that contains it. Sampling the residual operator, in which only
     `alpha`'s neighbor blocks survive, therefore gives
-    `((A - A^{(L)}) @ Omega)[alpha.row_indices, :w_beta] = A_{alpha,beta}`:
+    `((A - A^{(L)}) @ Omega)[alpha.row_indices, :w_beta]` is the residual
+    estimate of `A_{alpha,beta}` (equal only for exact prior factors):
     the other active boxes of that `Omega` contribute zero because they are
     not neighbors of `alpha`.
 

@@ -31,7 +31,9 @@ independent of `N`.
 `gfcompress.peeling.peeled_matvec` (Task 5.1) with the full set of stored
 `Factors` (levels `2, ..., L`) and reads off one `DenseLeaf` per neighbor
 pair. It never assembles a dense `A`; the dense block it stores is exactly
-the sample it read, not a call to the underlying kernel.
+the residual sample it read, not a call to the underlying kernel. It equals
+the original block only when the preceding far-field factors are exact;
+otherwise it inherits their approximation error.
 """
 
 from __future__ import annotations
@@ -60,8 +62,9 @@ class DenseLeaf:
         beta: The col box, `beta in L^nei(alpha)` (may equal `alpha`).
             `beta.col_indices` (length `dof_col * |beta|`) indexes the global
             col space `{0, ..., n_cols - 1}`.
-        block: The dense sub-block `A(I_alpha, I_beta)`, shape
-            `(len(alpha.row_indices), len(beta.col_indices))`.
+        block: The dense residual sample for `A(I_alpha, I_beta)`, shape
+            `(len(alpha.row_indices), len(beta.col_indices))`. It is the
+            original block only if preceding far-field factors are exact.
     """
 
     alpha: TreeNode
@@ -79,7 +82,8 @@ def extract_leaves(
     schedule: LeafProbeSchedule | None = None,
 ) -> list[DenseLeaf]:
     """Extract every inadmissible neighbor block `(alpha, beta)` at the leaf
-    `level`, from the residual operator `A - A^{(L)}`.
+    `level`, from the residual operator `A - A^{(L)}`. The returned
+        samples inherit any approximation error in those far-field factors.
 
     Args:
         operator: The black-box operator `A` (accessed only via

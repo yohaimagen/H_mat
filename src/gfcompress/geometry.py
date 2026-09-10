@@ -297,22 +297,34 @@ def pca_align(
     if var_tol is not None and (not np.isfinite(var_tol) or not 0.0 <= var_tol <= 1.0):
         raise ValueError(f"var_tol must be finite and in [0, 1], got {var_tol}")
 
-    mean = centroids.mean(axis=0)
+    # Normalizing first prevents a finite translated cloud near max-float from
+    # overflowing during the sum used by ``mean``.
+    coordinate_scale = float(np.max(np.abs(centroids)))
+    mean = (
+        (centroids / coordinate_scale).mean(axis=0) * coordinate_scale
+        if coordinate_scale
+        else np.zeros(centroids.shape[1])
+    )
     centered = centroids - mean
 
     # Tall clouds already return a complete d-by-d V^T in economical mode.
     # Only N < d needs full matrices to supply the missing ambient null axes.
     # Scale before squaring: raw singular values may underflow/overflow although
     # their ratios, and therefore numerical rank, are perfectly representable.
+    scale = float(np.max(np.abs(centered)))
     full_matrices = centered.shape[0] < centered.shape[1]
-    _, singular_values, vt = np.linalg.svd(centered, full_matrices=full_matrices)
+    _, singular_values, vt = np.linalg.svd(
+        centered / scale if scale else centered, full_matrices=full_matrices
+    )
     d_orig = centered.shape[1]
     s = np.zeros(d_orig, dtype=np.float64)
     # Centering makes the N rows sum to zero, hence at most N - 1 singular
     # directions can be observed.  Represent the remaining ambient null axes
     # exactly as zeros instead of exposing SVD roundoff as a fake direction.
     observed = min(len(singular_values), centered.shape[0] - 1)
-    s[:observed] = singular_values[:observed]
+    s[:observed] = singular_values[:observed] * scale
+    if not np.isfinite(s).all():
+        raise ValueError("centroid spread is too large for finite PCA diagnostics")
     sigma0 = float(s[0])
     scaled_s = s / sigma0 if sigma0 else np.zeros_like(s)
     scaled_total = float(np.dot(scaled_s, scaled_s))

@@ -1,9 +1,10 @@
 # CLAUDE.md — project conventions
 
 Black-box randomized H-matrix compression of elastostatic Green's Function
-matrices, after Levitt & Martinsson (2024). The full task breakdown is in
-`PLAN.md`; implement strictly the one task you are given, in the order in
-`tasks.txt`.
+matrices, after Levitt & Martinsson (2024). Resolve C.x in
+`BP_COLORING_PLAN.md`, R.x in `REALGF_PLAN.md`, F.x in `FIXPLAN.md`, and
+historical numeric ids in `plan.md`. C.0 activated `BP_COLORING_PLAN.md` as
+the execution sequence; implement strictly one active task in `tasks.txt`.
 
 ## Tooling
 - Python, packaged with `pyproject.toml`. A project virtualenv lives at `.venv/`
@@ -51,10 +52,11 @@ formed is the `MockGF` test double and the dense near-field leaf blocks.
 ## Scope
 - Format is **non-uniform H¹ only**. Uniform H¹ (§4.2) and H² (§4.3) are OUT of
   scope — do not implement them.
-- Build order: the fixed periodic test-matrix path (Stages 0–6) first and fully
-  validated. Graph coloring (Stage 7) is a drop-in optimization behind a flag
-  (`sampling="fixed" | "coloring"`); it must match fixed-path accuracy while
-  issuing strictly fewer matvecs.
+- Build order: accept the C.11 fixed BP3/BP7 baselines before coloring work.
+  Coloring is a schedule optimization behind `sampling="fixed" | "coloring"`:
+  it must preserve the partition and match fixed-path quality. Compare measured
+  costs; retain fixed whenever it is cheaper or tied. Strict savings are an
+  experimental result, not a universal requirement.
 
 ## Testing rule — do not fake rank structure
 A random dense matrix has full-rank blocks and CANNOT validate a compressor.
