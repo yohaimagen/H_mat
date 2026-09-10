@@ -44,7 +44,8 @@ activation has not been established and is not claimed as enforcement.
 | C.0 | 886dbb7 | APPROVED, no fixes | routing/TOML/ignore/diff validators passed | proceed C.1 |
 | C.1 | 93bee82 + fbe0ac8 + c0d375f + af5d0e7 + e3257d9 + c50f1a1 | APPROVED after 4 corrections | 118 focused plus full pytest; ruff/black/mypy pass | proceed C.2 |
 | C.2 | 0c8df92 + b1a4b9f + 6604919 | APPROVED after 2 corrections | 340 tests; ruff/black/mypy independently pass | proceed C.3 |
-| C.3-C.5 | not started | not started | not run | C.3 may start |
+| C.3 | 8113385 + 4eb126e | APPROVED after 1 correction | full suite; ruff/black/mypy independently pass | proceed C.4 |
+| C.4-C.5 | not started | not started | not run | C.4 may start |
 
 ## Baseline and usage record
 
@@ -110,3 +111,15 @@ suggestions. The approved evidence includes scale-safe PCA, complete `N < d`
 transforms, direct BP3/BP7 geometry-versus-dof integration, all 340 tests and
 static checks, and reproduced occupancy/residual measurements. Its final
 summary was posted to PR #28.
+
+C.3 review findings at `81133852bfcd5cf2546dfe32336e7e7d5038cf9e`:
+reject non-integer operator shape components and missing/non-callable products
+before sampling, and update public column/row basis docs from `k` to the shared
+per-block `k_eff`. Sol confirmed the Eq. 4.3 implementation and full validation
+otherwise pass.
+
+C.3 received Sol approval at `4eb126ed89267a017c879b39f769725a9fa4f62e`
+after correction round 1, with no remaining findings, questions, or
+suggestions. Sol independently verified the shared Eq. 4.3 rank, retained
+`k+p` probe width, exact/smooth truncation coverage, pre-sampling validation,
+the complete suite, and static checks. Its final summary was posted to PR #28.
