@@ -411,6 +411,31 @@ def test_sketch_streams_are_distinct_by_level_side_and_cell() -> None:
     assert col != _block_seed(seed, 3, "col", (2, 4))
 
 
+def test_sketch_seed_losslessly_distinguishes_large_and_negative_integers() -> None:
+    """Arbitrary Python integer seeds must not alias at 64-bit boundaries."""
+    args = (3, "col", (2, 5))
+    assert _block_seed(0, *args) != _block_seed(2**64, *args)
+    assert _block_seed(-1, *args) != _block_seed(2**64 - 1, *args)
+    assert _block_seed(-(2**80), *args) == _block_seed(-(2**80), *args)
+
+    mesh = _grid_mesh(8, 8)
+    root = build_tree(mesh, m=2)
+    level = _deepest_level(root)
+    zero = _blocks_by_cell(build_admissible_test_matrices(root, level, mesh, 2, 1, seed=0), root)
+    large = _blocks_by_cell(
+        build_admissible_test_matrices(root, level, mesh, 2, 1, seed=2**64), root
+    )
+    negative = _blocks_by_cell(
+        build_admissible_test_matrices(root, level, mesh, 2, 1, seed=-1), root
+    )
+    positive = _blocks_by_cell(
+        build_admissible_test_matrices(root, level, mesh, 2, 1, seed=2**64 - 1), root
+    )
+    cell = next(iter(zero))
+    assert not np.array_equal(zero[cell], large[cell])
+    assert not np.array_equal(negative[cell], positive[cell])
+
+
 def test_sketch_assignment_is_independent_of_tree_traversal() -> None:
     """Reordering tree children cannot change a box's reusable sketch."""
     mesh = _grid_mesh(8, 8)

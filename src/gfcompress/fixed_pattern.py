@@ -267,13 +267,19 @@ def _block_seed(seed: int | None, level: int, side: Side, cell: tuple[int, ...])
     Returns `None` (i.e. OS entropy) when `seed` is `None`. Otherwise
     `numpy.random.SeedSequence` derives the stream from `(seed, level, side,
     cell)`, rather than the order in which groups or boxes happen to be
-    visited.  Split the signed base seed into fixed-width words so this does
-    not depend on Python's randomized hash implementation.
+    visited. The signed Python integer is losslessly encoded as a sign and
+    little-endian 32-bit words; this does not depend on Python's randomized
+    hash implementation or alias integers modulo a machine word.
     """
     if seed is None:
         return None
-    base = int(seed) & ((1 << 64) - 1)
-    entropy = [base & 0xFFFFFFFF, base >> 32, int(level), 0 if side == "col" else 1, *cell]
+    base = int(seed)
+    magnitude = abs(base)
+    words: list[int] = []
+    while magnitude:
+        words.append(magnitude & 0xFFFFFFFF)
+        magnitude >>= 32
+    entropy = [int(base < 0), len(words), *words, int(level), 0 if side == "col" else 1, *cell]
     state = np.random.SeedSequence(entropy).generate_state(2, dtype=np.uint32)
     return int(state[0]) | (int(state[1]) << 32)
 

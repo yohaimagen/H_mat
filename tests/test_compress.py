@@ -220,13 +220,19 @@ def test_repeated_seed_oversampling_diagnostic() -> None:
     """
     mesh = _grid_mesh(16, 16)
     op = MockGF(mesh)
-    errors: dict[int, list[float]] = {0: [], 10: []}
-    for p in errors:
-        for construction_seed in (0, 1, 2):
-            hmat = compress(op, mesh, m=4, k=4, p=p, seed=construction_seed)
-            errors[p].append(relative_error(hmat, op, seed=1000 + construction_seed))
+    p0_errors: list[float] = []
+    default_errors: list[float] = []
+    for construction_seed in (0, 1, 2):
+        hmat = compress(op, mesh, m=4, k=4, p=0, seed=construction_seed)
+        p0_errors.append(relative_error(hmat, op, seed=1000 + construction_seed))
 
-    assert all(np.isfinite(error) for values in errors.values() for error in values)
+        # Deliberately omit p: this covers the public p=10 default path.
+        hmat = compress(op, mesh, m=4, k=4, seed=construction_seed)
+        default_errors.append(relative_error(hmat, op, seed=1000 + construction_seed))
+
+    assert max(p0_errors) < 1e-4
+    assert max(default_errors) < 5e-8
+    assert np.mean(default_errors) < np.mean(p0_errors) / 100
 
 
 # ---------------------------------------------------------------------------

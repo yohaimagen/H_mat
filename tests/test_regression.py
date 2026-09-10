@@ -254,16 +254,17 @@ def test_k_sweep_monotonic_error_and_exact_matvec_counts() -> None:
     print(f"[k-sweep] setup_time={time.time() - t0:.2f}s leaves_only={leaves_only_rel_err:.3e}")
 
 
-def test_p_sweep_monotonic_error_and_exact_matvec_counts() -> None:
+def test_p_sweep_accuracy_and_exact_matvec_counts() -> None:
     """Same 32x32/m=16 fixture, k=8 fixed, sweeping oversampling p. Measured
     (seeds 0-9, k=8): rel_err ~1.7e-6-1.1e-4 (p=0, not discriminating -- see
-    the in-test comment below) down to ~1.3-1.4e-9 (p=16), monotonically
-    non-increasing at every seed tried (0-9; 2 seeds asserted here to bound
-    runtime)."""
+    the in-test comment below) down to ~1.3-1.4e-9 (p=16). This records
+    repeated-seed aggregate evidence rather than requiring a randomized
+    per-seed monotonicity property."""
     mesh = _grid_mesh(32, 32)
     m, k = 16, 8
     ps = [0, 2, 4, 8, 16]
     seeds = [0, 1]
+    errors_by_p: dict[int, list[float]] = {p: [] for p in ps}
 
     t0 = time.time()
     for seed in seeds:
@@ -275,18 +276,13 @@ def test_p_sweep_monotonic_error_and_exact_matvec_counts() -> None:
                 observed == predicted
             ), f"seed={seed} p={p}: observed={observed}, predicted={predicted}"
             errs.append(rel_err)
+            errors_by_p[p].append(rel_err)
 
-        for i in range(len(errs) - 1):
-            assert errs[i] >= errs[i + 1] - 1e-14, (
-                f"seed={seed}: error increased going p={ps[i]} -> p={ps[i + 1]}: "
-                f"{errs[i]} -> {errs[i + 1]}"
-            )
         # p=0 is NOT a discriminating point: measured rel_err 1.7e-6-1.1e-4
         # across seeds 0-9 vs. leaves_only 7.2e-6, i.e. at p=0 the compressed
         # far field can be *worse* than dropping it entirely. The
         # discriminating comparison is therefore p=16 (~1.4e-9, three orders
-        # below leaves-only); p=0 contributes only the start of the monotone
-        # trend and its exact matvec count.
+        # below leaves-only); p=0 contributes its exact matvec count.
         op = MockGF(mesh)
         hmat = compress(op, mesh, m=m, k=k, p=ps[-1], seed=seed, sampling="fixed")
         leaves_only = HMatrix(root=hmat.root, mesh=mesh, factors=[], leaves=hmat.leaves)
@@ -294,6 +290,10 @@ def test_p_sweep_monotonic_error_and_exact_matvec_counts() -> None:
         assert (
             errs[-1] * 100 < leaves_only_rel_err
         ), f"seed={seed}: errs[-1]={errs[-1]}, leaves_only={leaves_only_rel_err}"
+
+    assert max(errors_by_p[0]) < 2e-4
+    assert max(errors_by_p[16]) < 2e-9
+    assert np.mean(errors_by_p[16]) < np.mean(errors_by_p[0]) / 100
 
     print(f"[p-sweep] setup_time={time.time() - t0:.2f}s")
 
