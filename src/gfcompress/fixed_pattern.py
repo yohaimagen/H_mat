@@ -179,7 +179,7 @@ def build_admissible_test_matrices(
     level: int,
     mesh: FaultMesh,
     k: int,
-    p: int = 0,
+    p: int = 10,
     seed: int | None = None,
     side: Side = "col",
 ) -> list[PeriodicTestMatrix]:
@@ -209,12 +209,13 @@ def build_admissible_test_matrices(
         level: The tree level to build test matrices for.
         mesh: The `FaultMesh` (provides `n_cols` / `n_rows`).
         k: Target rank (number of "signal" columns of each test matrix).
-        p: Oversampling parameter. Defaults to `0`.
+        p: Oversampling parameter. Defaults to `10`; pass `p=0` to disable
+            oversampling explicitly.
         seed: Optional base seed for `gfcompress.randomized.gaussian`. Each
             active box's Gaussian block is drawn with a seed derived
-            deterministically from `seed`, `side`, and a running counter, so
-            the whole generator is reproducible given `seed` while the two
-            sides stay independent.
+            deterministically from `seed`, `level`, `side`, and the box's
+            integer dyadic cell coordinates. This is independent of pattern
+            group or traversal order, while the two sides stay independent.
         side: `"col"` (default) for `Omega`, `"row"` for `Psi`.
 
     Returns:
@@ -239,15 +240,18 @@ def build_admissible_test_matrices(
     k_p = k + p
 
     result: list[PeriodicTestMatrix] = []
-    box_counter = 0
     for cell in sorted(groups.keys()):
-        active_boxes = groups[cell]
+        active_boxes = sorted(groups[cell], key=lambda node: grid_coordinates(node, root))
         omega = np.zeros((n_dofs, k_p), dtype=np.float64)
         blocks: dict[TreeNode, NDArray[np.float64]] = {}
         for beta in active_boxes:
             indices = beta.col_indices if side == "col" else beta.row_indices
-            block = gaussian(len(indices), k, p, seed=_block_seed(seed, side, box_counter))
-            box_counter += 1
+            block = gaussian(
+                len(indices),
+                k,
+                p,
+                seed=_block_seed(seed, level, side, grid_coordinates(beta, root)),
+            )
             omega[indices, :] = block
             blocks[beta] = block
         result.append(
@@ -257,17 +261,21 @@ def build_admissible_test_matrices(
     return result
 
 
-def _block_seed(seed: int | None, side: Side, counter: int) -> int | None:
-    """Derive an independent per-box seed from `(seed, side, counter)`.
+def _block_seed(seed: int | None, level: int, side: Side, cell: tuple[int, ...]) -> int | None:
+    """Derive an independent per-box seed from stable sketch coordinates.
 
     Returns `None` (i.e. OS entropy) when `seed` is `None`. Otherwise
-    `numpy.random.SeedSequence` spawns decorrelated streams for the two sides,
-    so `Omega` and `Psi` built from the same base seed share no random rows.
+    `numpy.random.SeedSequence` derives the stream from `(seed, level, side,
+    cell)`, rather than the order in which groups or boxes happen to be
+    visited.  Split the signed base seed into fixed-width words so this does
+    not depend on Python's randomized hash implementation.
     """
     if seed is None:
         return None
-    side_id = 0 if side == "col" else 1
-    return int(np.random.SeedSequence([seed, side_id, counter]).generate_state(1)[0])
+    base = int(seed) & ((1 << 64) - 1)
+    entropy = [base & 0xFFFFFFFF, base >> 32, int(level), 0 if side == "col" else 1, *cell]
+    state = np.random.SeedSequence(entropy).generate_state(2, dtype=np.uint32)
+    return int(state[0]) | (int(state[1]) << 32)
 
 
 @dataclass(frozen=True)

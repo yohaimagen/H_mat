@@ -98,7 +98,7 @@ def column_bases(
     level: int,
     factors: Factors,
     k: int,
-    p: int = 0,
+    p: int = 10,
     seed: int | None = None,
 ) -> list[ColumnBasis]:
     """Compute the level-`level` column bases `U_{alpha,beta}` for every
@@ -120,7 +120,8 @@ def column_bases(
             sampling). Empty for the coarsest level with admissible pairs.
         k: Positive target rank; each pair uses the shared
             `k_eff = min(k, len(alpha.row_indices), len(beta.col_indices))`.
-        p: Oversampling parameter for the test matrices. Defaults to `0`.
+        p: Oversampling parameter for the test matrices. Defaults to `10`;
+            pass `p=0` to disable oversampling explicitly.
         seed: Optional base seed forwarded to
             `gfcompress.fixed_pattern.build_admissible_test_matrices` for
             reproducibility.

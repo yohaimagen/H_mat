@@ -31,10 +31,13 @@ copying a formula that mirrors the driver's internals.
 
 from __future__ import annotations
 
+import inspect
+
 import numpy as np
 
 from gfcompress.build_tree import build_tree
-from gfcompress.compress import CountingOperator, compress
+from gfcompress.column_basis import column_bases
+from gfcompress.compress import CountingOperator, compress, compress_level
 from gfcompress.error import relative_error
 from gfcompress.fixed_pattern import build_admissible_test_matrices, build_leaf_test_matrices
 from gfcompress.geometry import FaultMesh
@@ -42,6 +45,8 @@ from gfcompress.hmatrix import HMatrix
 from gfcompress.interactions import build_lists
 from gfcompress.mockgf import MockGF
 from gfcompress.operators import MatVecOperator
+from gfcompress.randomized import gaussian
+from gfcompress.row_basis import row_bases
 
 
 def _grid_mesh(*shape: int, spacing: float = 1.0) -> FaultMesh:
@@ -75,6 +80,19 @@ def test_compress_rejects_unsupported_sampling() -> None:
         raise AssertionError("expected ValueError for sampling='coloring'")
     except ValueError as exc:
         assert "coloring" in str(exc)
+
+
+def test_public_oversampling_defaults_are_consistently_positive() -> None:
+    """`p=0` remains explicit, but no public sampling path defaults to it."""
+    for function in (
+        gaussian,
+        build_admissible_test_matrices,
+        column_bases,
+        row_bases,
+        compress_level,
+        compress,
+    ):
+        assert inspect.signature(function).parameters["p"].default == 10
 
 
 class _NoSamplingOperator(MatVecOperator):
@@ -189,6 +207,26 @@ def test_compress_relative_error_3d() -> None:
     assert (
         rel_err * 10 < rel_err_leaves_only
     ), f"rel_err={rel_err}, rel_err_leaves_only={rel_err_leaves_only}"
+
+
+def test_repeated_seed_oversampling_diagnostic() -> None:
+    """Keep construction and validation streams separate in this diagnostic.
+
+    This records both the public default (`p=10`) and the explicit `p=0`
+    experiment across several construction seeds. Randomized sketches do not
+    support a useful per-seed monotonic-error assertion, so this only guards
+    that every measured configuration remains finite; the measured values are
+    tracked in ``MEASUREMENTS_C4.md``.
+    """
+    mesh = _grid_mesh(16, 16)
+    op = MockGF(mesh)
+    errors: dict[int, list[float]] = {0: [], 10: []}
+    for p in errors:
+        for construction_seed in (0, 1, 2):
+            hmat = compress(op, mesh, m=4, k=4, p=p, seed=construction_seed)
+            errors[p].append(relative_error(hmat, op, seed=1000 + construction_seed))
+
+    assert all(np.isfinite(error) for values in errors.values() for error in values)
 
 
 # ---------------------------------------------------------------------------

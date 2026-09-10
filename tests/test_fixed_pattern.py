@@ -41,6 +41,8 @@ from gfcompress.fixed_pattern import (
     LEAF_PERIOD,
     PERIOD,
     PeriodicLeafTestMatrix,
+    PeriodicTestMatrix,
+    _block_seed,
     build_admissible_test_matrices,
     build_leaf_test_matrices,
     grid_coordinates,
@@ -387,6 +389,41 @@ def test_build_admissible_test_matrices_reproducible_with_seed() -> None:
     for a, b in zip(tm1, tm2, strict=True):
         np.testing.assert_array_equal(a.omega, b.omega)
         assert a.pattern == b.pattern
+
+
+def _blocks_by_cell(
+    test_matrices: list[PeriodicTestMatrix], root: TreeNode
+) -> dict[tuple[int, ...], np.ndarray]:
+    """Collect Gaussian blocks without depending on pattern-group ordering."""
+    return {
+        grid_coordinates(box, root): block
+        for tm in test_matrices
+        for box, block in tm.blocks.items()
+    }
+
+
+def test_sketch_streams_are_distinct_by_level_side_and_cell() -> None:
+    """Stable stream keys distinguish every coordinate used by a sketch."""
+    seed = 42
+    col = _block_seed(seed, 3, "col", (2, 5))
+    assert col != _block_seed(seed, 4, "col", (2, 5))
+    assert col != _block_seed(seed, 3, "row", (2, 5))
+    assert col != _block_seed(seed, 3, "col", (2, 4))
+
+
+def test_sketch_assignment_is_independent_of_tree_traversal() -> None:
+    """Reordering tree children cannot change a box's reusable sketch."""
+    mesh = _grid_mesh(8, 8)
+    root = build_tree(mesh, m=2)
+    level = _deepest_level(root)
+    before = _blocks_by_cell(build_admissible_test_matrices(root, level, mesh, 2, 1, seed=42), root)
+
+    root.children.reverse()
+    after = _blocks_by_cell(build_admissible_test_matrices(root, level, mesh, 2, 1, seed=42), root)
+
+    assert before.keys() == after.keys()
+    for cell in before:
+        np.testing.assert_array_equal(before[cell], after[cell])
 
 
 def test_build_admissible_test_matrices_no_seed_runs() -> None:

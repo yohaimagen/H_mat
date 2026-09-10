@@ -53,7 +53,7 @@ def compress_level(
     level: int,
     factors: Factors,
     k: int,
-    p: int = 0,
+    p: int = 10,
     seed: int | None = None,
 ) -> list[BlockFactor]:
     """Compress every admissible pair `(alpha, beta)` at `level` (Algorithm
@@ -71,7 +71,8 @@ def compress_level(
         level: The tree level whose admissible pairs are compressed.
         factors: Flat list of `BlockFactor`s for levels `2, ..., level - 1`.
         k: Target rank for each block's factorization.
-        p: Oversampling parameter. Defaults to `0`.
+        p: Oversampling parameter. Defaults to `10`; pass `p=0` to disable
+            oversampling explicitly.
         seed: Optional base seed forwarded to both `column_bases` and
             `row_bases`.
 
@@ -99,7 +100,7 @@ def compress(
     mesh: FaultMesh,
     m: int,
     k: int,
-    p: int = 0,
+    p: int = 10,
     seed: int | None = None,
     sampling: str = "fixed",
 ) -> HMatrix:
@@ -124,7 +125,8 @@ def compress(
             permits small rectangular blocks without narrowing the `k+p`
             probes. Rank zero is not supported because the fixed-pattern and
             leaf paths do not provide a meaningful zero-width compression.
-        p: Oversampling parameter. Defaults to `0`.
+        p: Oversampling parameter. Defaults to `10`; pass `p=0` to disable
+            oversampling explicitly.
         seed: Optional base seed forwarded to every level's test matrices.
         sampling: Test-matrix strategy. Only `"fixed"` (the default) is
             implemented; `"coloring"` (Stage 7) is not yet supported.

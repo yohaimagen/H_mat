@@ -36,14 +36,14 @@ import scipy.linalg
 from numpy.typing import NDArray
 
 
-def gaussian(n: int, k: int, p: int = 0, seed: int | None = None) -> NDArray[np.float64]:
+def gaussian(n: int, k: int, p: int = 10, seed: int | None = None) -> NDArray[np.float64]:
     """Draw an `n x (k + p)` standard-normal Gaussian sketch matrix.
 
     Args:
         n: Number of rows.
         k: Target rank.
         p: Oversampling parameter (extra columns beyond `k`). Defaults to
-            `0`.
+            `10`; pass `p=0` to disable oversampling explicitly.
         seed: Optional seed for `numpy.random.default_rng`, for
             reproducibility.
 
