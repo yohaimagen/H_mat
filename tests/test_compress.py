@@ -214,9 +214,9 @@ def test_repeated_seed_oversampling_diagnostic() -> None:
 
     This records both the public default (`p=10`) and the explicit `p=0`
     experiment across several construction seeds. Randomized sketches do not
-    support a useful per-seed monotonic-error assertion, so this only guards
-    that every measured configuration remains finite; the measured values are
-    tracked in ``MEASUREMENTS_C4.md``.
+    support a useful per-seed monotonic-error assertion, so it enforces
+    measured absolute bounds plus a 100-fold aggregate default-p=10
+    improvement; the measured values are tracked in ``MEASUREMENTS_C4.md``.
     """
     mesh = _grid_mesh(16, 16)
     op = MockGF(mesh)

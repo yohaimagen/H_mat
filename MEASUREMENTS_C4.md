@@ -12,8 +12,8 @@ Operator-wide relative errors were estimated through the power-method
 | construction seed | explicit `p=0` | default `p=10` |
 | --- | ---: | ---: |
 | 0 | 3.65076758e-05 | 2.03169512e-08 |
-| 1 | 6.28880861e-05 | 2.64833928e-08 |
-| 2 | 5.19265778e-05 | 2.41830188e-08 |
+| 1 | 3.25513306e-05 | 2.33523882e-08 |
+| 2 | 1.82191798e-05 | 2.31417860e-08 |
 
 This is a reproducible diagnostic, not a per-seed monotonicity guarantee for
 randomized compression. `p=0` remains an explicit supported experiment;
