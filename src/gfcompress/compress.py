@@ -183,12 +183,20 @@ def _validate_inputs(
         raise ValueError(f"seed must be an integer or None, got {seed!r}")
     if not isinstance(sampling, str):
         raise ValueError(f"sampling must be a string, got {sampling!r}")
+    for name in ("matvec", "rmatvec"):
+        if not callable(getattr(operator, name, None)):
+            raise ValueError(f"operator must provide callable {name}")
     try:
         shape = operator.shape
     except AttributeError as exc:
         raise ValueError("operator must provide shape=(n_rows, n_cols)") from exc
     expected = (mesh.n_rows, mesh.n_cols)
-    if not isinstance(shape, tuple) or len(shape) != 2 or shape != expected:
+    if (
+        not isinstance(shape, tuple)
+        or len(shape) != 2
+        or any(isinstance(size, bool) or not isinstance(size, (int, np.integer)) for size in shape)
+        or shape != expected
+    ):
         raise ValueError(f"operator shape must be {expected}, got {shape!r}")
 
 

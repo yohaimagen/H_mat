@@ -80,7 +80,7 @@ def test_compress_rejects_unsupported_sampling() -> None:
 class _NoSamplingOperator(MatVecOperator):
     """Operator double that records any accidental pre-validation sampling."""
 
-    def __init__(self, shape: tuple[int, int]) -> None:
+    def __init__(self, shape: tuple[object, object]) -> None:
         self._shape = shape
         self.calls = 0
 
@@ -97,6 +97,17 @@ class _NoSamplingOperator(MatVecOperator):
         return self._shape
 
 
+class _MissingProductsOperator:
+    """Shape-correct object with no callable black-box products."""
+
+    def __init__(self, shape: tuple[int, int], *, noncallable: bool) -> None:
+        self.shape = shape
+        self.calls = 0
+        if noncallable:
+            self.matvec = None
+            self.rmatvec = None
+
+
 def test_compress_validates_inputs_before_sampling() -> None:
     mesh = _grid_mesh(4, 4)
     cases = [
@@ -104,6 +115,17 @@ def test_compress_validates_inputs_before_sampling() -> None:
         (_NoSamplingOperator((mesh.n_rows, mesh.n_cols)), dict(m=0, k=1, p=0)),
         (_NoSamplingOperator((mesh.n_rows, mesh.n_cols)), dict(m=1, k=0, p=0)),
         (_NoSamplingOperator((mesh.n_rows, mesh.n_cols)), dict(m=1, k=1, p=-1)),
+        (_NoSamplingOperator((float(mesh.n_rows), mesh.n_cols)), dict(m=1, k=1, p=0)),
+        (_NoSamplingOperator((True, mesh.n_cols)), dict(m=1, k=1, p=0)),
+        (_NoSamplingOperator(("rows", mesh.n_cols)), dict(m=1, k=1, p=0)),
+        (
+            _MissingProductsOperator((mesh.n_rows, mesh.n_cols), noncallable=False),
+            dict(m=1, k=1, p=0),
+        ),
+        (
+            _MissingProductsOperator((mesh.n_rows, mesh.n_cols), noncallable=True),
+            dict(m=1, k=1, p=0),
+        ),
     ]
     for operator, options in cases:
         try:

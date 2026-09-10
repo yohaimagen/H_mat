@@ -3,6 +3,9 @@ revised by Task F.5).
 
 This is the first of the three per-level compression passes of Stage 5
 (`column_bases` here, `row_bases` in Task 5.3, `core_matrices` in Task 5.4).
+Every pair uses the shared effective rank `k_eff = min(k,
+len(alpha.row_indices), len(beta.col_indices))`; the fixed probes retain
+their requested width `k + p`.
 For tree level `l`, with the low-rank factors of levels `2, ..., l-1` already
 stored as a `gfcompress.peeling.Factors` list:
 
@@ -20,9 +23,9 @@ stored as a `gfcompress.peeling.Factors` list:
    guarantees `beta`'s columns of that `Omega` are an independent Gaussian
    block and every other box interacting with `alpha` is zeroed there),
    restrict to `alpha`'s row-index set `I_alpha = alpha.row_indices`
-   (`Y(I_alpha, :)`), and set `U_{alpha,beta} = qr(Y(I_alpha, :), k)`
+   (`Y(I_alpha, :)`), and set `U_{alpha,beta} = qr(Y(I_alpha, :), k_eff)`
    (`gfcompress.randomized.orth`, Task 3.1, pivoted) -- an orthonormal basis
-   for the block's (approximate rank-`k`) column space.
+   for the block's (approximate rank-`k_eff`) column space.
 
 Per Eq. 4.3, the core-matrix solve (Task 5.4/5.5) also needs `Y(I_alpha, :)`
 itself (not just its orthonormalization) and the Gaussian sketch block
@@ -32,7 +35,8 @@ retains both, rather than discarding them once `U` is formed.
 
 Per CLAUDE.md's shape conventions, `Y` lives in `A`'s range
 (`R^{dof_row * N}`), so `I_alpha` must be `alpha`'s `dof_row`-expanded
-`row_indices`; `U_{alpha,beta}` has shape `(len(alpha.row_indices), k)`.
+`row_indices`; `U_{alpha,beta}` has shape
+`(len(alpha.row_indices), k_eff)`.
 """
 
 from __future__ import annotations
@@ -68,7 +72,8 @@ class ColumnBasis:
         beta: The col box. `beta.col_indices` (length `dof_col * |beta|`)
             indexes the global col space `{0, ..., n_cols - 1}`.
         u: Orthonormal column-space basis `U_{alpha,beta}`, shape
-            `(len(alpha.row_indices), k)`, satisfying `u.conj().T @ u ~= I_k`.
+            `(len(alpha.row_indices), k_eff)`, satisfying
+            `u.conj().T @ u ~= I_k_eff`.
         y_alpha: The column sample restricted to `alpha`'s rows,
             `Y(I_alpha, :) = (A - A^{(l-1)})(I_alpha, I_beta) @ G_beta`, shape
             `(len(alpha.row_indices), k + p)` -- `U`'s un-orthonormalized
@@ -113,7 +118,8 @@ def column_bases(
         factors: Flat list of `BlockFactor`s for levels `2, ..., level - 1`
             (Task 5.1's `peeled_matvec` subtracts their contribution before
             sampling). Empty for the coarsest level with admissible pairs.
-        k: Target rank for each block's column basis.
+        k: Positive target rank; each pair uses the shared
+            `k_eff = min(k, len(alpha.row_indices), len(beta.col_indices))`.
         p: Oversampling parameter for the test matrices. Defaults to `0`.
         seed: Optional base seed forwarded to
             `gfcompress.fixed_pattern.build_admissible_test_matrices` for
@@ -124,7 +130,7 @@ def column_bases(
         `level` (in the order `L^int` yields them: outer loop over
         `root.nodes_at_level(level)`, inner loop over each box's interaction
         list). Each `u` has orthonormal columns and shape
-        `(len(alpha.row_indices), k)`.
+        `(len(alpha.row_indices), k_eff)` for its pair.
     """
     level_nodes = root.nodes_at_level(level)
 

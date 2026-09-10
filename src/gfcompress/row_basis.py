@@ -6,6 +6,9 @@ through `peeled_rmatvec` (Task 5.1) with the `side="row"` fixed periodic test
 matrices `Psi` (`gfcompress.fixed_pattern.build_admissible_test_matrices`,
 Task F.4) -- reused verbatim, not reinvented (FIXPLAN defect #6: an earlier
 attempt duplicated `fixed_pattern` with rows swapped in; that is forbidden).
+Each pair uses the same `k_eff = min(k, len(alpha.row_indices),
+len(beta.col_indices))` as the column pass, while the probes remain `k + p`
+wide.
 
 For tree level `l`, with the low-rank factors of levels `2, ..., l-1` already
 stored as a `gfcompress.peeling.Factors` list:
@@ -18,7 +21,7 @@ stored as a `gfcompress.peeling.Factors` list:
    `Psi`/`Z` whose active boxes include `alpha` (Eq. 4.4's transposed
    constraint, per the `fixed_pattern` module docstring), restrict to
    `beta`'s col-index set `I_beta = beta.col_indices` (`Z(I_beta, :)`), and
-   set `V_{alpha,beta} = qr(Z(I_beta, :), k)` (pivoted `orth`).
+   set `V_{alpha,beta} = qr(Z(I_beta, :), k_eff)` (pivoted `orth`).
 
 Per Eq. 4.3, the core-matrix solve also needs the Gaussian sketch block
 `G_alpha` used to generate `Z(I_beta, :)` -- `RowBasis` retains it
@@ -64,7 +67,8 @@ class RowBasis:
         beta: The col box. `beta.col_indices` (length `dof_col * |beta|`)
             indexes the global col space `{0, ..., n_cols - 1}`.
         v: Orthonormal row-space basis `V_{alpha,beta}`, shape
-            `(len(beta.col_indices), k)`, satisfying `v.conj().T @ v ~= I_k`.
+            `(len(beta.col_indices), k_eff)`, satisfying
+            `v.conj().T @ v ~= I_k_eff`.
         g_alpha: The Gaussian sketch block used to generate the row sample
             `Z(I_beta, :)`, `tm.blocks[alpha]`, shape
             `(len(alpha.row_indices), k + p)` -- the `G_alpha` of Eq. 4.3.
@@ -103,7 +107,8 @@ def row_bases(
         factors: Flat list of `BlockFactor`s for levels `2, ..., level - 1`
             (`peeled_rmatvec` subtracts their adjoint contribution before
             sampling). Empty for the coarsest level with admissible pairs.
-        k: Target rank for each block's row basis.
+        k: Positive target rank; each pair uses the shared
+            `k_eff = min(k, len(alpha.row_indices), len(beta.col_indices))`.
         p: Oversampling parameter for the test matrices. Defaults to `0`.
         seed: Optional base seed forwarded to
             `gfcompress.fixed_pattern.build_admissible_test_matrices` for
@@ -116,7 +121,7 @@ def row_bases(
         `level`, in the same order as `column_bases` (outer loop over
         `root.nodes_at_level(level)`, inner loop over each box's interaction
         list). Each `v` has orthonormal columns and shape
-        `(len(beta.col_indices), k)`.
+        `(len(beta.col_indices), k_eff)` for its pair.
     """
     level_nodes = root.nodes_at_level(level)
 
@@ -150,6 +155,7 @@ def core_matrices(col_bases: list[ColumnBasis], row_bases_: list[RowBasis]) -> F
     For each admissible pair `(alpha, beta)`, forms the core matrix
     `B_{alpha,beta}` via `gfcompress.randomized.core_matrix_solve` from
     `col_bases`'s `u`/`y_alpha`/`g_beta` and `row_bases_`'s `v`/`g_alpha`.
+    Their shared `k_eff` makes each core `B` shape `(k_eff, k_eff)`.
 
     Args:
         col_bases: Column bases for the level, from `column_bases`.
