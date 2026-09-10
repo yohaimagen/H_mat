@@ -45,7 +45,8 @@ activation has not been established and is not claimed as enforcement.
 | C.1 | 93bee82 + fbe0ac8 + c0d375f + af5d0e7 + e3257d9 + c50f1a1 | APPROVED after 4 corrections | 118 focused plus full pytest; ruff/black/mypy pass | proceed C.2 |
 | C.2 | 0c8df92 + b1a4b9f + 6604919 | APPROVED after 2 corrections | 340 tests; ruff/black/mypy independently pass | proceed C.3 |
 | C.3 | 8113385 + 4eb126e | APPROVED after 1 correction | full suite; ruff/black/mypy independently pass | proceed C.4 |
-| C.4-C.5 | not started | not started | not run | C.4 may start |
+| C.4 | fd88b43 + 9533703 + 94ef6b4 | APPROVED after 2 corrections | full suite; measurements reproduced; ruff/black/mypy independently pass | proceed C.5 |
+| C.5 | not started | not started | not run | start Terra implementation |
 
 ## Baseline and usage record
 
@@ -117,6 +118,24 @@ reject non-integer operator shape components and missing/non-callable products
 before sampling, and update public column/row basis docs from `k` to the shared
 per-block `k_eff`. Sol confirmed the Eq. 4.3 implementation and full validation
 otherwise pass.
+
+C.4 review findings at `fd88b43`: replace finiteness-only repeated-seed checks
+with measured accuracy bounds, remove the older forbidden per-seed monotonic
+oversampling assertion, and prevent arbitrary integer seeds from aliasing
+modulo `2**64`. Sol reproduced all six recorded measurements and confirmed the
+remaining default/stream/traversal contracts and full validation pass.
+
+C.4 follow-up findings at `9533703e7a5c389c88a8b6cbf6a9b6a865d40c26`:
+the lossless signed-seed encoding changed the deterministic streams, so refresh
+the tracked measurements, and update the repeated-seed test docstring to state
+its new absolute-accuracy and aggregate-improvement contract. Sol confirmed
+all three prior functional findings are resolved and all validation passes.
+
+C.4 received Sol approval at `94ef6b48e60bc31a3fa503ade53c28cfdc47b5fd`
+after correction round 2, with no remaining findings, questions, or
+suggestions. Sol independently reproduced every tracked measurement, verified
+the accuracy/default/seed/traversal contracts, and passed the full suite plus
+Ruff, Black, mypy, and diff checks. Its final summary was posted to PR #28.
 
 C.3 received Sol approval at `4eb126ed89267a017c879b39f769725a9fa4f62e`
 after correction round 1, with no remaining findings, questions, or
