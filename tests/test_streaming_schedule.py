@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+import gc
+import weakref
 from dataclasses import replace
 
 import numpy as np
 
+import gfcompress.column_basis as column_module
+import gfcompress.leaf as leaf_module
+import gfcompress.row_basis as row_module
 from gfcompress.build_tree import build_tree
 from gfcompress.column_basis import column_bases
 from gfcompress.fixed_pattern import (
     AdmissibleProbeSchedule,
     LeafProbeSchedule,
-    ProbeLifetime,
+    PeriodicLeafTestMatrix,
+    PeriodicTestMatrix,
     build_admissible_schedule,
     build_leaf_schedule,
 )
@@ -93,16 +99,63 @@ def test_pair_owners_drive_distinct_column_row_and_leaf_probes() -> None:
     )
 
 
-def test_dense_probe_and_sample_peaks_stay_constant_as_schedule_grows() -> None:
+def test_dense_probe_and_sample_objects_are_released_as_schedule_grows(monkeypatch) -> None:
     mesh, root, lists, op, level = _problem()
     col = build_admissible_schedule(root, lists, level, mesh, 2, 1, seed=3, side="col")
     row = build_admissible_schedule(root, lists, level, mesh, 2, 1, seed=3, side="row")
     leaf_level = max(nodes[0].level for nodes in root.iter_levels())
     leaf = build_leaf_schedule(root, lists, leaf_level, mesh)
 
+    def observe(refs, value) -> None:
+        gc.collect()
+        assert all(ref() is None for ref in refs)
+        refs.append(weakref.ref(value))
+
+    col_probes: list[weakref.ReferenceType[np.ndarray]] = []
+    row_probes: list[weakref.ReferenceType[np.ndarray]] = []
+    leaf_probes: list[weakref.ReferenceType[np.ndarray]] = []
+    col_samples: list[weakref.ReferenceType[np.ndarray]] = []
+    row_samples: list[weakref.ReferenceType[np.ndarray]] = []
+    leaf_samples: list[weakref.ReferenceType[np.ndarray]] = []
+    periodic_realize = PeriodicTestMatrix.realize
+    leaf_realize = PeriodicLeafTestMatrix.realize
+    col_matvec = column_module.peeled_matvec
+    row_rmatvec = row_module.peeled_rmatvec
+    leaf_matvec = leaf_module.peeled_matvec
+
+    def realize_periodic(probe):
+        realized = periodic_realize(probe)
+        observe(col_probes if probe.side == "col" else row_probes, realized.omega)
+        return realized
+
+    def realize_leaf(probe):
+        omega = leaf_realize(probe)
+        observe(leaf_probes, omega)
+        return omega
+
+    def sampled_col(*args, **kwargs):
+        sample = col_matvec(*args, **kwargs)
+        observe(col_samples, sample)
+        return sample
+
+    def sampled_row(*args, **kwargs):
+        sample = row_rmatvec(*args, **kwargs)
+        observe(row_samples, sample)
+        return sample
+
+    def sampled_leaf(*args, **kwargs):
+        sample = leaf_matvec(*args, **kwargs)
+        observe(leaf_samples, sample)
+        return sample
+
+    monkeypatch.setattr(PeriodicTestMatrix, "realize", realize_periodic)
+    monkeypatch.setattr(PeriodicLeafTestMatrix, "realize", realize_leaf)
+    monkeypatch.setattr(column_module, "peeled_matvec", sampled_col)
+    monkeypatch.setattr(row_module, "peeled_rmatvec", sampled_row)
+    monkeypatch.setattr(leaf_module, "peeled_matvec", sampled_leaf)
+
     for multiplier in (1, 2, 3):
-        col_life, row_life, leaf_life = ProbeLifetime(), ProbeLifetime(), ProbeLifetime()
-        column_bases(
+        col_result = column_bases(
             op,
             root,
             lists,
@@ -113,9 +166,8 @@ def test_dense_probe_and_sample_peaks_stay_constant_as_schedule_grows() -> None:
             1,
             3,
             schedule=replace(col, probes=col.probes * multiplier),
-            lifetime=col_life,
         )
-        row_bases(
+        row_result = row_bases(
             op,
             root,
             lists,
@@ -126,9 +178,8 @@ def test_dense_probe_and_sample_peaks_stay_constant_as_schedule_grows() -> None:
             1,
             3,
             schedule=replace(row, probes=row.probes * multiplier),
-            lifetime=row_life,
         )
-        extract_leaves(
+        leaf_result = extract_leaves(
             op,
             root,
             lists,
@@ -136,13 +187,17 @@ def test_dense_probe_and_sample_peaks_stay_constant_as_schedule_grows() -> None:
             leaf_level,
             [],
             schedule=replace(leaf, probes=leaf.probes * multiplier),
-            lifetime=leaf_life,
         )
-        for lifetime, count in (
-            (col_life, len(col.probes)),
-            (row_life, len(row.probes)),
-            (leaf_life, len(leaf.probes)),
+        assert col_result and row_result and leaf_result
+        assert all(item.y_alpha.base is None and item.u.base is None for item in col_result)
+        gc.collect()
+        for refs, count in (
+            (col_probes, len(col.probes)),
+            (row_probes, len(row.probes)),
+            (leaf_probes, len(leaf.probes)),
+            (col_samples, len(col.probes)),
+            (row_samples, len(row.probes)),
+            (leaf_samples, len(leaf.probes)),
         ):
-            assert lifetime.realized == multiplier * count
-            assert lifetime.live_probes == lifetime.live_samples == 0
-            assert lifetime.peak_live_probes == lifetime.peak_live_samples == 1
+            assert len(refs) == sum(range(1, multiplier + 1)) * count
+            assert all(ref() is None for ref in refs)

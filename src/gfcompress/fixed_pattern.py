@@ -184,32 +184,6 @@ class AdmissibleProbeSchedule:
     owners: dict[tuple[TreeNode, TreeNode], PeriodicTestMatrix]
 
 
-@dataclass
-class ProbeLifetime:
-    """Direct lifetime counters for a streamed probe consumer."""
-
-    realized: int = 0
-    live_probes: int = 0
-    peak_live_probes: int = 0
-    live_samples: int = 0
-    peak_live_samples: int = 0
-
-    def begin_probe(self) -> None:
-        self.realized += 1
-        self.live_probes += 1
-        self.peak_live_probes = max(self.peak_live_probes, self.live_probes)
-
-    def end_probe(self) -> None:
-        self.live_probes -= 1
-
-    def begin_sample(self) -> None:
-        self.live_samples += 1
-        self.peak_live_samples = max(self.peak_live_samples, self.live_samples)
-
-    def end_sample(self) -> None:
-        self.live_samples -= 1
-
-
 def grid_coordinates(node: TreeNode, root: TreeNode) -> tuple[int, ...]:
     """Return `node`'s stored dyadic grid coordinates `(i_0, ..., i_{d-1})`.
 
@@ -539,7 +513,6 @@ __all__ = [
     "PeriodicLeafTestMatrix",
     "PeriodicTestMatrix",
     "RealizedPeriodicTestMatrix",
-    "ProbeLifetime",
     "Side",
     "admissible_probe_owners",
     "build_admissible_schedule",

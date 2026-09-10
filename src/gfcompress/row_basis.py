@@ -48,7 +48,6 @@ from numpy.typing import NDArray
 from gfcompress.column_basis import ColumnBasis, _effective_rank
 from gfcompress.fixed_pattern import (
     AdmissibleProbeSchedule,
-    ProbeLifetime,
     build_admissible_schedule,
 )
 from gfcompress.geometry import FaultMesh
@@ -95,7 +94,6 @@ def row_bases(
     p: int = 10,
     seed: int | None = None,
     schedule: AdmissibleProbeSchedule | None = None,
-    lifetime: ProbeLifetime | None = None,
 ) -> list[RowBasis]:
     """Compute the level-`level` row bases `V_{alpha,beta}` for every
     admissible pair `(alpha, beta)` at `level`.
@@ -133,12 +131,8 @@ def row_bases(
     schedule = schedule or build_admissible_schedule(root, lists, level, mesh, k, p, seed, "row")
     result: dict[tuple[TreeNode, TreeNode], RowBasis] = {}
     for probe in schedule.probes:
-        if lifetime:
-            lifetime.begin_probe()
         realization = probe.realize()
         z = np.asarray(peeled_rmatvec(operator, realization.omega, factors), dtype=np.float64)
-        if lifetime:
-            lifetime.begin_sample()
         for (alpha, beta), owner in schedule.owners.items():
             if owner is probe:
                 z_beta = np.array(z[beta.col_indices, :], copy=True)
@@ -147,9 +141,6 @@ def row_bases(
                     alpha=alpha, beta=beta, v=v, g_alpha=realization.blocks[alpha]
                 )
         del z, realization
-        if lifetime:
-            lifetime.end_sample()
-            lifetime.end_probe()
     return [
         result[(alpha, beta)]
         for alpha in root.nodes_at_level(level)

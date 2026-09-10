@@ -48,7 +48,6 @@ from numpy.typing import NDArray
 
 from gfcompress.fixed_pattern import (
     AdmissibleProbeSchedule,
-    ProbeLifetime,
     build_admissible_schedule,
 )
 from gfcompress.geometry import FaultMesh
@@ -105,7 +104,6 @@ def column_bases(
     p: int = 10,
     seed: int | None = None,
     schedule: AdmissibleProbeSchedule | None = None,
-    lifetime: ProbeLifetime | None = None,
 ) -> list[ColumnBasis]:
     """Compute the level-`level` column bases `U_{alpha,beta}` for every
     admissible pair `(alpha, beta)` at `level`.
@@ -142,12 +140,8 @@ def column_bases(
     schedule = schedule or build_admissible_schedule(root, lists, level, mesh, k, p, seed, "col")
     result: dict[tuple[TreeNode, TreeNode], ColumnBasis] = {}
     for probe in schedule.probes:
-        if lifetime:
-            lifetime.begin_probe()
         realization = probe.realize()
         y = np.asarray(peeled_matvec(operator, realization.omega, factors), dtype=np.float64)
-        if lifetime:
-            lifetime.begin_sample()
         for (alpha, beta), owner in schedule.owners.items():
             if owner is probe:
                 y_alpha = np.array(y[alpha.row_indices, :], copy=True)
@@ -161,9 +155,6 @@ def column_bases(
                     g_beta=realization.blocks[beta],
                 )
         del y, realization
-        if lifetime:
-            lifetime.end_sample()
-            lifetime.end_probe()
     return [
         result[(alpha, beta)]
         for alpha in root.nodes_at_level(level)
