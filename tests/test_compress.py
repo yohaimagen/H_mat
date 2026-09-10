@@ -41,6 +41,7 @@ from gfcompress.geometry import FaultMesh
 from gfcompress.hmatrix import HMatrix
 from gfcompress.interactions import build_lists
 from gfcompress.mockgf import MockGF
+from gfcompress.operators import MatVecOperator
 
 
 def _grid_mesh(*shape: int, spacing: float = 1.0) -> FaultMesh:
@@ -74,6 +75,42 @@ def test_compress_rejects_unsupported_sampling() -> None:
         raise AssertionError("expected ValueError for sampling='coloring'")
     except ValueError as exc:
         assert "coloring" in str(exc)
+
+
+class _NoSamplingOperator(MatVecOperator):
+    """Operator double that records any accidental pre-validation sampling."""
+
+    def __init__(self, shape: tuple[int, int]) -> None:
+        self._shape = shape
+        self.calls = 0
+
+    def matvec(self, omega: np.ndarray) -> np.ndarray:
+        self.calls += 1
+        raise AssertionError("compress sampled an invalid input")
+
+    def rmatvec(self, psi: np.ndarray) -> np.ndarray:
+        self.calls += 1
+        raise AssertionError("compress sampled an invalid input")
+
+    @property
+    def shape(self) -> tuple[int, int]:
+        return self._shape
+
+
+def test_compress_validates_inputs_before_sampling() -> None:
+    mesh = _grid_mesh(4, 4)
+    cases = [
+        (_NoSamplingOperator((mesh.n_rows - 1, mesh.n_cols)), dict(m=1, k=1, p=0)),
+        (_NoSamplingOperator((mesh.n_rows, mesh.n_cols)), dict(m=0, k=1, p=0)),
+        (_NoSamplingOperator((mesh.n_rows, mesh.n_cols)), dict(m=1, k=0, p=0)),
+        (_NoSamplingOperator((mesh.n_rows, mesh.n_cols)), dict(m=1, k=1, p=-1)),
+    ]
+    for operator, options in cases:
+        try:
+            compress(operator, mesh, seed=0, sampling="fixed", **options)
+            raise AssertionError("expected invalid compression input to fail")
+        except ValueError:
+            assert operator.calls == 0
 
 
 # ---------------------------------------------------------------------------

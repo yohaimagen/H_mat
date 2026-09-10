@@ -182,12 +182,12 @@ def test_eta_sweep_consistency_1d() -> None:
 
 
 # ---------------------------------------------------------------------------
-# k precondition boundary: k <= dof_col * min_leaf_patches (fold-in docstring
-# claim, verified directly here). 16x16/m=4 has leaf width 4, dof_col=1.
+# Per-block effective rank: a target rank larger than the smallest leaf block
+# is valid; each rectangular pair is capped on both factor sides.
 # ---------------------------------------------------------------------------
 
 
-def test_k_precondition_boundary_16x16_m4() -> None:
+def test_large_target_rank_is_capped_per_small_block() -> None:
     mesh = _grid_mesh(16, 16)
     op = MockGF(mesh)
     root = build_tree(mesh, m=4)
@@ -196,13 +196,10 @@ def test_k_precondition_boundary_16x16_m4() -> None:
     bound = mesh.dof_col * min_leaf_patches
     assert bound == 4
 
-    compress(op, mesh, m=4, k=bound, p=0, seed=0, sampling="fixed")  # must not raise
-
-    try:
-        compress(op, mesh, m=4, k=bound + 1, p=0, seed=0, sampling="fixed")
-        raise AssertionError(f"expected ValueError for k={bound + 1} > bound={bound}")
-    except ValueError as exc:
-        assert f"[0, {bound}]" in str(exc), f"expected bound {bound} in error message: {exc}"
+    hmat = compress(op, mesh, m=4, k=bound + 1, p=0, seed=0, sampling="fixed")
+    for factor in hmat.factors:
+        k_eff = min(bound + 1, len(factor.alpha.row_indices), len(factor.beta.col_indices))
+        assert factor.u.shape[1] == factor.v.shape[1] == factor.b.shape[0] == k_eff
 
 
 # ---------------------------------------------------------------------------

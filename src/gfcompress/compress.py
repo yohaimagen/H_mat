@@ -119,15 +119,11 @@ def compress(
             supplies `n_rows`/`n_cols` and the tree's index expansion).
         m: Leaf stop threshold for `build_tree` (a node with `<= m` patches
             does not need further splitting).
-        k: Target rank for each admissible block's factorization. Must
-            satisfy `k <= dof_col * min_leaf_patches`, where
-            `min_leaf_patches` is the smallest leaf box's patch count over
-            the whole tree (the binding constraint comes from the row-basis
-            path's `orth(z_beta, k)` call, `z_beta` having only
-            `dof_col * |beta|` rows for the narrowest box `beta` reached at
-            any compressed level, leaf level included) -- `k` and `m` are
-            therefore coupled: increasing `m` (coarser leaves) is what
-            allows a larger `k`.
+        k: Positive target rank. Each block uses the common effective rank
+            `min(k, len(alpha.row_indices), len(beta.col_indices))`; this
+            permits small rectangular blocks without narrowing the `k+p`
+            probes. Rank zero is not supported because the fixed-pattern and
+            leaf paths do not provide a meaningful zero-width compression.
         p: Oversampling parameter. Defaults to `0`.
         seed: Optional base seed forwarded to every level's test matrices.
         sampling: Test-matrix strategy. Only `"fixed"` (the default) is
@@ -137,10 +133,10 @@ def compress(
         The compressed `HMatrix`.
 
     Raises:
-        ValueError: If `sampling` is not `"fixed"`, or if `k` exceeds
-            `dof_col * min_leaf_patches` (raised from `randomized.orth`, not
-            from `compress` itself).
+        ValueError: If an option, mesh, or operator shape is invalid.
     """
+    _validate_inputs(operator, mesh, m, k, p, seed, sampling)
+
     if sampling not in SUPPORTED_SAMPLING:
         raise ValueError(
             f"sampling={sampling!r} not supported; only {SUPPORTED_SAMPLING!r} "
@@ -158,6 +154,42 @@ def compress(
 
     leaves = extract_leaves(operator, root, lists, mesh, leaf_level, factors)
     return HMatrix(root=root, mesh=mesh, factors=factors, leaves=leaves)
+
+
+def _validate_inputs(
+    operator: MatVecOperator,
+    mesh: FaultMesh,
+    m: int,
+    k: int,
+    p: int,
+    seed: int | None,
+    sampling: str,
+) -> None:
+    """Validate public compression inputs before constructing any probes."""
+    if not isinstance(mesh, FaultMesh):
+        raise ValueError("mesh must be a FaultMesh")
+    if (
+        mesh.centroids.ndim != 2
+        or mesh.centroids.shape[0] == 0
+        or mesh.L.shape != (mesh.centroids.shape[0],)
+        or mesh.tree_dim != mesh.centroids.shape[1]
+        or mesh.dof_col != mesh.dof_row - 1
+    ):
+        raise ValueError("mesh has inconsistent centroid, length, or degree-of-freedom shapes")
+    for name, value, minimum in (("m", m, 1), ("k", k, 1), ("p", p, 0)):
+        if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value < minimum:
+            raise ValueError(f"{name} must be an integer >= {minimum}, got {value!r}")
+    if seed is not None and (isinstance(seed, bool) or not isinstance(seed, (int, np.integer))):
+        raise ValueError(f"seed must be an integer or None, got {seed!r}")
+    if not isinstance(sampling, str):
+        raise ValueError(f"sampling must be a string, got {sampling!r}")
+    try:
+        shape = operator.shape
+    except AttributeError as exc:
+        raise ValueError("operator must provide shape=(n_rows, n_cols)") from exc
+    expected = (mesh.n_rows, mesh.n_cols)
+    if not isinstance(shape, tuple) or len(shape) != 2 or shape != expected:
+        raise ValueError(f"operator shape must be {expected}, got {shape!r}")
 
 
 class CountingOperator(MatVecOperator):

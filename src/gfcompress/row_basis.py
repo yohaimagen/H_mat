@@ -42,7 +42,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from gfcompress.column_basis import ColumnBasis
+from gfcompress.column_basis import ColumnBasis, _effective_rank
 from gfcompress.fixed_pattern import build_admissible_test_matrices
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists
@@ -138,7 +138,7 @@ def row_bases(
         for beta in lists.interaction[alpha]:
             z = z_for_box[alpha]
             z_beta = z[beta.col_indices, :]
-            v = orth(z_beta, k)
+            v = orth(z_beta, _effective_rank(alpha, beta, k))
             result.append(RowBasis(alpha=alpha, beta=beta, v=v, g_alpha=g_for_box[alpha]))
 
     return result

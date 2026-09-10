@@ -51,6 +51,11 @@ from gfcompress.randomized import orth
 from gfcompress.tree import TreeNode
 
 
+def _effective_rank(alpha: TreeNode, beta: TreeNode, k: int) -> int:
+    """Return the common factor width for one rectangular block pair."""
+    return min(k, len(alpha.row_indices), len(beta.col_indices))
+
+
 @dataclass(frozen=True)
 class ColumnBasis:
     """Column-space basis `U_{alpha,beta}` for one admissible block `(alpha,
@@ -141,7 +146,7 @@ def column_bases(
         for beta in lists.interaction[alpha]:
             y = y_for_box[beta]
             y_alpha = y[alpha.row_indices, :]
-            u = orth(y_alpha, k)
+            u = orth(y_alpha, _effective_rank(alpha, beta, k))
             result.append(
                 ColumnBasis(alpha=alpha, beta=beta, u=u, y_alpha=y_alpha, g_beta=g_for_box[beta])
             )
