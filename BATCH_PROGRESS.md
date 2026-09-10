@@ -46,7 +46,7 @@ activation has not been established and is not claimed as enforcement.
 | C.2 | 0c8df92 + b1a4b9f + 6604919 | APPROVED after 2 corrections | 340 tests; ruff/black/mypy independently pass | proceed C.3 |
 | C.3 | 8113385 + 4eb126e | APPROVED after 1 correction | full suite; ruff/black/mypy independently pass | proceed C.4 |
 | C.4 | fd88b43 + 9533703 + 94ef6b4 | APPROVED after 2 corrections | full suite; measurements reproduced; ruff/black/mypy independently pass | proceed C.5 |
-| C.5 | not started | not started | not run | start Terra implementation |
+| C.5 | 09aeebd + 6c45588 + 336178b | APPROVED after 2 corrections | 352 tests; weakref lifetime proof; ruff/black/mypy independently pass | outer Astra review |
 
 ## Baseline and usage record
 
@@ -136,6 +136,28 @@ after correction round 2, with no remaining findings, questions, or
 suggestions. Sol independently reproduced every tracked measurement, verified
 the accuracy/default/seed/traversal contracts, and passed the full suite plus
 Ruff, Black, mypy, and diff checks. Its final summary was posted to PR #28.
+
+C.5 review findings at `09aeebd27ea5b3b03bf2863e4c21be5502db1fb0`:
+production ownership helpers collapse repeated source boxes through a
+box-to-probe map, while the synthetic test bypasses those helpers; make pair
+ownership part of the schedule consumed end-to-end by column, row, and leaf
+paths. Replace the backing-array-only memory assertion with instrumentation
+showing peak live dense probes/samples stays bounded as probe count grows in all
+three consumers. Sol independently passed 350 tests and all static checks.
+
+C.5 follow-up finding at `6c455880d489a23774743d2ca530f02498da852c`:
+explicit pair ownership is resolved, but manual lifetime counters cannot prove
+that dense arrays are released. Remove the test-only production counter API and
+replace it with evidence based on actual object reachability or allocations,
+covering growing column, row, and leaf schedules. Sol independently passed 352
+tests and all static checks.
+
+C.5 received Sol approval at `336178b550ffaa84f8c03aa8ed40f635c8deb7e1`
+after correction round 2, with no remaining findings, questions, or
+suggestions. Sol independently verified explicit repeated-source ownership,
+actual weak-reference release of dense probes and full samples across growing
+column/row/leaf schedules, fixed-path equivalence and counts, 352 tests, and all
+static checks. Its final summary was posted to PR #28.
 
 C.3 received Sol approval at `4eb126ed89267a017c879b39f769725a9fa4f62e`
 after correction round 1, with no remaining findings, questions, or
