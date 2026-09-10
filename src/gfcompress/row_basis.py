@@ -47,9 +47,9 @@ from numpy.typing import NDArray
 
 from gfcompress.column_basis import ColumnBasis, _effective_rank
 from gfcompress.fixed_pattern import (
-    admissible_probe_owners,
-    build_admissible_test_matrices,
-    validate_admissible_probe_owners,
+    AdmissibleProbeSchedule,
+    ProbeLifetime,
+    build_admissible_schedule,
 )
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists
@@ -94,6 +94,8 @@ def row_bases(
     k: int,
     p: int = 10,
     seed: int | None = None,
+    schedule: AdmissibleProbeSchedule | None = None,
+    lifetime: ProbeLifetime | None = None,
 ) -> list[RowBasis]:
     """Compute the level-`level` row bases `V_{alpha,beta}` for every
     admissible pair `(alpha, beta)` at `level`.
@@ -128,14 +130,16 @@ def row_bases(
         list). Each `v` has orthonormal columns and shape
         `(len(beta.col_indices), k_eff)` for its pair.
     """
-    test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=seed, side="row")
-    owners = admissible_probe_owners(root, lists, level, test_matrices, side="row")
-    validate_admissible_probe_owners(owners, side="row")
+    schedule = schedule or build_admissible_schedule(root, lists, level, mesh, k, p, seed, "row")
     result: dict[tuple[TreeNode, TreeNode], RowBasis] = {}
-    for probe in test_matrices:
+    for probe in schedule.probes:
+        if lifetime:
+            lifetime.begin_probe()
         realization = probe.realize()
         z = np.asarray(peeled_rmatvec(operator, realization.omega, factors), dtype=np.float64)
-        for (alpha, beta), owner in owners.items():
+        if lifetime:
+            lifetime.begin_sample()
+        for (alpha, beta), owner in schedule.owners.items():
             if owner is probe:
                 z_beta = np.array(z[beta.col_indices, :], copy=True)
                 v = orth(z_beta, _effective_rank(alpha, beta, k)).copy()
@@ -143,6 +147,9 @@ def row_bases(
                     alpha=alpha, beta=beta, v=v, g_alpha=realization.blocks[alpha]
                 )
         del z, realization
+        if lifetime:
+            lifetime.end_sample()
+            lifetime.end_probe()
     return [
         result[(alpha, beta)]
         for alpha in root.nodes_at_level(level)

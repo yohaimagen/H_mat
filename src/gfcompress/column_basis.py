@@ -47,9 +47,9 @@ import numpy as np
 from numpy.typing import NDArray
 
 from gfcompress.fixed_pattern import (
-    admissible_probe_owners,
-    build_admissible_test_matrices,
-    validate_admissible_probe_owners,
+    AdmissibleProbeSchedule,
+    ProbeLifetime,
+    build_admissible_schedule,
 )
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists
@@ -104,6 +104,8 @@ def column_bases(
     k: int,
     p: int = 10,
     seed: int | None = None,
+    schedule: AdmissibleProbeSchedule | None = None,
+    lifetime: ProbeLifetime | None = None,
 ) -> list[ColumnBasis]:
     """Compute the level-`level` column bases `U_{alpha,beta}` for every
     admissible pair `(alpha, beta)` at `level`.
@@ -137,14 +139,16 @@ def column_bases(
         list). Each `u` has orthonormal columns and shape
         `(len(alpha.row_indices), k_eff)` for its pair.
     """
-    test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=seed, side="col")
-    owners = admissible_probe_owners(root, lists, level, test_matrices, side="col")
-    validate_admissible_probe_owners(owners, side="col")
+    schedule = schedule or build_admissible_schedule(root, lists, level, mesh, k, p, seed, "col")
     result: dict[tuple[TreeNode, TreeNode], ColumnBasis] = {}
-    for probe in test_matrices:
+    for probe in schedule.probes:
+        if lifetime:
+            lifetime.begin_probe()
         realization = probe.realize()
         y = np.asarray(peeled_matvec(operator, realization.omega, factors), dtype=np.float64)
-        for (alpha, beta), owner in owners.items():
+        if lifetime:
+            lifetime.begin_sample()
+        for (alpha, beta), owner in schedule.owners.items():
             if owner is probe:
                 y_alpha = np.array(y[alpha.row_indices, :], copy=True)
                 # ``orth`` returns a QR slice; copy releases its unused columns.
@@ -157,6 +161,9 @@ def column_bases(
                     g_beta=realization.blocks[beta],
                 )
         del y, realization
+        if lifetime:
+            lifetime.end_sample()
+            lifetime.end_probe()
     return [
         result[(alpha, beta)]
         for alpha in root.nodes_at_level(level)

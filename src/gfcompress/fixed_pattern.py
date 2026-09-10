@@ -176,6 +176,40 @@ class RealizedPeriodicTestMatrix:
     blocks: dict[TreeNode, NDArray[np.float64]]
 
 
+@dataclass(frozen=True)
+class AdmissibleProbeSchedule:
+    """Descriptions plus the explicit probe selected for every block pair."""
+
+    probes: list[PeriodicTestMatrix]
+    owners: dict[tuple[TreeNode, TreeNode], PeriodicTestMatrix]
+
+
+@dataclass
+class ProbeLifetime:
+    """Direct lifetime counters for a streamed probe consumer."""
+
+    realized: int = 0
+    live_probes: int = 0
+    peak_live_probes: int = 0
+    live_samples: int = 0
+    peak_live_samples: int = 0
+
+    def begin_probe(self) -> None:
+        self.realized += 1
+        self.live_probes += 1
+        self.peak_live_probes = max(self.peak_live_probes, self.live_probes)
+
+    def end_probe(self) -> None:
+        self.live_probes -= 1
+
+    def begin_sample(self) -> None:
+        self.live_samples += 1
+        self.peak_live_samples = max(self.peak_live_samples, self.live_samples)
+
+    def end_sample(self) -> None:
+        self.live_samples -= 1
+
+
 def grid_coordinates(node: TreeNode, root: TreeNode) -> tuple[int, ...]:
     """Return `node`'s stored dyadic grid coordinates `(i_0, ..., i_{d-1})`.
 
@@ -313,6 +347,23 @@ def admissible_probe_owners(
     return owners
 
 
+def build_admissible_schedule(
+    root: TreeNode,
+    lists: TreeLists,
+    level: int,
+    mesh: FaultMesh,
+    k: int,
+    p: int = 10,
+    seed: int | None = None,
+    side: Side = "col",
+) -> AdmissibleProbeSchedule:
+    """Build the default fixed schedule with pair-specific ownership."""
+    probes = build_admissible_test_matrices(root, level, mesh, k, p, seed, side)
+    owners = admissible_probe_owners(root, lists, level, probes, side)
+    validate_admissible_probe_owners(owners, side)
+    return AdmissibleProbeSchedule(probes=probes, owners=owners)
+
+
 def validate_admissible_probe_owners(
     owners: dict[tuple[TreeNode, TreeNode], PeriodicTestMatrix], side: Side
 ) -> None:
@@ -374,6 +425,14 @@ class PeriodicLeafTestMatrix:
     def omega(self) -> NDArray[np.float64]:
         """Materialize a diagnostic copy of the dense test matrix."""
         return self.realize()
+
+
+@dataclass(frozen=True)
+class LeafProbeSchedule:
+    """Leaf descriptions plus their explicit neighbor-pair ownership."""
+
+    probes: list[PeriodicLeafTestMatrix]
+    owners: dict[tuple[TreeNode, TreeNode], PeriodicLeafTestMatrix]
 
 
 def leaf_pattern_cell(node: TreeNode, root: TreeNode) -> tuple[int, ...]:
@@ -464,16 +523,29 @@ def leaf_probe_owners(
     }
 
 
+def build_leaf_schedule(
+    root: TreeNode, lists: TreeLists, level: int, mesh: FaultMesh
+) -> LeafProbeSchedule:
+    """Build the default fixed leaf schedule with pair-specific ownership."""
+    probes = build_leaf_test_matrices(root, level, mesh)
+    return LeafProbeSchedule(probes=probes, owners=leaf_probe_owners(root, lists, level, probes))
+
+
 __all__ = [
+    "AdmissibleProbeSchedule",
     "LEAF_PERIOD",
+    "LeafProbeSchedule",
     "PERIOD",
     "PeriodicLeafTestMatrix",
     "PeriodicTestMatrix",
     "RealizedPeriodicTestMatrix",
+    "ProbeLifetime",
     "Side",
     "admissible_probe_owners",
+    "build_admissible_schedule",
     "build_admissible_test_matrices",
     "build_leaf_test_matrices",
+    "build_leaf_schedule",
     "grid_coordinates",
     "leaf_pattern_cell",
     "leaf_probe_owners",

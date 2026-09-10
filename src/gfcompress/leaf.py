@@ -41,7 +41,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from gfcompress.fixed_pattern import build_leaf_test_matrices, leaf_probe_owners
+from gfcompress.fixed_pattern import LeafProbeSchedule, ProbeLifetime, build_leaf_schedule
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists
 from gfcompress.operators import MatVecOperator
@@ -76,6 +76,8 @@ def extract_leaves(
     mesh: FaultMesh,
     level: int,
     factors: Factors,
+    schedule: LeafProbeSchedule | None = None,
+    lifetime: ProbeLifetime | None = None,
 ) -> list[DenseLeaf]:
     """Extract every inadmissible neighbor block `(alpha, beta)` at the leaf
     `level`, from the residual operator `A - A^{(L)}`.
@@ -105,18 +107,23 @@ def extract_leaves(
     """
     level_nodes = root.nodes_at_level(level)
 
-    test_matrices = build_leaf_test_matrices(root, level, mesh)
-
-    owners = leaf_probe_owners(root, lists, level, test_matrices)
+    schedule = schedule or build_leaf_schedule(root, lists, level, mesh)
     result: dict[tuple[TreeNode, TreeNode], DenseLeaf] = {}
-    for probe in test_matrices:
+    for probe in schedule.probes:
+        if lifetime:
+            lifetime.begin_probe()
         y = np.asarray(peeled_matvec(operator, probe.realize(), factors), dtype=np.float64)
-        for (alpha, beta), owner in owners.items():
+        if lifetime:
+            lifetime.begin_sample()
+        for (alpha, beta), owner in schedule.owners.items():
             if owner is probe:
                 width = len(beta.col_indices)
                 block = np.array(y[np.ix_(alpha.row_indices, np.arange(width))], copy=True)
                 result[(alpha, beta)] = DenseLeaf(alpha=alpha, beta=beta, block=block)
         del y
+        if lifetime:
+            lifetime.end_sample()
+            lifetime.end_probe()
     return [result[(alpha, beta)] for alpha in level_nodes for beta in lists.nei[alpha]]
 
 
