@@ -61,9 +61,11 @@ class FaultMesh:
             not necessarily the elasticity problem (see module docstring).
         L: Characteristic length per patch, shape `(N,)`.
         dof_row: Row degrees of freedom per patch (elastic problem
-            dimension `d`, `in {2, 3}`). Defaults to `tree_dim` if not given
-            explicitly, preserving pre-R.2 behavior when the tree is built at
-            full ambient dimension.
+            dimension `d`, `in {2, 3}`). Pass `0` (the default) to infer it
+            from `tree_dim`, preserving pre-R.2 behavior when the tree is
+            built at full ambient dimension. Always a real `int` (`2` or
+            `3`) after construction -- never `0` -- so downstream arithmetic
+            on `mesh.dof_row` needs no `None`/`0` check.
         tree_dim: Dimensionality of the cluster tree (`= centroids.shape[1]`),
             `in {1, 2, 3}`, `<= dof_row`.
         dof_col: Column degrees of freedom per patch, equal to `dof_row - 1`.
@@ -71,7 +73,7 @@ class FaultMesh:
 
     centroids: NDArray[np.float64]
     L: NDArray[np.float64]
-    dof_row: int | None = None
+    dof_row: int = 0
     tree_dim: int = field(init=False)
     dof_col: int = field(init=False)
 
@@ -88,9 +90,11 @@ class FaultMesh:
                 f"L must have shape (N,) matching centroids, got {L.shape} "
                 f"vs centroids {centroids.shape}"
             )
+        if not np.isfinite(centroids).all() or not np.isfinite(L).all():
+            raise ValueError("centroids and L must be finite")
 
         tree_dim = centroids.shape[1]
-        dof_row = tree_dim if self.dof_row is None else self.dof_row
+        dof_row = tree_dim if self.dof_row == 0 else self.dof_row
         if dof_row not in (2, 3):
             raise ValueError(
                 f"dof_row must be 2 or 3 (the elastic problem's spatial dimension), "
@@ -117,9 +121,6 @@ class FaultMesh:
     @property
     def n_rows(self) -> int:
         """Total row dimension `dof_row * N`."""
-        # __post_init__ always resolves dof_row to an int; the field stays
-        # typed `int | None` only to accept the optional constructor override.
-        assert self.dof_row is not None
         return self.dof_row * self.n_patches
 
     @property
@@ -140,7 +141,6 @@ class FaultMesh:
             1D array of scalar row indices, length `dof_row * len(patch_ids)`,
             ordered patch-major (block-interleaved) following the input order.
         """
-        assert self.dof_row is not None
         return _expand_indices(patch_ids, self.dof_row)
 
     def patch_to_cols(self, patch_ids: NDArray[np.integer]) -> NDArray[np.intp]:
@@ -187,21 +187,14 @@ def pairwise_distances(centroids: NDArray[np.float64]) -> NDArray[np.float64]:
     return result
 
 
-#: Default explained-variance-ratio threshold below which a principal axis is
-#: dropped by `pca_align`. Argued (REALGF_PLAN.md S2, Finding B) from two
-#: floors that sit ~18 orders of magnitude apart: float64 roundoff on
-#: O(1)-O(10) coordinates gives a variance-ratio noise floor around 1e-30 to
-#: 1e-32, while any genuine geometric feature (fault roughness, curvature) is
-#: at least ~1e-16. `1e-12` sits comfortably above the noise floor and well
-#: below the real-feature floor, biased conservative (dropping a genuine axis
-#: silently corrupts the geometry; keeping a noise axis only costs a factor
-#: of ~2 in tree cost).
-DEFAULT_PCA_VAR_TOL = 1e-12
-
-#: Explained-variance-ratio band in which whether an axis is "real" or
-#: "noise" is not decidable from the data alone; `pca_align` warns loudly
-#: (never decides silently) whenever any ratio falls in this half-open band.
-_AMBIGUITY_BAND = (1e-12, 1e-6)
+#: Numerical rank criterion used by `pca_align`: an axis is roundoff-degenerate
+#: when ``sigma_i / sigma_0 < eps * max(N, d)``.  This is NumPy's standard SVD
+#: matrix-rank scale.  In variance-ratio terms the cutoff is data dependent:
+#: ``(eps * max(N, d))**2 * sigma_0**2 / sum(sigma**2)``; it is returned as
+#: `PCAAlignment.variance_threshold`.  This keeps genuine 1e-16-scale variance
+#: rather than treating it as noise via the former arbitrary 1e-12 cutoff.
+DEFAULT_PCA_VAR_TOL: float | None = None
+_CUTOFF_UNCERTAINTY_FACTOR = 10.0
 
 
 @dataclass(frozen=True)
@@ -215,35 +208,64 @@ class PCAAlignment:
     by calling `pca_align` and feeding `.centroids` to `FaultMesh`.
 
     Attributes:
+        original_centroids: Original, unmodified input coordinates.
         centroids: Centered, rotated centroids restricted to the retained
             principal axes, shape `(N, len(kept_axes))`.
         mean: Centroid-cloud mean subtracted before rotation, shape
             `(d_orig,)`.
         rotation: Rows are the principal axes (right singular vectors of the
             centered cloud, descending singular value), shape
-            `(d_orig, d_orig)`. `centered @ rotation.T` gives the full
+            `(d_r, d_orig)` with `d_r = min(N, d_orig)` (`np.linalg.svd(...,
+            full_matrices=False)`). `centered @ rotation.T` gives the full
             (unreduced) rotated cloud; `.centroids` is that restricted to
-            `kept_axes`.
+            `kept_axes`. `d_r == d_orig` for every mesh this codebase
+            actually builds (patches always vastly outnumber `d_orig <= 3`);
+            the `N < d_orig` case (needs `N <= 3` to trigger) is a
+            pathological edge this function does not specially handle: `d_r`
+            axes are ranked/reported exactly as usual, but the
+            `d_orig - d_r` axes the cloud is too small to even define are
+            absent from `variance_ratio`/`kept_axes`/`dropped_axes`
+            altogether, not counted as "dropped".
         variance_ratio: Explained-variance ratio `sigma_i^2 / sum(sigma_j^2)`
-            per principal axis, shape `(d_orig,)`, descending.
+            per principal axis, shape `(d_r,)` (see `rotation`), descending.
         kept_axes: Indices into `variance_ratio`/`rotation` of the retained
             axes, in descending-variance order. Never empty.
         dropped_axes: Indices of the dropped axes, in descending-variance
             order.
+        singular_values: Singular values of the centered cloud.
+        singular_value_threshold: Roundoff singular-value cutoff used for the
+            automatic decision.
+        variance_threshold: Equivalent explained-variance-ratio cutoff.
+        automatic_kept_axes: Axes retained by the automatic rank criterion,
+            before an optional `tree_dim` override.
+        absolute_projection_residual: Frobenius norm discarded by projection.
+        relative_projection_residual: That residual divided by the centered
+            cloud's Frobenius norm (zero for a zero-spread cloud).
     """
 
+    original_centroids: NDArray[np.float64]
     centroids: NDArray[np.float64]
     mean: NDArray[np.float64]
     rotation: NDArray[np.float64]
     variance_ratio: NDArray[np.float64]
     kept_axes: tuple[int, ...]
     dropped_axes: tuple[int, ...]
+    singular_values: NDArray[np.float64]
+    singular_value_threshold: float
+    variance_threshold: float
+    automatic_kept_axes: tuple[int, ...]
+    absolute_projection_residual: float
+    relative_projection_residual: float
 
 
-def pca_align(centroids: NDArray[np.float64], var_tol: float = DEFAULT_PCA_VAR_TOL) -> PCAAlignment:
+def pca_align(
+    centroids: NDArray[np.float64],
+    var_tol: float | None = DEFAULT_PCA_VAR_TOL,
+    *,
+    tree_dim: int | None = None,
+) -> PCAAlignment:
     """Center a centroid cloud, rotate into principal axes, and drop axes
-    whose explained-variance ratio falls below `var_tol` (Task R.2, resolving
-    REALGF_PLAN.md Finding B).
+    whose singular value is numerically zero (Task C.2).
 
     Centering and rotation alone are not enough and can actively hurt: on a
     perfectly straight line embedded in 2D (e.g. BP3), rotating without
@@ -252,35 +274,32 @@ def pca_align(centroids: NDArray[np.float64], var_tol: float = DEFAULT_PCA_VAR_T
     83 leaves -> 2075). Rotation is only safe paired with the drop, which is
     why this function always does both together.
 
-    Three safeguards (REALGF_PLAN.md S2):
-      1. Any ratio in the ambiguity band `_AMBIGUITY_BAND` (`[1e-12, 1e-6)`)
-         triggers a `UserWarning` -- such a mesh is *nearly* degenerate and
-         silently deciding either way risks a wrong answer.
-      2. At least one axis is always kept, even if every ratio is below
-         `var_tol` (e.g. a single point, or a cloud degenerate to numerical
-         noise in every direction).
-      3. The full `variance_ratio` and the `kept_axes`/`dropped_axes` split
-         are always returned, never silently discarded.
+    A tenfold band around the cutoff warns for axes on either side of the
+    decision.  At least one axis is always kept.  `tree_dim` is an explicit
+    override for deliberate model reduction; its residual diagnostics make
+    that choice visible rather than silently treating it as numerical rank.
 
     Args:
         centroids: Raw centroids, shape `(N, d)`, `N >= 1`.
-        var_tol: Explained-variance-ratio threshold; axes with
-            `sigma_i^2 / sum(sigma_j^2) < var_tol` are dropped (subject to
-            safeguard 2). Defaults to `DEFAULT_PCA_VAR_TOL`.
+        var_tol: Optional explained-variance-ratio override. `None` (the
+            default) uses the documented roundoff singular-value criterion.
+        tree_dim: Explicit number of leading principal axes to retain.
 
     Returns:
         A `PCAAlignment` with the reduced, rotated centroids and the full
         report of what was kept/dropped and why.
 
     Raises:
-        ValueError: If `centroids` is not `(N, d)` with `N >= 1`, or
-            `var_tol < 0`.
+        ValueError: If inputs are malformed, nonfinite, or tolerances are
+            invalid.
     """
     centroids = np.asarray(centroids, dtype=np.float64)
-    if centroids.ndim != 2 or centroids.shape[0] == 0:
+    if centroids.ndim != 2 or centroids.shape[0] == 0 or centroids.shape[1] == 0:
         raise ValueError(f"centroids must have shape (N, d) with N >= 1, got {centroids.shape}")
-    if var_tol < 0:
-        raise ValueError(f"var_tol must be >= 0, got {var_tol}")
+    if not np.isfinite(centroids).all():
+        raise ValueError("centroids must be finite")
+    if var_tol is not None and (not np.isfinite(var_tol) or not 0.0 <= var_tol <= 1.0):
+        raise ValueError(f"var_tol must be finite and in [0, 1], got {var_tol}")
 
     mean = centroids.mean(axis=0)
     centered = centroids - mean
@@ -291,35 +310,55 @@ def pca_align(centroids: NDArray[np.float64], var_tol: float = DEFAULT_PCA_VAR_T
     variance = s * s
     total = float(variance.sum())
     ratio = variance / total if total > 0 else np.zeros_like(variance)
+    sigma0 = float(s[0]) if len(s) else 0.0
+    singular_threshold = np.finfo(np.float64).eps * max(centered.shape) * sigma0
+    variance_threshold = singular_threshold**2 / total if total else 0.0
+    threshold = float(var_tol) if var_tol is not None else variance_threshold
+    automatic_mask = ratio >= threshold if total else np.zeros_like(ratio, dtype=bool)
+    if not np.any(automatic_mask):
+        automatic_mask[0] = True
+    automatic_kept_axes = tuple(int(i) for i in np.flatnonzero(automatic_mask))
 
-    lo, hi = _AMBIGUITY_BAND
-    ambiguous = (ratio >= lo) & (ratio < hi)
-    if np.any(ambiguous):
+    uncertainty = (ratio >= threshold / _CUTOFF_UNCERTAINTY_FACTOR) & (
+        ratio <= threshold * _CUTOFF_UNCERTAINTY_FACTOR
+    )
+    if np.any(uncertainty) and threshold > 0:
         warnings.warn(
-            f"pca_align: explained-variance ratio(s) {ratio[ambiguous].tolist()} fall in the "
-            f"ambiguity band [{lo}, {hi}) -- whether these axes are genuine geometric "
-            f"features or noise is not decidable from the data alone. Proceeding with "
-            f"var_tol={var_tol}; inspect `variance_ratio` before trusting the result.",
+            "pca_align: explained-variance ratio(s) "
+            f"{ratio[uncertainty].tolist()} are within a factor of "
+            f"{_CUTOFF_UNCERTAINTY_FACTOR:g} of cutoff {threshold:.3e}; inspect "
+            "both retained and dropped axes before relying on automatic reduction.",
             stacklevel=2,
         )
 
-    keep_mask = ratio >= var_tol
-    if not np.any(keep_mask):
-        # Safeguard: never reduce below one dimension, even if every ratio is
-        # below var_tol (e.g. a single distinct point among near-duplicates).
-        keep_mask[int(np.argmax(ratio))] = True
+    if tree_dim is None:
+        keep_mask = automatic_mask
+    else:
+        if not isinstance(tree_dim, int) or not 1 <= tree_dim <= len(s):
+            raise ValueError(f"tree_dim must be an integer in [1, {len(s)}], got {tree_dim}")
+        keep_mask = np.arange(len(s)) < tree_dim
 
     kept_axes = tuple(int(i) for i in np.flatnonzero(keep_mask))
     dropped_axes = tuple(int(i) for i in np.flatnonzero(~keep_mask))
 
     rotated = centered @ vt.T
     reduced = rotated[:, kept_axes]
+    projected = reduced @ vt[np.array(kept_axes)].reshape(len(kept_axes), -1)
+    absolute_residual = float(np.linalg.norm(centered - projected))
+    relative_residual = absolute_residual / np.sqrt(total) if total else 0.0
 
     return PCAAlignment(
+        original_centroids=centroids.copy(),
         centroids=reduced,
         mean=mean,
         rotation=vt,
         variance_ratio=ratio,
         kept_axes=kept_axes,
         dropped_axes=dropped_axes,
+        singular_values=s,
+        singular_value_threshold=singular_threshold,
+        variance_threshold=variance_threshold,
+        automatic_kept_axes=automatic_kept_axes,
+        absolute_projection_residual=absolute_residual,
+        relative_projection_residual=relative_residual,
     )

@@ -7,13 +7,7 @@ import numpy as np
 import pytest
 
 from gfcompress.build_tree import build_tree
-from gfcompress.geometry import (
-    DEFAULT_PCA_VAR_TOL,
-    FaultMesh,
-    Patch,
-    pairwise_distances,
-    pca_align,
-)
+from gfcompress.geometry import FaultMesh, Patch, pairwise_distances, pca_align
 
 
 def _random_mesh(d: int, n: int, seed: int = 0) -> FaultMesh:
@@ -305,6 +299,59 @@ def test_pca_align_plane_in_3d_drops_to_two_axes() -> None:
     assert result.centroids.shape == (n, 2)
 
 
+def test_pca_align_is_translation_and_scale_invariant() -> None:
+    t = np.linspace(-3.0, 4.0, 40)
+    cloud = np.column_stack([t, 2.0 * t, -t])
+    base = pca_align(cloud)
+    moved = pca_align(1e3 * cloud + np.array([7e3, -3e3, 9e3]))
+
+    assert base.kept_axes == moved.kept_axes == (0,)
+    assert base.variance_ratio[0] == pytest.approx(moved.variance_ratio[0])
+    assert moved.relative_projection_residual < 1e-14
+
+
+def test_pca_align_slightly_curved_cloud_keeps_real_second_axis() -> None:
+    t = np.linspace(-1.0, 1.0, 100)
+    result = pca_align(np.column_stack([t, 1e-4 * t * t, np.zeros_like(t)]))
+
+    assert result.kept_axes == (0, 1)
+    assert result.dropped_axes == (2,)
+
+
+def test_pca_align_plane_in_3d_improves_leaf_occupancy() -> None:
+    # BP7-like (REALGF_PLAN.md Finding B's table): a near-planar 3D point
+    # cloud whose out-of-plane thickness is at the true float64 roundoff
+    # floor (~1e-17, matching BP7's measured y-extent of ~6e-17), not an
+    # exaggerated jitter. Building the tree at full ambient dimension (3D)
+    # wastes a whole axis bisecting noise the data does not have; the
+    # PCA-reduced 2D tree does not. Effect is large and robust here (unlike
+    # the marginal 2D line case below): min leaf occupancy 1 -> 4, far fewer
+    # leaves, at the same `m`.
+    rng = np.random.default_rng(5)
+    nx = ny = 40
+    xs, ys = np.meshgrid(np.arange(nx, dtype=float), np.arange(ny, dtype=float), indexing="ij")
+    xy = np.stack([xs.ravel(), ys.ravel()], axis=1)
+    n = xy.shape[0]
+    z = rng.uniform(-3e-17, 3e-17, size=n)
+    centroids = np.column_stack([xy, z])
+    lengths = np.full(n, 0.05)
+
+    result = pca_align(centroids)
+    assert result.kept_axes == (0, 1)
+    assert result.dropped_axes == (2,)
+    assert result.variance_ratio[2] < result.variance_threshold
+
+    m = 16
+    leaves_3d = build_tree(FaultMesh(centroids=centroids, L=lengths), m).leaves()
+    occ_3d = np.array([len(box.patch_indices) for box in leaves_3d])
+
+    leaves_2d = build_tree(FaultMesh(centroids=result.centroids, L=lengths, dof_row=3), m).leaves()
+    occ_2d = np.array([len(box.patch_indices) for box in leaves_2d])
+
+    assert len(leaves_2d) < len(leaves_3d)
+    assert occ_2d.min() > occ_3d.min()
+
+
 def test_pca_align_genuine_3d_cloud_keeps_all_axes() -> None:
     rng = np.random.default_rng(3)
     centroids = rng.uniform(-1.0, 1.0, size=(80, 3))
@@ -316,7 +363,7 @@ def test_pca_align_genuine_3d_cloud_keeps_all_axes() -> None:
     assert result.kept_axes == (0, 1, 2)
     assert result.dropped_axes == ()
     assert result.centroids.shape == (80, 3)
-    assert np.all(result.variance_ratio > DEFAULT_PCA_VAR_TOL)
+    assert np.all(result.variance_ratio > result.variance_threshold)
 
 
 def test_pca_align_never_reduces_below_one_dimension() -> None:
@@ -324,31 +371,38 @@ def test_pca_align_never_reduces_below_one_dimension() -> None:
     # at least one axis must survive.
     centroids = np.zeros((10, 3))
     result = pca_align(centroids)
-    assert len(result.kept_axes) >= 1
-    assert result.centroids.shape[1] >= 1
+    assert result.kept_axes == (0,)
+    assert result.centroids.shape == (10, 1)
+    assert result.absolute_projection_residual == 0.0
+    assert result.relative_projection_residual == 0.0
 
 
-def test_pca_align_ambiguity_band_warns_and_keeps_axis() -> None:
-    # A second axis with variance ratio ~8.5e-10, inside the ambiguity band
-    # [1e-12, 1e-6): must warn loudly, and -- since the ratio is still above
-    # DEFAULT_PCA_VAR_TOL -- must not silently drop it.
+def test_pca_align_small_but_real_variation_is_kept() -> None:
+    # The prior 1e-12 cutoff incorrectly discarded this genuine ~1e-16
+    # variance ratio.  It is enormously above the float64 numerical-rank
+    # cutoff and must therefore remain a tree axis by default.
     rng = np.random.default_rng(1)
     n = 100
     x = np.linspace(0.0, 100.0, n)
-    y = rng.normal(0.0, 1e-3, n)
+    y = rng.normal(0.0, 4e-7, n)
     centroids = np.stack([x, y], axis=1)
 
-    with pytest.warns(UserWarning, match="ambiguity band"):
-        result = pca_align(centroids)
+    result = pca_align(centroids)
 
-    assert 1e-12 <= result.variance_ratio[1] < 1e-6
+    assert 1e-16 <= result.variance_ratio[1] < 1e-12
     assert result.kept_axes == (0, 1)
     assert result.dropped_axes == ()
 
 
-def test_pca_align_var_tol_must_be_nonnegative() -> None:
+def test_pca_align_rejects_invalid_tolerances_and_nonfinite_values() -> None:
     with pytest.raises(ValueError):
         pca_align(np.zeros((5, 2)), var_tol=-1.0)
+    with pytest.raises(ValueError):
+        pca_align(np.zeros((5, 2)), var_tol=np.inf)
+    with pytest.raises(ValueError):
+        pca_align(np.array([[0.0, np.nan]]))
+    with pytest.raises(ValueError):
+        pca_align(np.zeros((5, 2)), tree_dim=0)
 
 
 def test_pca_align_rejects_empty_or_1d_input() -> None:
@@ -370,15 +424,15 @@ def test_pca_align_does_not_run_automatically_no_fixture_moves() -> None:
     assert mesh_a.tree_dim == 2
 
 
-def test_pca_align_improves_leaf_occupancy_on_gll_clustered_line() -> None:
-    # Reproduces REALGF_PLAN.md Finding A/B's mechanism synthetically: a
-    # diagonal line in 2D with Gauss-Lobatto-like node clustering per
-    # "element" plus sub-noise-floor perpendicular jitter (representing the
-    # ~1e-15 relative float roundoff of a real mesh generator, not a genuine
-    # geometric feature). Building the tree at full ambient dimension (2D)
-    # lets points near a cell boundary disagree between the x- and
-    # y-classification, isolating them into tiny leaves; building it in the
-    # PCA-reduced 1D tree removes the second axis to disagree on entirely.
+def test_pca_align_override_can_drop_small_real_variation_with_diagnostics() -> None:
+    # Reproduces REALGF_PLAN.md Finding A/B's mechanism synthetically, at
+    # small scale: a diagonal line in 2D with Gauss-Lobatto-like node
+    # clustering per "element" plus a perpendicular jitter of relative size
+    # ~1.7e-8 (sigma=1e-6 on coordinates spanning ~60) -- NOT true float64
+    # roundoff (~1e-15 relative): variance ratio here is ~3.4e-15, three
+    # orders above BP3's measured 4.7e-30.  Automatic PCA keeps it; an
+    # explicit model-reduction choice may drop it, with its real residual
+    # reported rather than mislabeled as roundoff.
     rng = np.random.default_rng(0)
     n_elements = 60
     # Degree-3 Gauss-Lobatto-Legendre nodes on a unit element, clustered at
@@ -392,10 +446,13 @@ def test_pca_align_improves_leaf_occupancy_on_gll_clustered_line() -> None:
     centroids = t[:, None] * direction[None, :] + noise
     lengths = np.full(n, 0.05)
 
-    result = pca_align(centroids)
+    result = pca_align(centroids, tree_dim=1)
     assert result.kept_axes == (0,)
     assert result.dropped_axes == (1,)
-    assert result.variance_ratio[1] < DEFAULT_PCA_VAR_TOL
+    assert result.automatic_kept_axes == (0, 1)
+    assert result.relative_projection_residual == pytest.approx(
+        np.sqrt(result.variance_ratio[1]), rel=1e-6
+    )
 
     m = 4
     mesh_2d = FaultMesh(centroids=centroids, L=lengths)
@@ -411,3 +468,26 @@ def test_pca_align_improves_leaf_occupancy_on_gll_clustered_line() -> None:
     assert len(leaves_1d) < len(leaves_2d)
     assert occ_1d.min() > occ_2d.min()
     assert int((occ_1d <= 2).sum()) < int((occ_2d <= 2).sum())
+
+
+def test_pca_align_reports_transform_and_roundoff_cutoff_uncertainty() -> None:
+    # Explicit variance threshold makes the kept and dropped sides of a
+    # borderline decision observable.  The cloud has axes just above and
+    # below 1e-12, both inside the factor-ten warning band.
+    rng = np.random.default_rng(8)
+    x = np.linspace(-1.0, 1.0, 500)
+    y = rng.normal(scale=1.5e-6, size=len(x))
+    z = rng.normal(scale=4e-7, size=len(x))
+    original = np.column_stack([x, y, z]) + np.array([1000.0, -20.0, 7.0])
+    with pytest.warns(UserWarning, match="both retained and dropped"):
+        result = pca_align(original, var_tol=1e-12)
+
+    np.testing.assert_array_equal(result.original_centroids, original)
+    np.testing.assert_allclose(
+        result.centroids,
+        (original - result.mean) @ result.rotation[list(result.kept_axes)].T,
+    )
+    assert result.kept_axes == (0, 1)
+    assert result.dropped_axes == (2,)
+    assert result.absolute_projection_residual > 0
+    assert result.relative_projection_residual > 0

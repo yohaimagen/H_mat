@@ -107,7 +107,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from gfcompress.geometry import FaultMesh
+from gfcompress.geometry import FaultMesh, PCAAlignment, pca_align
 from gfcompress.operators import MatVecOperator
 
 PETSC_MAT_CLASSID = 1211216
@@ -487,7 +487,14 @@ class RealGF(MatVecOperator):
         self.patch_length_candidates = patch_length_candidates(
             coords.centroids, coords.element_of_patch, coords.n_elements, coords.nbf
         )
-        self.mesh = FaultMesh(centroids=coords.centroids, L=self.patch_length_candidates[l_method])
+        # Geometry may be numerically lower dimensional, but operator components
+        # remain in the original patch-major elasticity layout.
+        self.alignment: PCAAlignment = pca_align(coords.centroids)
+        self.mesh = FaultMesh(
+            centroids=self.alignment.centroids,
+            L=self.patch_length_candidates[l_method],
+            dof_row=dof_row,
+        )
 
         self.mat: NDArray[np.float64] = np.memmap(
             mat_path,
