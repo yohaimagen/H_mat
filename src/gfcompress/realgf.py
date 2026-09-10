@@ -412,11 +412,14 @@ class RealGF(MatVecOperator):
         mat: The memory-mapped raw (file-order) values, shape `(header.rows,
             header.cols)`, big-endian `float64`. Read only via `matvec`/
             `rmatvec`.
-        mesh: `FaultMesh` of the `N` patch centroids, with `L` from
-            `l_method`.
+        mesh: `FaultMesh` of the PCA-aligned retained tree coordinates, with
+            `L` from `l_method`. This geometric transform does not alter the
+            operator's patch-major component ordering or shape.
+        alignment: The `PCAAlignment` retaining the original coordinates and
+            tree-coordinate transform.
         dof_row: Row dofs per patch (`= mesh.dof_row`, the elastic problem
-            dimension; the CSV/PETSc real-data meshes are always full-ambient,
-            i.e. `mesh.tree_dim == mesh.dof_row`).
+            dimension). It is independent of `mesh.tree_dim`: BP3 uses a
+            1D tree with 2 row dofs and BP7 a 2D tree with 3 row dofs.
         dof_col: Column dofs per patch (`= mesh.dof_row - 1`).
         row_pm_to_raw: Patch-major row index -> raw file row index, shape
             `(n_rows,)`.

@@ -190,7 +190,7 @@ def pairwise_distances(centroids: NDArray[np.float64]) -> NDArray[np.float64]:
 #: Numerical rank criterion used by `pca_align`: an axis is roundoff-degenerate
 #: when ``sigma_i / sigma_0 < eps * max(N, d)``.  This is NumPy's standard SVD
 #: matrix-rank scale.  In variance-ratio terms the cutoff is data dependent:
-#: ``(eps * max(N, d))**2 * sigma_0**2 / sum(sigma**2)``; it is returned as
+#: ``(eps * max(N, d))**2 / sum((sigma / sigma_0)**2)``; it is returned as
 #: `PCAAlignment.variance_threshold`.  This keeps genuine 1e-16-scale variance
 #: rather than treating it as noise via the former arbitrary 1e-12 cutoff.
 DEFAULT_PCA_VAR_TOL: float | None = None
@@ -215,24 +215,20 @@ class PCAAlignment:
             `(d_orig,)`.
         rotation: Rows are the principal axes (right singular vectors of the
             centered cloud, descending singular value), shape
-            `(d_r, d_orig)` with `d_r = min(N, d_orig)` (`np.linalg.svd(...,
-            full_matrices=False)`). `centered @ rotation.T` gives the full
+            `(d_orig, d_orig)`. The economical SVD mode supplies this directly
+            when `N >= d_orig`; full matrices are used only for `N < d_orig`.
+            `centered @ rotation.T` gives the full
             (unreduced) rotated cloud; `.centroids` is that restricted to
-            `kept_axes`. `d_r == d_orig` for every mesh this codebase
-            actually builds (patches always vastly outnumber `d_orig <= 3`);
-            the `N < d_orig` case (needs `N <= 3` to trigger) is a
-            pathological edge this function does not specially handle: `d_r`
-            axes are ranked/reported exactly as usual, but the
-            `d_orig - d_r` axes the cloud is too small to even define are
-            absent from `variance_ratio`/`kept_axes`/`dropped_axes`
-            altogether, not counted as "dropped".
+            `kept_axes`. It is complete even when `N < d_orig`; unobserved
+            null directions are reported as zero singular values and dropped.
         variance_ratio: Explained-variance ratio `sigma_i^2 / sum(sigma_j^2)`
-            per principal axis, shape `(d_r,)` (see `rotation`), descending.
+            per principal axis, shape `(d_orig,)` (see `rotation`), descending.
         kept_axes: Indices into `variance_ratio`/`rotation` of the retained
             axes, in descending-variance order. Never empty.
         dropped_axes: Indices of the dropped axes, in descending-variance
             order.
-        singular_values: Singular values of the centered cloud.
+        singular_values: Singular values of the centered cloud, padded with
+            zeros for unobserved ambient null directions, shape `(d_orig,)`.
         singular_value_threshold: Roundoff singular-value cutoff used for the
             automatic decision.
         variance_threshold: Equivalent explained-variance-ratio cutoff.
@@ -304,17 +300,28 @@ def pca_align(
     mean = centroids.mean(axis=0)
     centered = centroids - mean
 
-    # centered = U @ diag(s) @ vt; vt's rows are the principal axes, sorted by
-    # descending singular value (numpy guarantees this ordering).
-    _, s, vt = np.linalg.svd(centered, full_matrices=False)
-    variance = s * s
-    total = float(variance.sum())
-    ratio = variance / total if total > 0 else np.zeros_like(variance)
-    sigma0 = float(s[0]) if len(s) else 0.0
+    # Tall clouds already return a complete d-by-d V^T in economical mode.
+    # Only N < d needs full matrices to supply the missing ambient null axes.
+    # Scale before squaring: raw singular values may underflow/overflow although
+    # their ratios, and therefore numerical rank, are perfectly representable.
+    full_matrices = centered.shape[0] < centered.shape[1]
+    _, singular_values, vt = np.linalg.svd(centered, full_matrices=full_matrices)
+    d_orig = centered.shape[1]
+    s = np.zeros(d_orig, dtype=np.float64)
+    # Centering makes the N rows sum to zero, hence at most N - 1 singular
+    # directions can be observed.  Represent the remaining ambient null axes
+    # exactly as zeros instead of exposing SVD roundoff as a fake direction.
+    observed = min(len(singular_values), centered.shape[0] - 1)
+    s[:observed] = singular_values[:observed]
+    sigma0 = float(s[0])
+    scaled_s = s / sigma0 if sigma0 else np.zeros_like(s)
+    scaled_total = float(np.dot(scaled_s, scaled_s))
+    ratio = scaled_s * scaled_s / scaled_total if scaled_total else np.zeros_like(s)
     singular_threshold = np.finfo(np.float64).eps * max(centered.shape) * sigma0
-    variance_threshold = singular_threshold**2 / total if total else 0.0
+    rank_ratio = np.finfo(np.float64).eps * max(centered.shape)
+    variance_threshold = rank_ratio**2 / scaled_total if scaled_total else 0.0
     threshold = float(var_tol) if var_tol is not None else variance_threshold
-    automatic_mask = ratio >= threshold if total else np.zeros_like(ratio, dtype=bool)
+    automatic_mask = ratio >= threshold if sigma0 else np.zeros_like(ratio, dtype=bool)
     if not np.any(automatic_mask):
         automatic_mask[0] = True
     automatic_kept_axes = tuple(int(i) for i in np.flatnonzero(automatic_mask))
@@ -334,18 +341,18 @@ def pca_align(
     if tree_dim is None:
         keep_mask = automatic_mask
     else:
-        if not isinstance(tree_dim, int) or not 1 <= tree_dim <= len(s):
-            raise ValueError(f"tree_dim must be an integer in [1, {len(s)}], got {tree_dim}")
-        keep_mask = np.arange(len(s)) < tree_dim
+        if not isinstance(tree_dim, int) or not 1 <= tree_dim <= d_orig:
+            raise ValueError(f"tree_dim must be an integer in [1, {d_orig}], got {tree_dim}")
+        keep_mask = np.arange(d_orig) < tree_dim
 
     kept_axes = tuple(int(i) for i in np.flatnonzero(keep_mask))
     dropped_axes = tuple(int(i) for i in np.flatnonzero(~keep_mask))
 
     rotated = centered @ vt.T
     reduced = rotated[:, kept_axes]
-    projected = reduced @ vt[np.array(kept_axes)].reshape(len(kept_axes), -1)
-    absolute_residual = float(np.linalg.norm(centered - projected))
-    relative_residual = absolute_residual / np.sqrt(total) if total else 0.0
+    dropped_s = s[list(dropped_axes)]
+    absolute_residual = float(np.hypot.reduce(dropped_s)) if len(dropped_s) else 0.0
+    relative_residual = float(np.sqrt(ratio[list(dropped_axes)].sum())) if sigma0 else 0.0
 
     return PCAAlignment(
         original_centroids=centroids.copy(),

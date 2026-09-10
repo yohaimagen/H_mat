@@ -412,6 +412,67 @@ def test_pca_align_rejects_empty_or_1d_input() -> None:
         pca_align(np.zeros(5))
 
 
+@pytest.mark.parametrize("scale", [1e-200, 1e200])
+def test_pca_align_extreme_finite_scales_are_stable(scale: float) -> None:
+    t = np.linspace(-1.0, 1.0, 20)
+    cloud = scale * np.column_stack([t, 1e-2 * t * t, np.zeros_like(t)])
+    automatic = pca_align(cloud)
+    forced = pca_align(cloud, tree_dim=1)
+
+    assert automatic.kept_axes == (0, 1)
+    assert np.isfinite(automatic.variance_ratio).all()
+    assert np.isfinite(forced.absolute_projection_residual)
+    assert np.isfinite(forced.relative_projection_residual)
+    assert forced.absolute_projection_residual > 0.0
+    assert forced.relative_projection_residual == pytest.approx(
+        np.sqrt(forced.variance_ratio[1]), rel=1e-12
+    )
+
+
+@pytest.mark.parametrize(
+    ("cloud", "expected_kept"),
+    [
+        (np.array([[2.0, -1.0, 4.0]]), (0,)),
+        (np.array([[0.0, 0.0, 0.0], [1.0, 2.0, -1.0]]), (0,)),
+    ],
+)
+def test_pca_align_small_cloud_has_complete_ambient_report(
+    cloud: np.ndarray, expected_kept: tuple[int, ...]
+) -> None:
+    result = pca_align(cloud)
+
+    assert result.rotation.shape == (3, 3)
+    assert result.singular_values.shape == (3,)
+    assert result.variance_ratio.shape == (3,)
+    assert result.kept_axes == expected_kept
+    assert result.dropped_axes == (1, 2)
+    assert result.centroids.shape == (len(cloud), 1)
+    assert result.singular_values[1:].tolist() == [0.0, 0.0]
+
+    forced = pca_align(cloud, tree_dim=3)
+    assert forced.kept_axes == (0, 1, 2)
+    assert forced.centroids.shape == (len(cloud), 3)
+
+
+def test_pca_align_uses_full_svd_only_when_small_cloud_needs_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_svd = np.linalg.svd
+    calls: list[bool] = []
+
+    def recording_svd(a: np.ndarray, *, full_matrices: bool = True) -> tuple[np.ndarray, ...]:
+        calls.append(full_matrices)
+        return original_svd(a, full_matrices=full_matrices)
+
+    monkeypatch.setattr(np.linalg, "svd", recording_svd)
+    tall = pca_align(np.arange(30.0).reshape(10, 3))
+    small = pca_align(np.array([[0.0, 0.0, 0.0], [1.0, 2.0, -1.0]]))
+
+    assert calls == [False, True]
+    assert tall.rotation.shape == (3, 3)
+    assert small.rotation.shape == (3, 3)
+
+
 def test_pca_align_does_not_run_automatically_no_fixture_moves() -> None:
     # Hard constraint: FaultMesh/build_tree never call pca_align on their
     # own, so a mesh built directly from raw (non-degenerate) centroids is
