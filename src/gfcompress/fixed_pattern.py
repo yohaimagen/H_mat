@@ -1,6 +1,5 @@
-"""Fixed periodic admissible test matrices (`<= 6^d`, paper Sec. 4.1.4, Task 4.2)
-and fixed periodic leaf/inadmissible test matrices (`<= 3^d`, Sec. 4.1.3,
-Task 4.3).
+"""Fixed periodic admissible test matrices (`<= 6^d`, paper Sec. 4.1.4)
+and fixed periodic leaf/inadmissible test matrices (`<= 3^d`, Sec. 4.1.3).
 
 Per Levitt & Martinsson (2024), Sec. 4.1.4, the boxes at a level of the
 geometric cluster tree live on a common dyadic grid of `2^level` cells per
@@ -33,8 +32,9 @@ active set contains `beta` automatically satisfies the Eq. 4.4 sampling
 constraint for `(alpha, beta)`: `beta`'s columns are Gaussian and every column
 in `L^nei(alpha) | L^int(alpha) \\ {beta}` is zero.
 
-`build_admissible_test_matrices` emits one such `Omega` per non-empty pattern
-cell (at most `6**d`), each of shape `(mesh.n_cols, k + p)`.
+`build_admissible_test_matrices` emits one lightweight description per
+non-empty pattern cell (at most `6**d`); each is realized only for its one
+matvec/rmatvec, at shape `(mesh.n_cols, k + p)`.
 
 The very same combinatorics applies to *row* sampling (`Psi`, used to build
 the row bases): the admissibility relation is symmetric, so grouping the boxes
@@ -86,19 +86,23 @@ This keeps each `Omega` as narrow as a single box (`w_max` columns, not
 `O(N / 3**d)`) while the matrix count stays at `<= 3**d`, so the whole leaf
 extraction costs at most `3**d * w_max` matvecs.
 
-`build_leaf_test_matrices` emits one such `Omega` per non-empty leaf pattern
-cell (at most `3**d`).
+`build_leaf_test_matrices` likewise emits descriptions, realizing one `Omega`
+at a time for each non-empty leaf pattern cell (at most `3**d`). The read-off
+is an original dense block only when the already-peeled far-field factors are
+exact; otherwise this residual sample inherits their approximation error.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import secrets
+from dataclasses import dataclass, field
 from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
 from gfcompress.geometry import FaultMesh
+from gfcompress.interactions import TreeLists
 from gfcompress.randomized import gaussian
 from gfcompress.tree import TreeNode
 
@@ -117,65 +121,98 @@ Side = Literal["col", "row"]
 
 @dataclass(frozen=True)
 class PeriodicTestMatrix:
-    """One emitted test matrix for the fixed `6x...x6` periodic pattern.
+    """A lightweight description of one fixed `6x...x6` probe.
 
     Attributes:
-        omega: The test matrix, shape `(mesh.n_cols, k + p)` for
-            `side="col"` (`Omega`) or `(mesh.n_rows, k + p)` for `side="row"`
-            (`Psi`).
         pattern: The pattern-cell offset `(i_0 mod 6, ..., i_{d-1} mod 6)`
             shared by every box in `active_boxes`, length `d`.
         active_boxes: The level-`level` nodes whose pattern cell equals
             `pattern`; their `col_indices` (resp. `row_indices`) rows of
             `omega` hold independent Gaussian blocks, every other row is zero.
-        blocks: For each box in `active_boxes`, the Gaussian block written
-            into that box's rows: `blocks[box] == omega[box.col_indices, :]`
-            (`side="col"`, the `G_beta` of Eq. 4.3) or
-            `omega[box.row_indices, :]` (`side="row"`, `G_alpha`). Stored so
-            consumers read it back instead of re-deriving it from seeds.
+        The dense probe is deliberately not retained. Call :meth:`realize`
+        immediately before its one matvec/rmatvec. ``omega`` and ``blocks``
+        remain compatibility properties for diagnostics; production consumers
+        must use ``realize`` and release its result before the next probe.
     """
 
-    omega: NDArray[np.float64]
     pattern: tuple[int, ...]
     active_boxes: list[TreeNode]
+    n_dofs: int
+    k: int
+    p: int
+    seed: int | None
+    level: int
+    side: Side
+    _stream_seed: int = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        # An unseeded description still owns one stream. Keeping just this
+        # scalar lets diagnostic properties agree without retaining a probe.
+        object.__setattr__(
+            self, "_stream_seed", secrets.randbits(64) if self.seed is None else self.seed
+        )
+
+    def realize(self) -> RealizedPeriodicTestMatrix:
+        """Materialize this probe and its independent active-box sketches."""
+        omega = np.zeros((self.n_dofs, self.k + self.p), dtype=np.float64)
+        blocks: dict[TreeNode, NDArray[np.float64]] = {}
+        for box in self.active_boxes:
+            indices = box.col_indices if self.side == "col" else box.row_indices
+            block = gaussian(
+                len(indices),
+                self.k,
+                self.p,
+                seed=_block_seed(self._stream_seed, self.level, self.side, box.cell_coords),
+            )
+            omega[indices, :] = block
+            blocks[box] = block
+        return RealizedPeriodicTestMatrix(omega=omega, blocks=blocks)
+
+    @property
+    def omega(self) -> NDArray[np.float64]:
+        """Materialize a diagnostic copy of the dense test matrix."""
+        return self.realize().omega
+
+    @property
+    def blocks(self) -> dict[TreeNode, NDArray[np.float64]]:
+        """Materialize diagnostic sketch blocks without retaining a probe."""
+        return self.realize().blocks
+
+
+@dataclass(frozen=True)
+class RealizedPeriodicTestMatrix:
+    """Ephemeral dense realization of :class:`PeriodicTestMatrix`."""
+
+    omega: NDArray[np.float64]
     blocks: dict[TreeNode, NDArray[np.float64]]
 
 
+@dataclass(frozen=True)
+class AdmissibleProbeSchedule:
+    """Descriptions plus the explicit probe selected for every block pair."""
+
+    probes: list[PeriodicTestMatrix]
+    owners: dict[tuple[TreeNode, TreeNode], PeriodicTestMatrix]
+
+
 def grid_coordinates(node: TreeNode, root: TreeNode) -> tuple[int, ...]:
-    """Compute `node`'s dyadic grid coordinates `(i_0, ..., i_{d-1})`.
+    """Return `node`'s stored dyadic grid coordinates `(i_0, ..., i_{d-1})`.
 
-    `node.bounding_box` is a cell of the dyadic grid obtained by subdividing
-    `root.bounding_box` into `2**node.level` equal cells per axis (see
-    `gfcompress.build_tree.build_tree`). The grid coordinate along axis `a` is
-
-        i_a = round((node.bounding_box[a, 0] - root.bounding_box[a, 0]) / cell_width_a)
-
-    where `cell_width_a = (root.bounding_box[a, 1] - root.bounding_box[a, 0])
-    / 2**node.level`. Rounding guards against floating-point error in the
-    bisection arithmetic.
+    `build_tree` assigns exact integer cell coordinates while subdividing the
+    padded root hypercube. Reusing those integers avoids reconstructing a
+    coordinate from floating-point cell geometry.
 
     Args:
         node: The node whose grid coordinates are computed.
-        root: Root of the geometric cluster tree (provides the level-0 domain
-            box).
+        root: Root of the geometric cluster tree, used to validate the
+            coordinate dimensionality.
 
     Returns:
         Tuple of `d` integers, each in `{0, ..., 2**node.level - 1}`.
     """
-    level = node.level
-    n_cells = 2**level
-    d = root.bounding_box.shape[0]
-
-    coords = []
-    for axis in range(d):
-        root_lo = root.bounding_box[axis, 0]
-        root_hi = root.bounding_box[axis, 1]
-        cell_width = (root_hi - root_lo) / n_cells
-        raw = (node.bounding_box[axis, 0] - root_lo) / cell_width
-        i_a = int(round(raw))
-        coords.append(i_a)
-
-    return tuple(coords)
+    if len(node.cell_coords) != len(root.cell_coords):
+        raise ValueError("node does not carry a dyadic cell coordinate")
+    return node.cell_coords
 
 
 def pattern_cell(node: TreeNode, root: TreeNode) -> tuple[int, ...]:
@@ -197,7 +234,7 @@ def build_admissible_test_matrices(
     level: int,
     mesh: FaultMesh,
     k: int,
-    p: int = 0,
+    p: int = 10,
     seed: int | None = None,
     side: Side = "col",
 ) -> list[PeriodicTestMatrix]:
@@ -227,18 +264,19 @@ def build_admissible_test_matrices(
         level: The tree level to build test matrices for.
         mesh: The `FaultMesh` (provides `n_cols` / `n_rows`).
         k: Target rank (number of "signal" columns of each test matrix).
-        p: Oversampling parameter. Defaults to `0`.
+        p: Oversampling parameter. Defaults to `10`; pass `p=0` to disable
+            oversampling explicitly.
         seed: Optional base seed for `gfcompress.randomized.gaussian`. Each
             active box's Gaussian block is drawn with a seed derived
-            deterministically from `seed`, `side`, and a running counter, so
-            the whole generator is reproducible given `seed` while the two
-            sides stay independent.
+            deterministically from `seed`, `level`, `side`, and the box's
+            integer dyadic cell coordinates. This is independent of pattern
+            group or traversal order, while the two sides stay independent.
         side: `"col"` (default) for `Omega`, `"row"` for `Psi`.
 
     Returns:
         A list of `PeriodicTestMatrix`, one per non-empty pattern cell, in a
         deterministic order (pattern cells sorted lexicographically). At most
-        `6 ** mesh.d` entries.
+        `6 ** mesh.tree_dim` entries.
 
     Raises:
         ValueError: If `side` is not `"col"` or `"row"`.
@@ -254,38 +292,102 @@ def build_admissible_test_matrices(
         groups.setdefault(cell, []).append(node)
 
     n_dofs = mesh.n_cols if side == "col" else mesh.n_rows
-    k_p = k + p
-
     result: list[PeriodicTestMatrix] = []
-    box_counter = 0
     for cell in sorted(groups.keys()):
-        active_boxes = groups[cell]
-        omega = np.zeros((n_dofs, k_p), dtype=np.float64)
-        blocks: dict[TreeNode, NDArray[np.float64]] = {}
-        for beta in active_boxes:
-            indices = beta.col_indices if side == "col" else beta.row_indices
-            block = gaussian(len(indices), k, p, seed=_block_seed(seed, side, box_counter))
-            box_counter += 1
-            omega[indices, :] = block
-            blocks[beta] = block
+        active_boxes = sorted(groups[cell], key=lambda node: grid_coordinates(node, root))
         result.append(
-            PeriodicTestMatrix(omega=omega, pattern=cell, active_boxes=active_boxes, blocks=blocks)
+            PeriodicTestMatrix(
+                pattern=cell,
+                active_boxes=active_boxes,
+                n_dofs=n_dofs,
+                k=k,
+                p=p,
+                seed=seed,
+                level=level,
+                side=side,
+            )
         )
 
     return result
 
 
-def _block_seed(seed: int | None, side: Side, counter: int) -> int | None:
-    """Derive an independent per-box seed from `(seed, side, counter)`.
+def admissible_probe_owners(
+    root: TreeNode,
+    lists: TreeLists,
+    level: int,
+    probes: list[PeriodicTestMatrix],
+    side: Side,
+) -> dict[tuple[TreeNode, TreeNode], PeriodicTestMatrix]:
+    """Assign every admissible pair to its explicitly selected fixed probe.
+
+    The ownership map is the consumption contract used by both basis passes:
+    callers look up a *pair*, never merely the currently active source box.
+    """
+    by_box = {box: probe for probe in probes for box in probe.active_boxes}
+    owners: dict[tuple[TreeNode, TreeNode], PeriodicTestMatrix] = {}
+    for alpha in root.nodes_at_level(level):
+        for beta in lists.interaction[alpha]:
+            owner = by_box[beta if side == "col" else alpha]
+            owners[(alpha, beta)] = owner
+    return owners
+
+
+def build_admissible_schedule(
+    root: TreeNode,
+    lists: TreeLists,
+    level: int,
+    mesh: FaultMesh,
+    k: int,
+    p: int = 10,
+    seed: int | None = None,
+    side: Side = "col",
+) -> AdmissibleProbeSchedule:
+    """Build the default fixed schedule with pair-specific ownership."""
+    probes = build_admissible_test_matrices(root, level, mesh, k, p, seed, side)
+    owners = admissible_probe_owners(root, lists, level, probes, side)
+    validate_admissible_probe_owners(owners, side)
+    return AdmissibleProbeSchedule(probes=probes, owners=owners)
+
+
+def validate_admissible_probe_owners(
+    owners: dict[tuple[TreeNode, TreeNode], PeriodicTestMatrix], side: Side
+) -> None:
+    """Reject an explicit pair assignment whose required sketch is absent."""
+    for (alpha, beta), probe in owners.items():
+        required = beta if side == "col" else alpha
+        if required not in probe.active_boxes:
+            raise ValueError("probe does not activate the pair's required sketch box")
+
+
+def _block_seed(seed: int | None, level: int, side: Side, cell: tuple[int, ...]) -> int | None:
+    """Derive an independent per-box seed from stable sketch coordinates.
 
     Returns `None` (i.e. OS entropy) when `seed` is `None`. Otherwise
-    `numpy.random.SeedSequence` spawns decorrelated streams for the two sides,
-    so `Omega` and `Psi` built from the same base seed share no random rows.
+    `numpy.random.SeedSequence` derives the stream from `(seed, level, side,
+    cell)`, rather than the order in which groups or boxes happen to be
+    visited. The signed Python integer is losslessly encoded as a sign and
+    little-endian 32-bit words; this does not depend on Python's randomized
+    hash implementation or alias integers modulo a machine word. Every cell
+    coordinate carries its own sign-and-word-count boundary, so arbitrary-size
+    signed tuples cannot be confused by concatenation.
     """
     if seed is None:
         return None
-    side_id = 0 if side == "col" else 1
-    return int(np.random.SeedSequence([seed, side_id, counter]).generate_state(1)[0])
+    base = int(seed)
+
+    def encode(value: int) -> list[int]:
+        magnitude = abs(int(value))
+        words: list[int] = []
+        while magnitude:
+            words.append(magnitude & 0xFFFFFFFF)
+            magnitude >>= 32
+        return [int(value < 0), len(words), *words]
+
+    entropy = [*encode(base), int(level), 0 if side == "col" else 1, len(cell)]
+    for coordinate in cell:
+        entropy.extend(encode(coordinate))
+    state = np.random.SeedSequence(entropy).generate_state(2, dtype=np.uint32)
+    return int(state[0]) | (int(state[1]) << 32)
 
 
 @dataclass(frozen=True)
@@ -293,19 +395,37 @@ class PeriodicLeafTestMatrix:
     """One emitted test matrix for the fixed `3x...x3` leaf periodic pattern.
 
     Attributes:
-        omega: The test matrix `Omega`, shape `(mesh.n_cols, w_max)` with
-            `w_max` the widest `len(beta.col_indices)` over the level's boxes.
-            Every active box shares the same column slot:
-            `omega[beta.col_indices, :w_beta] = I_{w_beta}`, all else zero.
         pattern: The leaf pattern-cell offset `(i_0 mod 3, ..., i_{d-1} mod
             3)` shared by every box in `active_boxes`, length `d`.
         active_boxes: The level-`level` nodes whose leaf pattern cell equals
             `pattern`.
     """
 
-    omega: NDArray[np.float64]
     pattern: tuple[int, ...]
     active_boxes: list[TreeNode]
+    n_cols: int
+    w_max: int
+
+    def realize(self) -> NDArray[np.float64]:
+        """Materialize this probe immediately before its residual matvec."""
+        omega = np.zeros((self.n_cols, self.w_max), dtype=np.float64)
+        for beta in self.active_boxes:
+            width = len(beta.col_indices)
+            omega[np.ix_(beta.col_indices, np.arange(width))] = np.eye(width)
+        return omega
+
+    @property
+    def omega(self) -> NDArray[np.float64]:
+        """Materialize a diagnostic copy of the dense test matrix."""
+        return self.realize()
+
+
+@dataclass(frozen=True)
+class LeafProbeSchedule:
+    """Leaf descriptions plus their explicit neighbor-pair ownership."""
+
+    probes: list[PeriodicLeafTestMatrix]
+    owners: dict[tuple[TreeNode, TreeNode], PeriodicLeafTestMatrix]
 
 
 def leaf_pattern_cell(node: TreeNode, root: TreeNode) -> tuple[int, ...]:
@@ -344,7 +464,8 @@ def build_leaf_test_matrices(
     `L^nei(alpha)` (including `alpha` itself) active in the emitted `Omega`
     that contains it. Sampling the residual operator, in which only
     `alpha`'s neighbor blocks survive, therefore gives
-    `((A - A^{(L)}) @ Omega)[alpha.row_indices, :w_beta] = A_{alpha,beta}`:
+    `((A - A^{(L)}) @ Omega)[alpha.row_indices, :w_beta]` is the residual
+    estimate of `A_{alpha,beta}` (equal only for exact prior factors):
     the other active boxes of that `Omega` contribute zero because they are
     not neighbors of `alpha`.
 
@@ -357,7 +478,7 @@ def build_leaf_test_matrices(
     Returns:
         A list of `PeriodicLeafTestMatrix`, one per non-empty leaf pattern
         cell, in a deterministic order (pattern cells sorted
-        lexicographically). At most `3 ** mesh.d` entries.
+        lexicographically). At most `3 ** mesh.tree_dim` entries.
     """
     level_nodes = root.nodes_at_level(level)
 
@@ -372,26 +493,55 @@ def build_leaf_test_matrices(
     result: list[PeriodicLeafTestMatrix] = []
     for cell in sorted(groups.keys()):
         active_boxes = groups[cell]
-        omega = np.zeros((n_cols, w_max), dtype=np.float64)
-
-        for beta in active_boxes:
-            w_beta = len(beta.col_indices)
-            omega[np.ix_(beta.col_indices, np.arange(w_beta))] = np.eye(w_beta)
-
-        result.append(PeriodicLeafTestMatrix(omega=omega, pattern=cell, active_boxes=active_boxes))
+        result.append(
+            PeriodicLeafTestMatrix(
+                pattern=cell, active_boxes=active_boxes, n_cols=n_cols, w_max=w_max
+            )
+        )
 
     return result
 
 
+def leaf_probe_owners(
+    root: TreeNode,
+    lists: TreeLists,
+    level: int,
+    probes: list[PeriodicLeafTestMatrix],
+) -> dict[tuple[TreeNode, TreeNode], PeriodicLeafTestMatrix]:
+    """Assign every leaf neighbor pair to the probe that isolates it."""
+    by_box = {box: probe for probe in probes for box in probe.active_boxes}
+    return {
+        (alpha, beta): by_box[beta]
+        for alpha in root.nodes_at_level(level)
+        for beta in lists.nei[alpha]
+    }
+
+
+def build_leaf_schedule(
+    root: TreeNode, lists: TreeLists, level: int, mesh: FaultMesh
+) -> LeafProbeSchedule:
+    """Build the default fixed leaf schedule with pair-specific ownership."""
+    probes = build_leaf_test_matrices(root, level, mesh)
+    return LeafProbeSchedule(probes=probes, owners=leaf_probe_owners(root, lists, level, probes))
+
+
 __all__ = [
+    "AdmissibleProbeSchedule",
     "LEAF_PERIOD",
+    "LeafProbeSchedule",
     "PERIOD",
     "PeriodicLeafTestMatrix",
     "PeriodicTestMatrix",
+    "RealizedPeriodicTestMatrix",
     "Side",
+    "admissible_probe_owners",
+    "build_admissible_schedule",
     "build_admissible_test_matrices",
     "build_leaf_test_matrices",
+    "build_leaf_schedule",
     "grid_coordinates",
     "leaf_pattern_cell",
+    "leaf_probe_owners",
     "pattern_cell",
+    "validate_admissible_probe_owners",
 ]

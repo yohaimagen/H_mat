@@ -34,34 +34,39 @@ A_{alpha,beta}`.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from gfcompress.build_tree import build_tree
 from gfcompress.fixed_pattern import (
     LEAF_PERIOD,
     PERIOD,
     PeriodicLeafTestMatrix,
+    PeriodicTestMatrix,
+    _block_seed,
     build_admissible_test_matrices,
     build_leaf_test_matrices,
     grid_coordinates,
     leaf_pattern_cell,
     pattern_cell,
+    validate_admissible_probe_owners,
 )
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists, build_lists
 from gfcompress.mockgf import MockGF
 from gfcompress.peeling import BlockFactor, Factors, peeled_matvec
+from gfcompress.randomized import gaussian
 from gfcompress.sampling import build_sampling_constraint
 from gfcompress.tree import TreeNode
 
 
 def _grid_mesh(*shape: int, spacing: float = 1.0) -> FaultMesh:
     """Build a `FaultMesh` whose centroids form a regular grid of the given
-    `shape` (length `d`, `d in (2, 3)`), with unit spacing along each axis."""
+    `shape` (length `d in {1, 2, 3}`), with unit spacing along each axis."""
     axes = [np.arange(n, dtype=float) * spacing for n in shape]
     mesh_grids = np.meshgrid(*axes, indexing="ij")
     centroids = np.stack([g.ravel() for g in mesh_grids], axis=1)
     L = np.full(centroids.shape[0], 0.1 * spacing)
-    return FaultMesh(centroids=centroids, L=L)
+    return FaultMesh(centroids=centroids, L=L, dof_row=max(2, len(shape)))
 
 
 def _deepest_level(root: TreeNode) -> int:
@@ -91,6 +96,14 @@ def test_grid_coordinates_distinct_and_in_range() -> None:
             assert 0 <= c < n_cells
         assert coords not in seen, f"duplicate grid coordinates {coords}"
         seen.add(coords)
+
+
+def test_grid_coordinates_are_the_tree_integer_coordinates() -> None:
+    mesh = _grid_mesh(8, 8)
+    root = build_tree(mesh, m=2)
+    for level_nodes in root.iter_levels():
+        for node in level_nodes:
+            assert grid_coordinates(node, root) == node.cell_coords
 
 
 def test_pattern_cell_is_elementwise_mod_period() -> None:
@@ -150,7 +163,7 @@ def test_admissible_test_matrices_coverage_2d_wraparound() -> None:
     seed = 12345
     test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=seed)
 
-    d = mesh.d
+    d = mesh.tree_dim
     assert len(test_matrices) <= PERIOD**d
 
     # Every emitted Omega has the right shape.
@@ -197,6 +210,57 @@ def test_admissible_test_matrices_coverage_2d_wraparound() -> None:
     assert n_checked > 0
 
 
+def test_explicit_ownership_allows_repeated_source_in_distinct_probes() -> None:
+    """Future schedules may reuse a source box; ownership remains per pair."""
+    mesh = _grid_mesh(8, 8)
+    root = build_tree(mesh, m=2)
+    lists = build_lists(root)
+    level = next(nodes[0].level for nodes in root.iter_levels() if lists.interaction[nodes[0]])
+    beta = next(node for node in root.nodes_at_level(level) if len(lists.interaction[node]) >= 2)
+    alpha0, alpha1 = lists.interaction[beta][:2]
+    source_probe = next(
+        probe
+        for probe in build_admissible_test_matrices(root, level, mesh, k=2, p=1, seed=6)
+        if beta in probe.active_boxes
+    )
+    # A second realization of a valid source probe is a synthetic schedule
+    # where one source serves different target blocks in distinct probes.
+    duplicate_probe = PeriodicTestMatrix(
+        pattern=source_probe.pattern,
+        active_boxes=source_probe.active_boxes,
+        n_dofs=source_probe.n_dofs,
+        k=source_probe.k,
+        p=source_probe.p,
+        seed=source_probe.seed,
+        level=source_probe.level,
+        side=source_probe.side,
+    )
+    owners = {(alpha0, beta): source_probe, (alpha1, beta): duplicate_probe}
+    validate_admissible_probe_owners(owners, side="col")
+    assert owners[(alpha0, beta)] is not owners[(alpha1, beta)]
+
+
+@pytest.mark.parametrize("tree_dim", [1, 2, 3])
+def test_period_six_wraparound_isolates_each_admissible_probe(tree_dim: int) -> None:
+    """A wrapped period-6 class has no second box in any sampling window."""
+    mesh = _grid_mesh(*(8,) * tree_dim)
+    root = build_tree(mesh, m=1)
+    level = _deepest_level(root)
+    level_nodes = root.nodes_at_level(level)
+    assert 2**level > PERIOD
+
+    matrices = build_admissible_test_matrices(root, level, mesh, k=1, seed=7)
+    assert any(len(tm.active_boxes) > 1 for tm in matrices)
+    box_to_matrix = {id(box): tm for tm in matrices for box in tm.active_boxes}
+    lists = build_lists(root)
+
+    for alpha in level_nodes:
+        window = {*lists.nei[alpha], *lists.interaction[alpha]}
+        for beta in window:
+            active = set(box_to_matrix[id(beta)].active_boxes)
+            assert active & window == {beta}
+
+
 # ---------------------------------------------------------------------------
 # Row side (Psi) and the retained Gaussian blocks
 # ---------------------------------------------------------------------------
@@ -216,7 +280,7 @@ def test_admissible_test_matrices_row_side_coverage_2d() -> None:
     k, p = 3, 2
     test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=5, side="row")
 
-    assert len(test_matrices) <= PERIOD**mesh.d
+    assert len(test_matrices) <= PERIOD**mesh.tree_dim
     for tm in test_matrices:
         assert tm.omega.shape == (mesh.n_rows, k + p)
 
@@ -306,7 +370,7 @@ def test_admissible_test_matrices_3d_smoke() -> None:
     k, p = 2, 1
     test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=7)
 
-    d = mesh.d
+    d = mesh.tree_dim
     assert len(test_matrices) <= PERIOD**d
 
     for tm in test_matrices:
@@ -357,6 +421,93 @@ def test_build_admissible_test_matrices_reproducible_with_seed() -> None:
     for a, b in zip(tm1, tm2, strict=True):
         np.testing.assert_array_equal(a.omega, b.omega)
         assert a.pattern == b.pattern
+
+
+def _blocks_by_cell(
+    test_matrices: list[PeriodicTestMatrix], root: TreeNode
+) -> dict[tuple[int, ...], np.ndarray]:
+    """Collect Gaussian blocks without depending on pattern-group ordering."""
+    return {
+        grid_coordinates(box, root): block
+        for tm in test_matrices
+        for box, block in tm.blocks.items()
+    }
+
+
+def test_sketch_streams_are_distinct_by_level_side_and_cell() -> None:
+    """Stable stream keys distinguish every coordinate used by a sketch."""
+    seed = 42
+    col = _block_seed(seed, 3, "col", (2, 5))
+    assert col != _block_seed(seed, 4, "col", (2, 5))
+    assert col != _block_seed(seed, 3, "row", (2, 5))
+    assert col != _block_seed(seed, 3, "col", (2, 4))
+
+
+def test_sketch_seed_losslessly_distinguishes_large_and_negative_integers() -> None:
+    """Arbitrary Python integer seeds must not alias at 64-bit boundaries."""
+    args = (3, "col", (2, 5))
+    assert _block_seed(0, *args) != _block_seed(2**64, *args)
+    assert _block_seed(-1, *args) != _block_seed(2**64 - 1, *args)
+    assert _block_seed(-(2**80), *args) == _block_seed(-(2**80), *args)
+
+    mesh = _grid_mesh(8, 8)
+    root = build_tree(mesh, m=2)
+    level = _deepest_level(root)
+    zero = _blocks_by_cell(build_admissible_test_matrices(root, level, mesh, 2, 1, seed=0), root)
+    large = _blocks_by_cell(
+        build_admissible_test_matrices(root, level, mesh, 2, 1, seed=2**64), root
+    )
+    negative = _blocks_by_cell(
+        build_admissible_test_matrices(root, level, mesh, 2, 1, seed=-1), root
+    )
+    positive = _blocks_by_cell(
+        build_admissible_test_matrices(root, level, mesh, 2, 1, seed=2**64 - 1), root
+    )
+    cell = next(iter(zero))
+    assert not np.array_equal(zero[cell], large[cell])
+    assert not np.array_equal(negative[cell], positive[cell])
+
+
+def test_sketch_seed_has_unambiguous_arbitrary_size_cell_coordinates() -> None:
+    """Cell-word boundaries prevent formerly concatenated coordinates aliasing."""
+    first = (1, 2**32)
+    second = (1 + 2**32, 0)
+    assert _block_seed(7, 3, "col", first) != _block_seed(7, 3, "col", second)
+
+    # The seeds drive different actual Gaussian sketches, not merely distinct
+    # integer labels.
+    assert not np.array_equal(
+        gaussian(3, 2, 1, seed=_block_seed(7, 3, "col", first)),
+        gaussian(3, 2, 1, seed=_block_seed(7, 3, "col", second)),
+    )
+
+
+def test_unseeded_probe_properties_share_one_ephemeral_stream() -> None:
+    mesh = _grid_mesh(8, 8)
+    root = build_tree(mesh, m=2)
+    level = _deepest_level(root)
+    probe = build_admissible_test_matrices(root, level, mesh, k=2, p=1)[0]
+
+    omega = probe.omega
+    blocks = probe.blocks
+    for box, block in blocks.items():
+        np.testing.assert_array_equal(block, omega[box.col_indices, :])
+    np.testing.assert_array_equal(omega, probe.omega)
+
+
+def test_sketch_assignment_is_independent_of_tree_traversal() -> None:
+    """Reordering tree children cannot change a box's reusable sketch."""
+    mesh = _grid_mesh(8, 8)
+    root = build_tree(mesh, m=2)
+    level = _deepest_level(root)
+    before = _blocks_by_cell(build_admissible_test_matrices(root, level, mesh, 2, 1, seed=42), root)
+
+    root.children.reverse()
+    after = _blocks_by_cell(build_admissible_test_matrices(root, level, mesh, 2, 1, seed=42), root)
+
+    assert before.keys() == after.keys()
+    for cell in before:
+        np.testing.assert_array_equal(before[cell], after[cell])
 
 
 def test_build_admissible_test_matrices_no_seed_runs() -> None:
@@ -432,7 +583,7 @@ def test_leaf_test_matrices_shared_slots_and_isolation_2d() -> None:
     assert 2**level >= 4
 
     test_matrices = build_leaf_test_matrices(root, level, mesh)
-    d = mesh.d
+    d = mesh.tree_dim
     w_max = max(len(box.col_indices) for box in level_nodes)
 
     assert len(test_matrices) <= LEAF_PERIOD**d
@@ -478,6 +629,27 @@ def test_leaf_test_matrices_shared_slots_and_isolation_2d() -> None:
             n_checked += 1
 
     assert n_checked > 0
+
+
+@pytest.mark.parametrize("tree_dim", [1, 2, 3])
+def test_period_three_wraparound_isolates_each_leaf_probe(tree_dim: int) -> None:
+    """A wrapped period-3 class has no second box in a leaf neighbor list."""
+    mesh = _grid_mesh(*(4,) * tree_dim)
+    root = build_tree(mesh, m=1)
+    level = _deepest_level(root)
+    level_nodes = root.nodes_at_level(level)
+    assert 2**level > LEAF_PERIOD
+
+    matrices = build_leaf_test_matrices(root, level, mesh)
+    assert any(len(tm.active_boxes) > 1 for tm in matrices)
+    box_to_matrix = {id(box): tm for tm in matrices for box in tm.active_boxes}
+    neighbors = build_lists(root).nei
+
+    for alpha in level_nodes:
+        window = set(neighbors[alpha])
+        for beta in window:
+            active = set(box_to_matrix[id(beta)].active_boxes)
+            assert active & window == {beta}
 
 
 # ---------------------------------------------------------------------------
@@ -545,7 +717,7 @@ def test_leaf_test_matrices_3d_smoke() -> None:
     test_matrices = build_leaf_test_matrices(root, level, mesh)
     w_max = max(len(box.col_indices) for box in level_nodes)
 
-    assert len(test_matrices) <= LEAF_PERIOD**mesh.d
+    assert len(test_matrices) <= LEAF_PERIOD**mesh.tree_dim
     for tm in test_matrices:
         assert tm.omega.shape == (mesh.n_cols, w_max)
 

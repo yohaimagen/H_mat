@@ -46,19 +46,44 @@ F.5  # done 99fd50a 2026-09-06
 6.1  # done 2990cb4 2026-09-06
 6.2  # done c071b36 2026-09-06
 
-# Stage R: validation on real GF data (see REALGF_PLAN.md)
+# Stage R: historical real-GF sequence (see REALGF_PLAN.md)
+# R.2-R.8 are retained for history but are superseded by the active C-series
+# after C.0. Do not dispatch them in parallel with the C-series.
 R.1  # done 024ae97 2026-09-07
-R.2
-R.3
-R.4
-R.5
-R.6
-R.7
-R.8
+# R.2  # historical, deactivated by C.0
+# R.3  # historical, deactivated by C.0
+# R.4  # historical, deactivated by C.0
+# R.5  # historical, deactivated by C.0
+# R.6  # historical, deactivated by C.0
+# R.7  # historical, deactivated by C.0
+# R.8  # historical, deactivated by C.0
 
-# Stage 7: graph-coloring optimization
-7.1
-7.2
-7.3
-7.4
-7.5
+# Stage 7: historical graph-coloring sequence (see plan.md), superseded by C.12-C.18.
+# 7.1  # historical, deactivated by C.0
+# 7.2  # historical, deactivated by C.0
+# 7.3  # historical, deactivated by C.0
+# 7.4  # historical, deactivated by C.0
+# 7.5  # historical, deactivated by C.0
+
+# Active BP3/BP7 sequence (BP_COLORING_PLAN.md). Execute strictly in order.
+# C.0 activates this sequence; C.12-C.18 remain gated on the accepted C.11
+# fixed baselines and are listed here for routing only.
+C.0  # done 886dbb7 2026-09-09 (Sol task approval)
+C.1  # done c50f1a1 2026-09-09 (Sol task approval)
+C.2  # done 6604919 2026-09-09 (Sol task approval)
+C.3  # done 4eb126e 2026-09-09 (Sol task approval)
+C.4  # done 94ef6b4 2026-09-10 (Sol task approval)
+C.5  # done 336178b 2026-09-10 (Sol task approval)
+C.6
+C.7
+C.8
+C.9
+C.10
+C.11
+C.12
+C.13
+C.14
+C.15
+C.16
+C.17
+C.18

@@ -73,6 +73,15 @@ def _grid_mesh(*shape: int, spacing: float = 1.0) -> FaultMesh:
     return FaultMesh(centroids=centroids, L=lengths)
 
 
+def _line_mesh(n: int, spacing: float = 1.0, dof_row: int = 2) -> FaultMesh:
+    """Build a `FaultMesh` whose centroids form a 1D line (`tree_dim=1`),
+    with an explicit `dof_row` decoupled from the tree dimension (Task R.2)
+    -- the BP3-like case (1D fault, 2D elasticity)."""
+    centroids = (np.arange(n, dtype=float) * spacing)[:, None]
+    lengths = np.full(n, 0.1 * spacing)
+    return FaultMesh(centroids=centroids, L=lengths, dof_row=dof_row)
+
+
 def _deepest_level(root: object) -> int:
     deepest = 0
     for level_nodes in root.iter_levels():  # type: ignore[attr-defined]
@@ -88,7 +97,7 @@ def _predicted_counts(mesh: FaultMesh, m: int, k: int, p: int) -> int:
     root = build_tree(mesh, m)
     leaf_level = _deepest_level(root)
 
-    d = mesh.d
+    d = mesh.tree_dim
     total = 0
     for level in range(2, leaf_level + 1):
         omegas = build_admissible_test_matrices(root, level, mesh, k, p, side="col")
@@ -158,13 +167,27 @@ def test_eta_sweep_consistency_3d() -> None:
     _assert_eta_consistent(_grid_mesh(8, 8, 8), m=8, etas=etas)
 
 
+def test_eta_sweep_consistency_1d() -> None:
+    # Task R.2, part 1b: DEFAULT_ETA's `<= 1/sqrt(d_t)` justification is
+    # restated against the *tree* dimension `d_t`, not the elastic one.
+    # Here `d_t=1` (`1/sqrt(1) = 1.0`) while `dof_row=2` (2D elasticity),
+    # the BP3-like decoupled case.
+    d_t = 1
+    bound = (1.0 / np.sqrt(d_t)) * (1.0 - 1e-9)
+    etas = [0.1, 0.3, DEFAULT_ETA, bound]
+    mesh = _line_mesh(64, dof_row=2)
+    assert mesh.tree_dim == 1
+    assert mesh.dof_row == 2
+    _assert_eta_consistent(mesh, m=4, etas=etas)
+
+
 # ---------------------------------------------------------------------------
-# k precondition boundary: k <= dof_col * min_leaf_patches (fold-in docstring
-# claim, verified directly here). 16x16/m=4 has leaf width 4, dof_col=1.
+# Per-block effective rank: a target rank larger than the smallest leaf block
+# is valid; each rectangular pair is capped on both factor sides.
 # ---------------------------------------------------------------------------
 
 
-def test_k_precondition_boundary_16x16_m4() -> None:
+def test_large_target_rank_is_capped_per_small_block() -> None:
     mesh = _grid_mesh(16, 16)
     op = MockGF(mesh)
     root = build_tree(mesh, m=4)
@@ -173,13 +196,10 @@ def test_k_precondition_boundary_16x16_m4() -> None:
     bound = mesh.dof_col * min_leaf_patches
     assert bound == 4
 
-    compress(op, mesh, m=4, k=bound, p=0, seed=0, sampling="fixed")  # must not raise
-
-    try:
-        compress(op, mesh, m=4, k=bound + 1, p=0, seed=0, sampling="fixed")
-        raise AssertionError(f"expected ValueError for k={bound + 1} > bound={bound}")
-    except ValueError as exc:
-        assert f"[0, {bound}]" in str(exc), f"expected bound {bound} in error message: {exc}"
+    hmat = compress(op, mesh, m=4, k=bound + 1, p=0, seed=0, sampling="fixed")
+    for factor in hmat.factors:
+        k_eff = min(bound + 1, len(factor.alpha.row_indices), len(factor.beta.col_indices))
+        assert factor.u.shape[1] == factor.v.shape[1] == factor.b.shape[0] == k_eff
 
 
 # ---------------------------------------------------------------------------
@@ -234,16 +254,17 @@ def test_k_sweep_monotonic_error_and_exact_matvec_counts() -> None:
     print(f"[k-sweep] setup_time={time.time() - t0:.2f}s leaves_only={leaves_only_rel_err:.3e}")
 
 
-def test_p_sweep_monotonic_error_and_exact_matvec_counts() -> None:
+def test_p_sweep_accuracy_and_exact_matvec_counts() -> None:
     """Same 32x32/m=16 fixture, k=8 fixed, sweeping oversampling p. Measured
     (seeds 0-9, k=8): rel_err ~1.7e-6-1.1e-4 (p=0, not discriminating -- see
-    the in-test comment below) down to ~1.3-1.4e-9 (p=16), monotonically
-    non-increasing at every seed tried (0-9; 2 seeds asserted here to bound
-    runtime)."""
+    the in-test comment below) down to ~1.3-1.4e-9 (p=16). This records
+    repeated-seed aggregate evidence rather than requiring a randomized
+    per-seed monotonicity property."""
     mesh = _grid_mesh(32, 32)
     m, k = 16, 8
     ps = [0, 2, 4, 8, 16]
     seeds = [0, 1]
+    errors_by_p: dict[int, list[float]] = {p: [] for p in ps}
 
     t0 = time.time()
     for seed in seeds:
@@ -255,18 +276,13 @@ def test_p_sweep_monotonic_error_and_exact_matvec_counts() -> None:
                 observed == predicted
             ), f"seed={seed} p={p}: observed={observed}, predicted={predicted}"
             errs.append(rel_err)
+            errors_by_p[p].append(rel_err)
 
-        for i in range(len(errs) - 1):
-            assert errs[i] >= errs[i + 1] - 1e-14, (
-                f"seed={seed}: error increased going p={ps[i]} -> p={ps[i + 1]}: "
-                f"{errs[i]} -> {errs[i + 1]}"
-            )
         # p=0 is NOT a discriminating point: measured rel_err 1.7e-6-1.1e-4
         # across seeds 0-9 vs. leaves_only 7.2e-6, i.e. at p=0 the compressed
         # far field can be *worse* than dropping it entirely. The
         # discriminating comparison is therefore p=16 (~1.4e-9, three orders
-        # below leaves-only); p=0 contributes only the start of the monotone
-        # trend and its exact matvec count.
+        # below leaves-only); p=0 contributes its exact matvec count.
         op = MockGF(mesh)
         hmat = compress(op, mesh, m=m, k=k, p=ps[-1], seed=seed, sampling="fixed")
         leaves_only = HMatrix(root=hmat.root, mesh=mesh, factors=[], leaves=hmat.leaves)
@@ -274,6 +290,10 @@ def test_p_sweep_monotonic_error_and_exact_matvec_counts() -> None:
         assert (
             errs[-1] * 100 < leaves_only_rel_err
         ), f"seed={seed}: errs[-1]={errs[-1]}, leaves_only={leaves_only_rel_err}"
+
+    assert max(errors_by_p[0]) < 2e-4
+    assert max(errors_by_p[16]) < 2e-9
+    assert np.mean(errors_by_p[16]) < np.mean(errors_by_p[0]) / 100
 
     print(f"[p-sweep] setup_time={time.time() - t0:.2f}s")
 

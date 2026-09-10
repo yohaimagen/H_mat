@@ -63,19 +63,14 @@ as reason to re-run this check first.
 
 `L` (patch characteristic length)
 ----------------------------------
-`FaultMesh.L` is a per-patch length that (per `CLAUDE.md` and the plan) is
-*intended* to feed `diam`, which feeds admissibility (`dist >= eta *
-max(diam_a, diam_b)`). **As of this task, it does not**: `TreeNode.diam`/
-`bounding_box` are computed from patch centroids alone
-(`tree.py::_compute_geometry`) and then overwritten by the dyadic cell
-(`build_tree.py`); `is_admissible` reads only `bounding_box`/`diam`
-(`interactions.py`). Nothing outside `geometry.py` reads `mesh.L`, so
-`l_method` currently has no effect on which blocks the compressor treats as
-near/far -- it is stored on the mesh for a downstream task to consume, not
-wired into admissibility yet. GLL nodes cluster at element edges, so true
+`FaultMesh.L` is per-patch mesh metadata. It does not control the production
+block partition: that partition is defined by the dyadic interaction lists
+and leaf neighbors. `TreeNode.diam`/`bounding_box` are computed from patch
+centroids and then overwritten by the dyadic cell; nothing outside
+`geometry.py` reads `mesh.L`, so `l_method` has no effect on near/far blocks.
+It is not a deferred eta-split control. GLL nodes cluster at element edges, so true
 nearest-neighbour spacing varies by an order of magnitude *within one
-element* -- a poor default for whenever `L` does get consumed, since it would
-hand wildly different lengths to physically equivalent nodes. Three
+element*. Three
 candidates are implemented (`patch_length_candidates`):
 
 - `"representative"` (**default**): `element_diam / nbf`, uniform across an
@@ -89,18 +84,18 @@ give each node a length tied to local mesh resolution, not to where within
 the element it happens to sit) while being cheaper to compute and stable
 under GLL clustering, and it avoids `"element"`'s over-conservatism.
 
-Measured sensitivity is a **proxy**, not a measurement of the compressor's
-actual admissible/inadmissible split (since `L` is not yet wired into
-`diam`): the fraction of a patch's `k=30` nearest neighbours that a direct
-patch-pair test `dist >= eta * max(L_i, L_j)` (eta=0.5) would call
-admissible, computed independently of the tree (see `tests/test_realgf.py::
-test_L_candidate_sensitivity_*`). `"representative"` and `"voronoi"` agree to
+Measured sensitivity is an **independent proxy experiment**, not a
+measurement of the compressor's actual partition: it counts the fraction of
+a patch's `k=30` nearest neighbours that a direct patch-pair test
+`dist >= eta * max(L_i, L_j)` (eta=0.5) would call admissible, independently
+of the tree (see `tests/test_realgf.py::test_L_candidate_sensitivity_*`).
+`"representative"` and `"voronoi"` agree to
 within a few percent (BP3: 0.991 vs 0.991; BP7: 0.931 vs 0.931), while
 `"element"` differs sharply (BP3: 0.801; BP7: 0.302) -- using the full
 element size for every node would classify far more near-neighbour pairs as
 inadmissible, especially on BP7 where element sizes vary ~6x across the
-mesh. The proxy split **is** materially sensitive to this choice; `"element"`
-would not be a safe substitute for the default once `L` is consumed.
+mesh. The proxy result is materially sensitive to this choice; it does not
+change or predict a production partition.
 """
 
 from __future__ import annotations
@@ -112,7 +107,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from gfcompress.geometry import FaultMesh
+from gfcompress.geometry import FaultMesh, PCAAlignment, pca_align
 from gfcompress.operators import MatVecOperator
 
 PETSC_MAT_CLASSID = 1211216
@@ -417,10 +412,15 @@ class RealGF(MatVecOperator):
         mat: The memory-mapped raw (file-order) values, shape `(header.rows,
             header.cols)`, big-endian `float64`. Read only via `matvec`/
             `rmatvec`.
-        mesh: `FaultMesh` of the `N` patch centroids, with `L` from
-            `l_method`.
-        dof_row: Row dofs per patch (`= mesh.d`).
-        dof_col: Column dofs per patch (`= mesh.d - 1`).
+        mesh: `FaultMesh` of the PCA-aligned retained tree coordinates, with
+            `L` from `l_method`. This geometric transform does not alter the
+            operator's patch-major component ordering or shape.
+        alignment: The `PCAAlignment` retaining the original coordinates and
+            tree-coordinate transform.
+        dof_row: Row dofs per patch (`= mesh.dof_row`, the elastic problem
+            dimension). It is independent of `mesh.tree_dim`: BP3 uses a
+            1D tree with 2 row dofs and BP7 a 2D tree with 3 row dofs.
+        dof_col: Column dofs per patch (`= mesh.dof_row - 1`).
         row_pm_to_raw: Patch-major row index -> raw file row index, shape
             `(n_rows,)`.
         col_pm_to_raw: Patch-major column index -> raw file column index,
@@ -490,7 +490,14 @@ class RealGF(MatVecOperator):
         self.patch_length_candidates = patch_length_candidates(
             coords.centroids, coords.element_of_patch, coords.n_elements, coords.nbf
         )
-        self.mesh = FaultMesh(centroids=coords.centroids, L=self.patch_length_candidates[l_method])
+        # Geometry may be numerically lower dimensional, but operator components
+        # remain in the original patch-major elasticity layout.
+        self.alignment: PCAAlignment = pca_align(coords.centroids)
+        self.mesh = FaultMesh(
+            centroids=self.alignment.centroids,
+            L=self.patch_length_candidates[l_method],
+            dof_row=dof_row,
+        )
 
         self.mat: NDArray[np.float64] = np.memmap(
             mat_path,

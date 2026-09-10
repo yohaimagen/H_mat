@@ -31,7 +31,9 @@ independent of `N`.
 `gfcompress.peeling.peeled_matvec` (Task 5.1) with the full set of stored
 `Factors` (levels `2, ..., L`) and reads off one `DenseLeaf` per neighbor
 pair. It never assembles a dense `A`; the dense block it stores is exactly
-the sample it read, not a call to the underlying kernel.
+the residual sample it read, not a call to the underlying kernel. It equals
+the original block only when the preceding far-field factors are exact;
+otherwise it inherits their approximation error.
 """
 
 from __future__ import annotations
@@ -41,7 +43,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from gfcompress.fixed_pattern import build_leaf_test_matrices
+from gfcompress.fixed_pattern import LeafProbeSchedule, build_leaf_schedule
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists
 from gfcompress.operators import MatVecOperator
@@ -60,8 +62,9 @@ class DenseLeaf:
         beta: The col box, `beta in L^nei(alpha)` (may equal `alpha`).
             `beta.col_indices` (length `dof_col * |beta|`) indexes the global
             col space `{0, ..., n_cols - 1}`.
-        block: The dense sub-block `A(I_alpha, I_beta)`, shape
-            `(len(alpha.row_indices), len(beta.col_indices))`.
+        block: The dense residual sample for `A(I_alpha, I_beta)`, shape
+            `(len(alpha.row_indices), len(beta.col_indices))`. It is the
+            original block only if preceding far-field factors are exact.
     """
 
     alpha: TreeNode
@@ -76,9 +79,11 @@ def extract_leaves(
     mesh: FaultMesh,
     level: int,
     factors: Factors,
+    schedule: LeafProbeSchedule | None = None,
 ) -> list[DenseLeaf]:
     """Extract every inadmissible neighbor block `(alpha, beta)` at the leaf
-    `level`, from the residual operator `A - A^{(L)}`.
+    `level`, from the residual operator `A - A^{(L)}`. The returned
+        samples inherit any approximation error in those far-field factors.
 
     Args:
         operator: The black-box operator `A` (accessed only via
@@ -99,32 +104,23 @@ def extract_leaves(
         A list of `DenseLeaf`, one per pair `(alpha, beta)` with `alpha`
         ranging over `root.nodes_at_level(level)` and `beta` over
         `lists.nei[alpha]` (in that nested order). Issues exactly one peeled
-        matvec per emitted leaf test matrix (`<= 3 ** mesh.d`), each of width
+        matvec per emitted leaf test matrix (`<= 3 ** mesh.tree_dim`), each of width
         `w_max = max_beta len(beta.col_indices)`, for a total probe width
-        `<= 3 ** mesh.d * w_max`.
+        `<= 3 ** mesh.tree_dim * w_max`.
     """
     level_nodes = root.nodes_at_level(level)
 
-    test_matrices = build_leaf_test_matrices(root, level, mesh)
-
-    # Map each box (by identity) to the sample Y = (A - A^{(L)}) @ Omega from
-    # the unique Omega in which it is active -- the leaf period-3 pattern
-    # guarantees this Omega is unique per box (see fixed_pattern docstring).
-    y_for_box: dict[TreeNode, NDArray[np.float64]] = {}
-    for tm in test_matrices:
-        y = np.asarray(peeled_matvec(operator, tm.omega, factors), dtype=np.float64)
-        for box in tm.active_boxes:
-            y_for_box[box] = y
-
-    result: list[DenseLeaf] = []
-    for alpha in level_nodes:
-        for beta in lists.nei[alpha]:
-            y = y_for_box[beta]
-            w_beta = len(beta.col_indices)
-            block = y[np.ix_(alpha.row_indices, np.arange(w_beta))]
-            result.append(DenseLeaf(alpha=alpha, beta=beta, block=block))
-
-    return result
+    schedule = schedule or build_leaf_schedule(root, lists, level, mesh)
+    result: dict[tuple[TreeNode, TreeNode], DenseLeaf] = {}
+    for probe in schedule.probes:
+        y = np.asarray(peeled_matvec(operator, probe.realize(), factors), dtype=np.float64)
+        for (alpha, beta), owner in schedule.owners.items():
+            if owner is probe:
+                width = len(beta.col_indices)
+                block = np.array(y[np.ix_(alpha.row_indices, np.arange(width))], copy=True)
+                result[(alpha, beta)] = DenseLeaf(alpha=alpha, beta=beta, block=block)
+        del y
+    return [result[(alpha, beta)] for alpha in level_nodes for beta in lists.nei[alpha]]
 
 
 __all__ = ["DenseLeaf", "extract_leaves"]

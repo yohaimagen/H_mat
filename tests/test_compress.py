@@ -31,16 +31,22 @@ copying a formula that mirrors the driver's internals.
 
 from __future__ import annotations
 
+import inspect
+
 import numpy as np
 
 from gfcompress.build_tree import build_tree
-from gfcompress.compress import CountingOperator, compress
+from gfcompress.column_basis import column_bases
+from gfcompress.compress import CountingOperator, compress, compress_level
 from gfcompress.error import relative_error
 from gfcompress.fixed_pattern import build_admissible_test_matrices, build_leaf_test_matrices
 from gfcompress.geometry import FaultMesh
 from gfcompress.hmatrix import HMatrix
 from gfcompress.interactions import build_lists
 from gfcompress.mockgf import MockGF
+from gfcompress.operators import MatVecOperator
+from gfcompress.randomized import gaussian
+from gfcompress.row_basis import row_bases
 
 
 def _grid_mesh(*shape: int, spacing: float = 1.0) -> FaultMesh:
@@ -74,6 +80,77 @@ def test_compress_rejects_unsupported_sampling() -> None:
         raise AssertionError("expected ValueError for sampling='coloring'")
     except ValueError as exc:
         assert "coloring" in str(exc)
+
+
+def test_public_oversampling_defaults_are_consistently_positive() -> None:
+    """`p=0` remains explicit, but no public sampling path defaults to it."""
+    for function in (
+        gaussian,
+        build_admissible_test_matrices,
+        column_bases,
+        row_bases,
+        compress_level,
+        compress,
+    ):
+        assert inspect.signature(function).parameters["p"].default == 10
+
+
+class _NoSamplingOperator(MatVecOperator):
+    """Operator double that records any accidental pre-validation sampling."""
+
+    def __init__(self, shape: tuple[object, object]) -> None:
+        self._shape = shape
+        self.calls = 0
+
+    def matvec(self, omega: np.ndarray) -> np.ndarray:
+        self.calls += 1
+        raise AssertionError("compress sampled an invalid input")
+
+    def rmatvec(self, psi: np.ndarray) -> np.ndarray:
+        self.calls += 1
+        raise AssertionError("compress sampled an invalid input")
+
+    @property
+    def shape(self) -> tuple[int, int]:
+        return self._shape
+
+
+class _MissingProductsOperator:
+    """Shape-correct object with no callable black-box products."""
+
+    def __init__(self, shape: tuple[int, int], *, noncallable: bool) -> None:
+        self.shape = shape
+        self.calls = 0
+        if noncallable:
+            self.matvec = None
+            self.rmatvec = None
+
+
+def test_compress_validates_inputs_before_sampling() -> None:
+    mesh = _grid_mesh(4, 4)
+    cases = [
+        (_NoSamplingOperator((mesh.n_rows - 1, mesh.n_cols)), dict(m=1, k=1, p=0)),
+        (_NoSamplingOperator((mesh.n_rows, mesh.n_cols)), dict(m=0, k=1, p=0)),
+        (_NoSamplingOperator((mesh.n_rows, mesh.n_cols)), dict(m=1, k=0, p=0)),
+        (_NoSamplingOperator((mesh.n_rows, mesh.n_cols)), dict(m=1, k=1, p=-1)),
+        (_NoSamplingOperator((float(mesh.n_rows), mesh.n_cols)), dict(m=1, k=1, p=0)),
+        (_NoSamplingOperator((True, mesh.n_cols)), dict(m=1, k=1, p=0)),
+        (_NoSamplingOperator(("rows", mesh.n_cols)), dict(m=1, k=1, p=0)),
+        (
+            _MissingProductsOperator((mesh.n_rows, mesh.n_cols), noncallable=False),
+            dict(m=1, k=1, p=0),
+        ),
+        (
+            _MissingProductsOperator((mesh.n_rows, mesh.n_cols), noncallable=True),
+            dict(m=1, k=1, p=0),
+        ),
+    ]
+    for operator, options in cases:
+        try:
+            compress(operator, mesh, seed=0, sampling="fixed", **options)
+            raise AssertionError("expected invalid compression input to fail")
+        except ValueError:
+            assert operator.calls == 0
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +209,32 @@ def test_compress_relative_error_3d() -> None:
     ), f"rel_err={rel_err}, rel_err_leaves_only={rel_err_leaves_only}"
 
 
+def test_repeated_seed_oversampling_diagnostic() -> None:
+    """Keep construction and validation streams separate in this diagnostic.
+
+    This records both the public default (`p=10`) and the explicit `p=0`
+    experiment across several construction seeds. Randomized sketches do not
+    support a useful per-seed monotonic-error assertion, so it enforces
+    measured absolute bounds plus a 100-fold aggregate default-p=10
+    improvement; the measured values are tracked in ``MEASUREMENTS_C4.md``.
+    """
+    mesh = _grid_mesh(16, 16)
+    op = MockGF(mesh)
+    p0_errors: list[float] = []
+    default_errors: list[float] = []
+    for construction_seed in (0, 1, 2):
+        hmat = compress(op, mesh, m=4, k=4, p=0, seed=construction_seed)
+        p0_errors.append(relative_error(hmat, op, seed=1000 + construction_seed))
+
+        # Deliberately omit p: this covers the public p=10 default path.
+        hmat = compress(op, mesh, m=4, k=4, seed=construction_seed)
+        default_errors.append(relative_error(hmat, op, seed=1000 + construction_seed))
+
+    assert max(p0_errors) < 1e-4
+    assert max(default_errors) < 5e-8
+    assert np.mean(default_errors) < np.mean(p0_errors) / 100
+
+
 # ---------------------------------------------------------------------------
 # Matvec count: exact prediction from the actual per-level test-matrix
 # counts, plus the structural bounds and the N-independence claim.
@@ -171,7 +274,7 @@ def _predicted_counts(
 def test_matvec_count_matches_exact_prediction_2d() -> None:
     mesh = _grid_mesh(16, 16)
     m, k, p, seed = 4, 4, 4, 3
-    d = mesh.d
+    d = mesh.tree_dim
 
     predicted_total, per_level, leaf_probe_width, w_max = _predicted_counts(mesh, m, k, p)
 
@@ -196,7 +299,7 @@ def test_matvec_count_matches_exact_prediction_2d() -> None:
 def test_matvec_count_matches_exact_prediction_3d() -> None:
     mesh = _grid_mesh(8, 8, 8)
     m, k, p, seed = 8, 8, 8, 4
-    d = mesh.d
+    d = mesh.tree_dim
 
     predicted_total, per_level, leaf_probe_width, w_max = _predicted_counts(mesh, m, k, p)
 

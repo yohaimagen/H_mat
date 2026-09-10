@@ -12,5 +12,6 @@ venv/
 .coverage
 htmlcov/
 
-# Real Green's function datasets (6.5 GB, see REALGF_PLAN.md)
-real_gfs/
+# Real Green's function datasets (6.5 GB, see BP_COLORING_PLAN.md)
+# Match both a directory and the shared read-only dataset symlink.
+/real_gfs

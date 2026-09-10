@@ -3,6 +3,9 @@ revised by Task F.5).
 
 This is the first of the three per-level compression passes of Stage 5
 (`column_bases` here, `row_bases` in Task 5.3, `core_matrices` in Task 5.4).
+Every pair uses the shared effective rank `k_eff = min(k,
+len(alpha.row_indices), len(beta.col_indices))`; the fixed probes retain
+their requested width `k + p`.
 For tree level `l`, with the low-rank factors of levels `2, ..., l-1` already
 stored as a `gfcompress.peeling.Factors` list:
 
@@ -20,9 +23,9 @@ stored as a `gfcompress.peeling.Factors` list:
    guarantees `beta`'s columns of that `Omega` are an independent Gaussian
    block and every other box interacting with `alpha` is zeroed there),
    restrict to `alpha`'s row-index set `I_alpha = alpha.row_indices`
-   (`Y(I_alpha, :)`), and set `U_{alpha,beta} = qr(Y(I_alpha, :), k)`
+   (`Y(I_alpha, :)`), and set `U_{alpha,beta} = qr(Y(I_alpha, :), k_eff)`
    (`gfcompress.randomized.orth`, Task 3.1, pivoted) -- an orthonormal basis
-   for the block's (approximate rank-`k`) column space.
+   for the block's (approximate rank-`k_eff`) column space.
 
 Per Eq. 4.3, the core-matrix solve (Task 5.4/5.5) also needs `Y(I_alpha, :)`
 itself (not just its orthonormalization) and the Gaussian sketch block
@@ -32,7 +35,8 @@ retains both, rather than discarding them once `U` is formed.
 
 Per CLAUDE.md's shape conventions, `Y` lives in `A`'s range
 (`R^{dof_row * N}`), so `I_alpha` must be `alpha`'s `dof_row`-expanded
-`row_indices`; `U_{alpha,beta}` has shape `(len(alpha.row_indices), k)`.
+`row_indices`; `U_{alpha,beta}` has shape
+`(len(alpha.row_indices), k_eff)`.
 """
 
 from __future__ import annotations
@@ -42,13 +46,21 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from gfcompress.fixed_pattern import build_admissible_test_matrices
+from gfcompress.fixed_pattern import (
+    AdmissibleProbeSchedule,
+    build_admissible_schedule,
+)
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists
 from gfcompress.operators import MatVecOperator
 from gfcompress.peeling import Factors, peeled_matvec
 from gfcompress.randomized import orth
 from gfcompress.tree import TreeNode
+
+
+def _effective_rank(alpha: TreeNode, beta: TreeNode, k: int) -> int:
+    """Return the common factor width for one rectangular block pair."""
+    return min(k, len(alpha.row_indices), len(beta.col_indices))
 
 
 @dataclass(frozen=True)
@@ -63,7 +75,8 @@ class ColumnBasis:
         beta: The col box. `beta.col_indices` (length `dof_col * |beta|`)
             indexes the global col space `{0, ..., n_cols - 1}`.
         u: Orthonormal column-space basis `U_{alpha,beta}`, shape
-            `(len(alpha.row_indices), k)`, satisfying `u.conj().T @ u ~= I_k`.
+            `(len(alpha.row_indices), k_eff)`, satisfying
+            `u.conj().T @ u ~= I_k_eff`.
         y_alpha: The column sample restricted to `alpha`'s rows,
             `Y(I_alpha, :) = (A - A^{(l-1)})(I_alpha, I_beta) @ G_beta`, shape
             `(len(alpha.row_indices), k + p)` -- `U`'s un-orthonormalized
@@ -88,8 +101,9 @@ def column_bases(
     level: int,
     factors: Factors,
     k: int,
-    p: int = 0,
+    p: int = 10,
     seed: int | None = None,
+    schedule: AdmissibleProbeSchedule | None = None,
 ) -> list[ColumnBasis]:
     """Compute the level-`level` column bases `U_{alpha,beta}` for every
     admissible pair `(alpha, beta)` at `level`.
@@ -108,8 +122,10 @@ def column_bases(
         factors: Flat list of `BlockFactor`s for levels `2, ..., level - 1`
             (Task 5.1's `peeled_matvec` subtracts their contribution before
             sampling). Empty for the coarsest level with admissible pairs.
-        k: Target rank for each block's column basis.
-        p: Oversampling parameter for the test matrices. Defaults to `0`.
+        k: Positive target rank; each pair uses the shared
+            `k_eff = min(k, len(alpha.row_indices), len(beta.col_indices))`.
+        p: Oversampling parameter for the test matrices. Defaults to `10`;
+            pass `p=0` to disable oversampling explicitly.
         seed: Optional base seed forwarded to
             `gfcompress.fixed_pattern.build_admissible_test_matrices` for
             reproducibility.
@@ -119,34 +135,31 @@ def column_bases(
         `level` (in the order `L^int` yields them: outer loop over
         `root.nodes_at_level(level)`, inner loop over each box's interaction
         list). Each `u` has orthonormal columns and shape
-        `(len(alpha.row_indices), k)`.
+        `(len(alpha.row_indices), k_eff)` for its pair.
     """
-    level_nodes = root.nodes_at_level(level)
-
-    test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=seed, side="col")
-
-    # Map each box (by identity) to the Y sample and G_beta block from the
-    # Omega whose active_boxes include it -- Eq. 4.4 guarantees this Omega is
-    # unique per box.
-    y_for_box: dict[TreeNode, NDArray[np.float64]] = {}
-    g_for_box: dict[TreeNode, NDArray[np.float64]] = {}
-    for tm in test_matrices:
-        y = np.asarray(peeled_matvec(operator, tm.omega, factors), dtype=np.float64)
-        for box in tm.active_boxes:
-            y_for_box[box] = y
-            g_for_box[box] = tm.blocks[box]
-
-    result: list[ColumnBasis] = []
-    for alpha in level_nodes:
-        for beta in lists.interaction[alpha]:
-            y = y_for_box[beta]
-            y_alpha = y[alpha.row_indices, :]
-            u = orth(y_alpha, k)
-            result.append(
-                ColumnBasis(alpha=alpha, beta=beta, u=u, y_alpha=y_alpha, g_beta=g_for_box[beta])
-            )
-
-    return result
+    schedule = schedule or build_admissible_schedule(root, lists, level, mesh, k, p, seed, "col")
+    result: dict[tuple[TreeNode, TreeNode], ColumnBasis] = {}
+    for probe in schedule.probes:
+        realization = probe.realize()
+        y = np.asarray(peeled_matvec(operator, realization.omega, factors), dtype=np.float64)
+        for (alpha, beta), owner in schedule.owners.items():
+            if owner is probe:
+                y_alpha = np.array(y[alpha.row_indices, :], copy=True)
+                # ``orth`` returns a QR slice; copy releases its unused columns.
+                u = orth(y_alpha, _effective_rank(alpha, beta, k)).copy()
+                result[(alpha, beta)] = ColumnBasis(
+                    alpha=alpha,
+                    beta=beta,
+                    u=u,
+                    y_alpha=y_alpha,
+                    g_beta=realization.blocks[beta],
+                )
+        del y, realization
+    return [
+        result[(alpha, beta)]
+        for alpha in root.nodes_at_level(level)
+        for beta in lists.interaction[alpha]
+    ]
 
 
 __all__ = ["ColumnBasis", "column_bases"]
