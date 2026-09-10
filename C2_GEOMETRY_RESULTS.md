@@ -21,8 +21,8 @@ listed `m` threshold.
 
 The automatic singular cutoff was 4.247e-09 for BP3 and 1.452e-11 for BP7;
 their equivalent variance-ratio cutoffs were 9.664e-24 and 7.685e-25.  The
-discarded projection residuals were respectively 2.988e-12 (relative
-2.187e-15) and 6.050e-15 (relative 3.654e-16).  The operator layout remains
+discarded projection residuals were respectively 2.964e-12 (relative
+2.169e-15) and 2.949e-31 (relative 1.781e-32).  The operator layout remains
 unchanged: only its tree coordinates are rotated/reduced.
 
 BP7 has the same occupancy at `m=128` and `m=256` because the
