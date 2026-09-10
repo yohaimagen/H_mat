@@ -43,7 +43,8 @@ activation has not been established and is not claimed as enforcement.
 | --- | --- | --- | --- | --- |
 | C.0 | 886dbb7 | APPROVED, no fixes | routing/TOML/ignore/diff validators passed | proceed C.1 |
 | C.1 | 93bee82 + fbe0ac8 + c0d375f + af5d0e7 + e3257d9 + c50f1a1 | APPROVED after 4 corrections | 118 focused plus full pytest; ruff/black/mypy pass | proceed C.2 |
-| C.2-C.5 | not started | not started | not run | C.2 may start |
+| C.2 | 0c8df92 + b1a4b9f + 6604919 | APPROVED after 2 corrections | 340 tests; ruff/black/mypy independently pass | proceed C.3 |
+| C.3-C.5 | not started | not started | not run | C.3 may start |
 
 ## Baseline and usage record
 
@@ -88,3 +89,24 @@ after correction round 4, with no remaining in-scope findings, questions, or
 suggestions. Sol independently passed 118 focused tests (including warnings as
 errors), the complete suite, Ruff, Black, mypy, diff checks, and additional
 extreme-coordinate probes. C.1's final summary was posted to PR #28.
+
+C.2 review findings at `0c8df929b0eb32f86c90e7d61db2edf203ba6d00`:
+normalize singular values/residuals so PCA decisions survive extreme finite
+rescaling; return a complete ambient transform and axis report for `N < d`;
+correct and interpret several BP occupancy medians/tiny-leaf counts; and add
+direct RealGF geometry-versus-dof regression assertions while fixing its stale
+public docs. Sol independently passed all 333 tests and static checks and
+reproduced the real-data measurements before requesting corrections.
+
+C.2 follow-up at `b1a4b9f4bc4b8415395434114c59fa0c1b572126`
+closed all implementation and integration findings. Sol requested only that the
+tracked BP3/BP7 projection-residual values be refreshed after the stable
+discarded-singular-value calculation replaced the earlier reconstruction-based
+measurement. All 340 tests and static checks passed independently.
+
+C.2 received Sol approval at `660491909970e1df2f189a794da54d2d9bb65535`
+after correction round 2, with no remaining findings, questions, or
+suggestions. The approved evidence includes scale-safe PCA, complete `N < d`
+transforms, direct BP3/BP7 geometry-versus-dof integration, all 340 tests and
+static checks, and reproduced occupancy/residual measurements. Its final
+summary was posted to PR #28.
