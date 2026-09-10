@@ -46,7 +46,11 @@ import numpy as np
 from numpy.typing import NDArray
 
 from gfcompress.column_basis import ColumnBasis, _effective_rank
-from gfcompress.fixed_pattern import build_admissible_test_matrices
+from gfcompress.fixed_pattern import (
+    admissible_probe_owners,
+    build_admissible_test_matrices,
+    validate_admissible_probe_owners,
+)
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists
 from gfcompress.operators import MatVecOperator
@@ -124,30 +128,26 @@ def row_bases(
         list). Each `v` has orthonormal columns and shape
         `(len(beta.col_indices), k_eff)` for its pair.
     """
-    level_nodes = root.nodes_at_level(level)
-
     test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=seed, side="row")
-
-    # Map each box (by identity) to the Z sample and G_alpha block from the
-    # Psi whose active_boxes include it -- Eq. 4.4's transposed constraint
-    # guarantees this Psi is unique per box.
-    z_for_box: dict[TreeNode, NDArray[np.float64]] = {}
-    g_for_box: dict[TreeNode, NDArray[np.float64]] = {}
-    for tm in test_matrices:
-        z = np.asarray(peeled_rmatvec(operator, tm.omega, factors), dtype=np.float64)
-        for box in tm.active_boxes:
-            z_for_box[box] = z
-            g_for_box[box] = tm.blocks[box]
-
-    result: list[RowBasis] = []
-    for alpha in level_nodes:
-        for beta in lists.interaction[alpha]:
-            z = z_for_box[alpha]
-            z_beta = z[beta.col_indices, :]
-            v = orth(z_beta, _effective_rank(alpha, beta, k))
-            result.append(RowBasis(alpha=alpha, beta=beta, v=v, g_alpha=g_for_box[alpha]))
-
-    return result
+    owners = admissible_probe_owners(root, lists, level, test_matrices, side="row")
+    validate_admissible_probe_owners(owners, side="row")
+    result: dict[tuple[TreeNode, TreeNode], RowBasis] = {}
+    for probe in test_matrices:
+        realization = probe.realize()
+        z = np.asarray(peeled_rmatvec(operator, realization.omega, factors), dtype=np.float64)
+        for (alpha, beta), owner in owners.items():
+            if owner is probe:
+                z_beta = np.array(z[beta.col_indices, :], copy=True)
+                v = orth(z_beta, _effective_rank(alpha, beta, k)).copy()
+                result[(alpha, beta)] = RowBasis(
+                    alpha=alpha, beta=beta, v=v, g_alpha=realization.blocks[alpha]
+                )
+        del z, realization
+    return [
+        result[(alpha, beta)]
+        for alpha in root.nodes_at_level(level)
+        for beta in lists.interaction[alpha]
+    ]
 
 
 def core_matrices(col_bases: list[ColumnBasis], row_bases_: list[RowBasis]) -> Factors:

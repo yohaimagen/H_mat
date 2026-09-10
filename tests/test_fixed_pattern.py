@@ -48,6 +48,7 @@ from gfcompress.fixed_pattern import (
     grid_coordinates,
     leaf_pattern_cell,
     pattern_cell,
+    validate_admissible_probe_owners,
 )
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists, build_lists
@@ -206,6 +207,36 @@ def test_admissible_test_matrices_coverage_2d_wraparound() -> None:
             n_checked += 1
 
     assert n_checked > 0
+
+
+def test_explicit_ownership_allows_repeated_source_in_distinct_probes() -> None:
+    """Future schedules may reuse a source box; ownership remains per pair."""
+    mesh = _grid_mesh(8, 8)
+    root = build_tree(mesh, m=2)
+    lists = build_lists(root)
+    level = next(nodes[0].level for nodes in root.iter_levels() if lists.interaction[nodes[0]])
+    beta = next(node for node in root.nodes_at_level(level) if len(lists.interaction[node]) >= 2)
+    alpha0, alpha1 = lists.interaction[beta][:2]
+    source_probe = next(
+        probe
+        for probe in build_admissible_test_matrices(root, level, mesh, k=2, p=1, seed=6)
+        if beta in probe.active_boxes
+    )
+    # A second realization of a valid source probe is a synthetic schedule
+    # where one source serves different target blocks in distinct probes.
+    duplicate_probe = PeriodicTestMatrix(
+        pattern=source_probe.pattern,
+        active_boxes=source_probe.active_boxes,
+        n_dofs=source_probe.n_dofs,
+        k=source_probe.k,
+        p=source_probe.p,
+        seed=source_probe.seed,
+        level=source_probe.level,
+        side=source_probe.side,
+    )
+    owners = {(alpha0, beta): source_probe, (alpha1, beta): duplicate_probe}
+    validate_admissible_probe_owners(owners, side="col")
+    assert owners[(alpha0, beta)] is not owners[(alpha1, beta)]
 
 
 @pytest.mark.parametrize("tree_dim", [1, 2, 3])

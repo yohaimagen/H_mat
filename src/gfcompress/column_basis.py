@@ -46,7 +46,11 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from gfcompress.fixed_pattern import build_admissible_test_matrices
+from gfcompress.fixed_pattern import (
+    admissible_probe_owners,
+    build_admissible_test_matrices,
+    validate_admissible_probe_owners,
+)
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists
 from gfcompress.operators import MatVecOperator
@@ -133,32 +137,31 @@ def column_bases(
         list). Each `u` has orthonormal columns and shape
         `(len(alpha.row_indices), k_eff)` for its pair.
     """
-    level_nodes = root.nodes_at_level(level)
-
     test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=seed, side="col")
-
-    # Map each box (by identity) to the Y sample and G_beta block from the
-    # Omega whose active_boxes include it -- Eq. 4.4 guarantees this Omega is
-    # unique per box.
-    y_for_box: dict[TreeNode, NDArray[np.float64]] = {}
-    g_for_box: dict[TreeNode, NDArray[np.float64]] = {}
-    for tm in test_matrices:
-        y = np.asarray(peeled_matvec(operator, tm.omega, factors), dtype=np.float64)
-        for box in tm.active_boxes:
-            y_for_box[box] = y
-            g_for_box[box] = tm.blocks[box]
-
-    result: list[ColumnBasis] = []
-    for alpha in level_nodes:
-        for beta in lists.interaction[alpha]:
-            y = y_for_box[beta]
-            y_alpha = y[alpha.row_indices, :]
-            u = orth(y_alpha, _effective_rank(alpha, beta, k))
-            result.append(
-                ColumnBasis(alpha=alpha, beta=beta, u=u, y_alpha=y_alpha, g_beta=g_for_box[beta])
-            )
-
-    return result
+    owners = admissible_probe_owners(root, lists, level, test_matrices, side="col")
+    validate_admissible_probe_owners(owners, side="col")
+    result: dict[tuple[TreeNode, TreeNode], ColumnBasis] = {}
+    for probe in test_matrices:
+        realization = probe.realize()
+        y = np.asarray(peeled_matvec(operator, realization.omega, factors), dtype=np.float64)
+        for (alpha, beta), owner in owners.items():
+            if owner is probe:
+                y_alpha = np.array(y[alpha.row_indices, :], copy=True)
+                # ``orth`` returns a QR slice; copy releases its unused columns.
+                u = orth(y_alpha, _effective_rank(alpha, beta, k)).copy()
+                result[(alpha, beta)] = ColumnBasis(
+                    alpha=alpha,
+                    beta=beta,
+                    u=u,
+                    y_alpha=y_alpha,
+                    g_beta=realization.blocks[beta],
+                )
+        del y, realization
+    return [
+        result[(alpha, beta)]
+        for alpha in root.nodes_at_level(level)
+        for beta in lists.interaction[alpha]
+    ]
 
 
 __all__ = ["ColumnBasis", "column_bases"]

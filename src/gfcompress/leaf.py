@@ -41,7 +41,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from gfcompress.fixed_pattern import build_leaf_test_matrices
+from gfcompress.fixed_pattern import build_leaf_test_matrices, leaf_probe_owners
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists
 from gfcompress.operators import MatVecOperator
@@ -107,24 +107,17 @@ def extract_leaves(
 
     test_matrices = build_leaf_test_matrices(root, level, mesh)
 
-    # Map each box (by identity) to the sample Y = (A - A^{(L)}) @ Omega from
-    # the unique Omega in which it is active -- the leaf period-3 pattern
-    # guarantees this Omega is unique per box (see fixed_pattern docstring).
-    y_for_box: dict[TreeNode, NDArray[np.float64]] = {}
-    for tm in test_matrices:
-        y = np.asarray(peeled_matvec(operator, tm.omega, factors), dtype=np.float64)
-        for box in tm.active_boxes:
-            y_for_box[box] = y
-
-    result: list[DenseLeaf] = []
-    for alpha in level_nodes:
-        for beta in lists.nei[alpha]:
-            y = y_for_box[beta]
-            w_beta = len(beta.col_indices)
-            block = y[np.ix_(alpha.row_indices, np.arange(w_beta))]
-            result.append(DenseLeaf(alpha=alpha, beta=beta, block=block))
-
-    return result
+    owners = leaf_probe_owners(root, lists, level, test_matrices)
+    result: dict[tuple[TreeNode, TreeNode], DenseLeaf] = {}
+    for probe in test_matrices:
+        y = np.asarray(peeled_matvec(operator, probe.realize(), factors), dtype=np.float64)
+        for (alpha, beta), owner in owners.items():
+            if owner is probe:
+                width = len(beta.col_indices)
+                block = np.array(y[np.ix_(alpha.row_indices, np.arange(width))], copy=True)
+                result[(alpha, beta)] = DenseLeaf(alpha=alpha, beta=beta, block=block)
+        del y
+    return [result[(alpha, beta)] for alpha in level_nodes for beta in lists.nei[alpha]]
 
 
 __all__ = ["DenseLeaf", "extract_leaves"]

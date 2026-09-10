@@ -32,8 +32,9 @@ active set contains `beta` automatically satisfies the Eq. 4.4 sampling
 constraint for `(alpha, beta)`: `beta`'s columns are Gaussian and every column
 in `L^nei(alpha) | L^int(alpha) \\ {beta}` is zero.
 
-`build_admissible_test_matrices` emits one such `Omega` per non-empty pattern
-cell (at most `6**d`), each of shape `(mesh.n_cols, k + p)`.
+`build_admissible_test_matrices` emits one lightweight description per
+non-empty pattern cell (at most `6**d`); each is realized only for its one
+matvec/rmatvec, at shape `(mesh.n_cols, k + p)`.
 
 The very same combinatorics applies to *row* sampling (`Psi`, used to build
 the row bases): the admissibility relation is symmetric, so grouping the boxes
@@ -85,8 +86,8 @@ This keeps each `Omega` as narrow as a single box (`w_max` columns, not
 `O(N / 3**d)`) while the matrix count stays at `<= 3**d`, so the whole leaf
 extraction costs at most `3**d * w_max` matvecs.
 
-`build_leaf_test_matrices` emits one such `Omega` per non-empty leaf pattern
-cell (at most `3**d`).
+`build_leaf_test_matrices` likewise emits descriptions, realizing one `Omega`
+at a time for each non-empty leaf pattern cell (at most `3**d`).
 """
 
 from __future__ import annotations
@@ -98,6 +99,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from gfcompress.geometry import FaultMesh
+from gfcompress.interactions import TreeLists
 from gfcompress.randomized import gaussian
 from gfcompress.tree import TreeNode
 
@@ -116,27 +118,61 @@ Side = Literal["col", "row"]
 
 @dataclass(frozen=True)
 class PeriodicTestMatrix:
-    """One emitted test matrix for the fixed `6x...x6` periodic pattern.
+    """A lightweight description of one fixed `6x...x6` probe.
 
     Attributes:
-        omega: The test matrix, shape `(mesh.n_cols, k + p)` for
-            `side="col"` (`Omega`) or `(mesh.n_rows, k + p)` for `side="row"`
-            (`Psi`).
         pattern: The pattern-cell offset `(i_0 mod 6, ..., i_{d-1} mod 6)`
             shared by every box in `active_boxes`, length `d`.
         active_boxes: The level-`level` nodes whose pattern cell equals
             `pattern`; their `col_indices` (resp. `row_indices`) rows of
             `omega` hold independent Gaussian blocks, every other row is zero.
-        blocks: For each box in `active_boxes`, the Gaussian block written
-            into that box's rows: `blocks[box] == omega[box.col_indices, :]`
-            (`side="col"`, the `G_beta` of Eq. 4.3) or
-            `omega[box.row_indices, :]` (`side="row"`, `G_alpha`). Stored so
-            consumers read it back instead of re-deriving it from seeds.
+        The dense probe is deliberately not retained. Call :meth:`realize`
+        immediately before its one matvec/rmatvec. ``omega`` and ``blocks``
+        remain compatibility properties for diagnostics; production consumers
+        must use ``realize`` and release its result before the next probe.
     """
 
-    omega: NDArray[np.float64]
     pattern: tuple[int, ...]
     active_boxes: list[TreeNode]
+    n_dofs: int
+    k: int
+    p: int
+    seed: int | None
+    level: int
+    side: Side
+
+    def realize(self) -> RealizedPeriodicTestMatrix:
+        """Materialize this probe and its independent active-box sketches."""
+        omega = np.zeros((self.n_dofs, self.k + self.p), dtype=np.float64)
+        blocks: dict[TreeNode, NDArray[np.float64]] = {}
+        for box in self.active_boxes:
+            indices = box.col_indices if self.side == "col" else box.row_indices
+            block = gaussian(
+                len(indices),
+                self.k,
+                self.p,
+                seed=_block_seed(self.seed, self.level, self.side, box.cell_coords),
+            )
+            omega[indices, :] = block
+            blocks[box] = block
+        return RealizedPeriodicTestMatrix(omega=omega, blocks=blocks)
+
+    @property
+    def omega(self) -> NDArray[np.float64]:
+        """Materialize a diagnostic copy of the dense test matrix."""
+        return self.realize().omega
+
+    @property
+    def blocks(self) -> dict[TreeNode, NDArray[np.float64]]:
+        """Materialize diagnostic sketch blocks without retaining a probe."""
+        return self.realize().blocks
+
+
+@dataclass(frozen=True)
+class RealizedPeriodicTestMatrix:
+    """Ephemeral dense realization of :class:`PeriodicTestMatrix`."""
+
+    omega: NDArray[np.float64]
     blocks: dict[TreeNode, NDArray[np.float64]]
 
 
@@ -237,28 +273,54 @@ def build_admissible_test_matrices(
         groups.setdefault(cell, []).append(node)
 
     n_dofs = mesh.n_cols if side == "col" else mesh.n_rows
-    k_p = k + p
-
     result: list[PeriodicTestMatrix] = []
     for cell in sorted(groups.keys()):
         active_boxes = sorted(groups[cell], key=lambda node: grid_coordinates(node, root))
-        omega = np.zeros((n_dofs, k_p), dtype=np.float64)
-        blocks: dict[TreeNode, NDArray[np.float64]] = {}
-        for beta in active_boxes:
-            indices = beta.col_indices if side == "col" else beta.row_indices
-            block = gaussian(
-                len(indices),
-                k,
-                p,
-                seed=_block_seed(seed, level, side, grid_coordinates(beta, root)),
-            )
-            omega[indices, :] = block
-            blocks[beta] = block
         result.append(
-            PeriodicTestMatrix(omega=omega, pattern=cell, active_boxes=active_boxes, blocks=blocks)
+            PeriodicTestMatrix(
+                pattern=cell,
+                active_boxes=active_boxes,
+                n_dofs=n_dofs,
+                k=k,
+                p=p,
+                seed=seed,
+                level=level,
+                side=side,
+            )
         )
 
     return result
+
+
+def admissible_probe_owners(
+    root: TreeNode,
+    lists: TreeLists,
+    level: int,
+    probes: list[PeriodicTestMatrix],
+    side: Side,
+) -> dict[tuple[TreeNode, TreeNode], PeriodicTestMatrix]:
+    """Assign every admissible pair to its explicitly selected fixed probe.
+
+    The ownership map is the consumption contract used by both basis passes:
+    callers look up a *pair*, never merely the currently active source box.
+    """
+    by_box = {box: probe for probe in probes for box in probe.active_boxes}
+    owners: dict[tuple[TreeNode, TreeNode], PeriodicTestMatrix] = {}
+    for alpha in root.nodes_at_level(level):
+        for beta in lists.interaction[alpha]:
+            owner = by_box[beta if side == "col" else alpha]
+            owners[(alpha, beta)] = owner
+    return owners
+
+
+def validate_admissible_probe_owners(
+    owners: dict[tuple[TreeNode, TreeNode], PeriodicTestMatrix], side: Side
+) -> None:
+    """Reject an explicit pair assignment whose required sketch is absent."""
+    for (alpha, beta), probe in owners.items():
+        required = beta if side == "col" else alpha
+        if required not in probe.active_boxes:
+            raise ValueError("probe does not activate the pair's required sketch box")
 
 
 def _block_seed(seed: int | None, level: int, side: Side, cell: tuple[int, ...]) -> int | None:
@@ -289,19 +351,29 @@ class PeriodicLeafTestMatrix:
     """One emitted test matrix for the fixed `3x...x3` leaf periodic pattern.
 
     Attributes:
-        omega: The test matrix `Omega`, shape `(mesh.n_cols, w_max)` with
-            `w_max` the widest `len(beta.col_indices)` over the level's boxes.
-            Every active box shares the same column slot:
-            `omega[beta.col_indices, :w_beta] = I_{w_beta}`, all else zero.
         pattern: The leaf pattern-cell offset `(i_0 mod 3, ..., i_{d-1} mod
             3)` shared by every box in `active_boxes`, length `d`.
         active_boxes: The level-`level` nodes whose leaf pattern cell equals
             `pattern`.
     """
 
-    omega: NDArray[np.float64]
     pattern: tuple[int, ...]
     active_boxes: list[TreeNode]
+    n_cols: int
+    w_max: int
+
+    def realize(self) -> NDArray[np.float64]:
+        """Materialize this probe immediately before its residual matvec."""
+        omega = np.zeros((self.n_cols, self.w_max), dtype=np.float64)
+        for beta in self.active_boxes:
+            width = len(beta.col_indices)
+            omega[np.ix_(beta.col_indices, np.arange(width))] = np.eye(width)
+        return omega
+
+    @property
+    def omega(self) -> NDArray[np.float64]:
+        """Materialize a diagnostic copy of the dense test matrix."""
+        return self.realize()
 
 
 def leaf_pattern_cell(node: TreeNode, root: TreeNode) -> tuple[int, ...]:
@@ -368,15 +440,28 @@ def build_leaf_test_matrices(
     result: list[PeriodicLeafTestMatrix] = []
     for cell in sorted(groups.keys()):
         active_boxes = groups[cell]
-        omega = np.zeros((n_cols, w_max), dtype=np.float64)
-
-        for beta in active_boxes:
-            w_beta = len(beta.col_indices)
-            omega[np.ix_(beta.col_indices, np.arange(w_beta))] = np.eye(w_beta)
-
-        result.append(PeriodicLeafTestMatrix(omega=omega, pattern=cell, active_boxes=active_boxes))
+        result.append(
+            PeriodicLeafTestMatrix(
+                pattern=cell, active_boxes=active_boxes, n_cols=n_cols, w_max=w_max
+            )
+        )
 
     return result
+
+
+def leaf_probe_owners(
+    root: TreeNode,
+    lists: TreeLists,
+    level: int,
+    probes: list[PeriodicLeafTestMatrix],
+) -> dict[tuple[TreeNode, TreeNode], PeriodicLeafTestMatrix]:
+    """Assign every leaf neighbor pair to the probe that isolates it."""
+    by_box = {box: probe for probe in probes for box in probe.active_boxes}
+    return {
+        (alpha, beta): by_box[beta]
+        for alpha in root.nodes_at_level(level)
+        for beta in lists.nei[alpha]
+    }
 
 
 __all__ = [
@@ -384,10 +469,14 @@ __all__ = [
     "PERIOD",
     "PeriodicLeafTestMatrix",
     "PeriodicTestMatrix",
+    "RealizedPeriodicTestMatrix",
     "Side",
+    "admissible_probe_owners",
     "build_admissible_test_matrices",
     "build_leaf_test_matrices",
     "grid_coordinates",
     "leaf_pattern_cell",
+    "leaf_probe_owners",
     "pattern_cell",
+    "validate_admissible_probe_owners",
 ]
