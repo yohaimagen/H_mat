@@ -48,6 +48,46 @@ activation has not been established and is not claimed as enforcement.
 | C.4 | fd88b43 + 9533703 + 94ef6b4 | APPROVED after 2 corrections | full suite; measurements reproduced; ruff/black/mypy independently pass | proceed C.5 |
 | C.5 | 09aeebd + 6c45588 + 336178b | APPROVED after 2 corrections | 352 tests; weakref lifetime proof; ruff/black/mypy independently pass | outer Astra review |
 
+Outer GPT-6 Astra stack review started at aggregate tip
+`e9b0876f478284b602376d66382b46bc7ac9fc5f`, covering the recorded batch range
+`b0a67f678077083c6c4b416ea8022b5cb9c19c6c..e9b0876` and cumulative integration
+against `main`.
+
+Outer Astra requested changes at `e9b0876f478284b602376d66382b46bc7ac9fc5f`:
+encode large multiword cell coordinates with unambiguous boundaries; keep
+unseeded compatibility probe/sketch properties mutually consistent; make PCA
+centering safe for representable clouds translated near `1e308`; deactivate
+superseded R.2-R.8 and historical 7.1-7.5 driver entries while reconciling root
+workflow conventions; and qualify leaf exactness as conditional on exact prior
+factors. Astra independently passed 352 tests and all static/diff checks, and
+confirmed core ranks, rectangular indexing, matvec-only access, ownership, and
+streaming lifetimes otherwise pass.
+
+Sol correction review requested changes at
+`d204eecc8638a423cb83ba0e98d814a1f728f8cd`: normalized PCA centering remains
+non-invariant after near-max translation; the actual `.claude/commands/task.md`
+resolver still rejects C.x tasks; and early leaf/fixed-pattern prose still
+makes unconditional exact-recovery claims. Sol confirmed the seed-boundary,
+unseeded-probe, measurement, task-list, and root-convention fixes, and passed
+357 tests plus all static checks.
+
+Sol correction round 2 requested changes at
+`d2b5d05842ee1ffb9c02a36ba5071809e7dd818c`: carry one authoritative resolved
+plan through the actual `/task` preflight, PR, and reviewer instructions; expose
+a replayable anchored PCA centering transform for asymmetric near-max clouds;
+and remove the final unconditional neighbor-only survival statement from leaf
+probe documentation. The full suite and static checks still pass.
+
+Sol correction round 3 requested changes at
+`42bae8063aa7f5e235de8e7a6692912684385a89`: make PCA replay bit-exact when
+axes are dropped (avoid full-then-slice versus retained-matrix BLAS rounding);
+make `run_plan.sh` skip completed/annotated historical entries and dispatch the
+actual next active C-series task; and remove unconditional exact-leaf claims
+from tests. The full suite, static checks, C.4 measurement reproduction, and
+7,500 randomized near-max translation checks otherwise pass. The configured
+three-round correction limit is reached; PR #28 remains draft and the outer
+Astra re-review is not started.
+
 ## Baseline and usage record
 
 Working-tree baseline (includes preserved dirty R.2 corrections): 305 passed in
