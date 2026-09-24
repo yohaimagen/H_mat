@@ -49,18 +49,23 @@ rows -- `A` is not square) and an independent seed stream, so `Omega` and
 Leaf/inadmissible test matrices (Task 4.3, Sec. 4.1.3)
 --------------------------------------------------------
 For a same-level pair `(alpha, beta)` with `beta in L^nei(alpha)` (an
-inadmissible "neighbor" pair), the dense block `A_{alpha,beta}` is extracted
-directly rather than compressed, from a matvec of the *residual* operator
-`A - A^{(L)}` (all admissible blocks of all levels already peeled off). In
-that residual only the neighbor blocks of `alpha` survive, so a sample
+inadmissible "neighbor" pair), a dense residual estimate of
+`A_{alpha,beta}` is extracted rather than compressed, from a matvec of the
+*residual* operator `A - A^{(L)}` (all admissible blocks of all levels already
+peeled off). In that residual, neighbor blocks of `alpha` and any far-field
+approximation error survive, so a sample
 `Y = (A - A^{(L)}) @ Omega` satisfies
 
     Y[alpha.row_indices, :] = sum_{gamma in L^nei(alpha)}
-        A_{alpha,gamma} @ Omega[gamma.col_indices, :].
+        A_{alpha,gamma} @ Omega[gamma.col_indices, :] + E^{(L)}_alpha @ Omega,
 
-Hence `A_{alpha,beta}` is read off directly as long as `Omega` restricted to
-`beta`'s columns is an identity block and *no other member of `L^nei(alpha)`
-is active in that same `Omega`*.
+where `E^{(L)}_alpha` is the preceding far-field approximation error on
+`alpha`'s rows.
+
+Hence the residual estimate for `A_{alpha,beta}` is isolated as long as
+`Omega` restricted to `beta`'s columns is an identity block and *no other
+member of `L^nei(alpha)` is active in that same `Omega`*. It equals the
+original block only when the preceding far-field factors are exact.
 
 `L^nei(alpha)` spans grid offsets `-1 ... +1` along each axis -- a `3x...x3`
 window. Tiling the dyadic grid periodically with period `3` along every axis

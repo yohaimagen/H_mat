@@ -297,24 +297,34 @@ def pca_align(
     if var_tol is not None and (not np.isfinite(var_tol) or not 0.0 <= var_tol <= 1.0):
         raise ValueError(f"var_tol must be finite and in [0, 1], got {var_tol}")
 
-    # Normalizing first prevents a finite translated cloud near max-float from
-    # overflowing during the sum used by ``mean``.
-    coordinate_scale = float(np.max(np.abs(centroids)))
-    mean = (
-        (centroids / coordinate_scale).mean(axis=0) * coordinate_scale
-        if coordinate_scale
-        else np.zeros(centroids.shape[1])
-    )
-    centered = centroids - mean
+    # Keep centering in normalized coordinates. Reconstructing a large mean
+    # and subtracting it from the original values can erase a representable
+    # ulp-sized spread near max-float.
+    reference = centroids[0]
+    offsets = centroids - reference
+    if np.isfinite(offsets).all():
+        coordinate_scale = float(np.max(np.abs(offsets)))
+        normalized = offsets / coordinate_scale if coordinate_scale else offsets
+        normalized_mean = normalized.mean(axis=0)
+        mean = reference + normalized_mean * coordinate_scale
+    else:
+        # Opposite-sign near-max-float coordinates can overflow a direct
+        # reference offset. Normalize before differencing in that case.
+        coordinate_scale = float(np.max(np.abs(centroids)))
+        normalized = centroids / coordinate_scale
+        normalized_mean = normalized.mean(axis=0)
+        mean = normalized_mean * coordinate_scale
+    centered_normalized = normalized - normalized_mean
+    centered = centered_normalized * coordinate_scale
 
     # Tall clouds already return a complete d-by-d V^T in economical mode.
     # Only N < d needs full matrices to supply the missing ambient null axes.
     # Scale before squaring: raw singular values may underflow/overflow although
     # their ratios, and therefore numerical rank, are perfectly representable.
-    scale = float(np.max(np.abs(centered)))
+    scale = float(np.max(np.abs(centered_normalized)))
     full_matrices = centered.shape[0] < centered.shape[1]
     _, singular_values, vt = np.linalg.svd(
-        centered / scale if scale else centered, full_matrices=full_matrices
+        centered_normalized / scale if scale else centered_normalized, full_matrices=full_matrices
     )
     d_orig = centered.shape[1]
     s = np.zeros(d_orig, dtype=np.float64)
@@ -322,7 +332,7 @@ def pca_align(
     # directions can be observed.  Represent the remaining ambient null axes
     # exactly as zeros instead of exposing SVD roundoff as a fake direction.
     observed = min(len(singular_values), centered.shape[0] - 1)
-    s[:observed] = singular_values[:observed] * scale
+    s[:observed] = singular_values[:observed] * scale * coordinate_scale
     if not np.isfinite(s).all():
         raise ValueError("centroid spread is too large for finite PCA diagnostics")
     sigma0 = float(s[0])

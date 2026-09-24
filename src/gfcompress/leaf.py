@@ -5,19 +5,20 @@ At the leaf level `L` of the geometric cluster tree, every same-level pair
 `(alpha, beta)` with `beta in L^nei(alpha)` (Task F.2's
 `gfcompress.interactions.TreeLists.nei`, which -- per
 `gfcompress.neighbors.neighbor_lists` -- includes `alpha` itself) is
-*inadmissible*: it is never compressed into a low-rank factor, but extracted
-directly as a dense block `A(I_alpha, I_beta)`.
+*inadmissible*: it is never compressed into a low-rank factor, but estimated
+as a dense residual block for `A(I_alpha, I_beta)`.
 
 Task 4.3's `gfcompress.fixed_pattern.build_leaf_test_matrices` builds the
 fixed, period-`3` periodic test matrices `Omega` needed to read these blocks
 off a sample of the *residual* operator `A - A^{(L)}` (all admissible blocks
 of levels `2, ..., L` already peeled off and stored as `Factors`, Task 5.1):
-for the unique `Omega` in which `beta` is active,
+for the unique `Omega` in which `beta` is active, the residual estimate is
 
-    ((A - A^{(L)}) @ Omega)[alpha.row_indices, :w_beta] == A(I_alpha, I_beta)
+    ((A - A^{(L)}) @ Omega)[alpha.row_indices, :w_beta],
 
-because (i) peeling `A^{(L)}` makes every far-field (admissible) contribution
-to that sample vanish, leaving only `alpha`'s own neighbor blocks, and (ii)
+because (i) peeling by the stored `A^{(L)}` removes its represented far-field
+(admissible) contribution, leaving `alpha`'s neighbor blocks and any
+far-field approximation error, and (ii)
 the period-3 pattern guarantees no other member of `L^nei(alpha)` (`alpha`
 included) is active in that same `Omega` -- so those neighbor blocks other
 than `beta` also contribute nothing. Per CLAUDE.md and the `fixed_pattern`
@@ -30,10 +31,10 @@ independent of `N`.
 `extract_leaves` is the thin driver that applies those probes through
 `gfcompress.peeling.peeled_matvec` (Task 5.1) with the full set of stored
 `Factors` (levels `2, ..., L`) and reads off one `DenseLeaf` per neighbor
-pair. It never assembles a dense `A`; the dense block it stores is exactly
-the residual sample it read, not a call to the underlying kernel. It equals
-the original block only when the preceding far-field factors are exact;
-otherwise it inherits their approximation error.
+pair. It never assembles a dense `A`; the dense residual estimate it stores is
+the residual sample it read, not a call to the underlying kernel. It equals the
+original block only when the preceding far-field factors are exact; otherwise
+it inherits their approximation error.
 """
 
 from __future__ import annotations
@@ -62,7 +63,7 @@ class DenseLeaf:
         beta: The col box, `beta in L^nei(alpha)` (may equal `alpha`).
             `beta.col_indices` (length `dof_col * |beta|`) indexes the global
             col space `{0, ..., n_cols - 1}`.
-        block: The dense residual sample for `A(I_alpha, I_beta)`, shape
+        block: The dense residual estimate for `A(I_alpha, I_beta)`, shape
             `(len(alpha.row_indices), len(beta.col_indices))`. It is the
             original block only if preceding far-field factors are exact.
     """
@@ -97,8 +98,9 @@ def extract_leaves(
         level: The leaf tree level `L` whose neighbor pairs are extracted.
         factors: Flat list of `BlockFactor`s for every admissible pair of
             levels `2, ..., L` (i.e. including `level` itself), so that
-            `peeled_matvec` samples the full residual `A - A^{(L)}` in which
-            only neighbor blocks survive.
+            `peeled_matvec` samples the residual `A - A^{(L)}`. Its leaf
+            estimates equal the original neighbor blocks only when these
+            factors are exact.
 
     Returns:
         A list of `DenseLeaf`, one per pair `(alpha, beta)` with `alpha`

@@ -1,5 +1,5 @@
 ---
-description: Run one PLAN.md task autonomously through open-PR → implement → review → fix-loop → finalize, leaving the PR ready for the human to merge. Usage: /task 3.2
+description: Run one routed task autonomously through open-PR → implement → review → fix-loop → finalize, leaving the PR ready for the human to merge. Usage: /task C.2
 ---
 
 You are the ORCHESTRATOR for task **$ARGUMENTS**. You run the ENTIRE pipeline
@@ -23,8 +23,11 @@ Git identity: this repo has no `user.name`/`user.email` configured. Commit with
 
 ## 0. Preflight
 
-Confirm task **$ARGUMENTS** exists in `PLAN.md` (Stage F tasks carry a one-line
-entry in `plan.md` and their full block in `FIXPLAN.md` — read the full block)
+Resolve task **$ARGUMENTS** before preflight: `C.x` lives in
+`BP_COLORING_PLAN.md`, `R.x` in `REALGF_PLAN.md`, `F.x` in `FIXPLAN.md`, and
+historical numeric ids in `plan.md`. Confirm the task exists in its resolved
+plan (Stage F tasks carry a one-line entry in `plan.md` and their full block in
+`FIXPLAN.md` — read the full block)
 and its prerequisites appear done: a prerequisite counts as done if its line in
 `tasks.txt` is marked `# done` OR it landed on `main` as a `feat(task-<id>)`
 commit. Confirm HEAD is `main` and `.venv/bin/pytest -q` is green.

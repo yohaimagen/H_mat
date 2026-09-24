@@ -446,6 +446,25 @@ def test_pca_align_handles_finite_clouds_near_max_float_without_overflow() -> No
 
 
 @pytest.mark.filterwarnings("error")
+def test_pca_align_preserves_representable_large_translation_rank() -> None:
+    offset = 1e308
+    step = np.spacing(offset)
+    t = step * np.arange(-4.0, 5.0)
+    cloud = np.column_stack([t, 2.0 * t])
+    translated = cloud + offset
+
+    base = pca_align(cloud)
+    moved = pca_align(translated)
+
+    assert base.kept_axes == moved.kept_axes == (0,)
+    np.testing.assert_allclose(moved.variance_ratio, base.variance_ratio, rtol=1e-12, atol=1e-30)
+    assert np.isfinite(moved.mean).all()
+    assert np.isfinite(moved.centroids).all()
+    assert np.isfinite(moved.absolute_projection_residual)
+    assert np.isfinite(moved.relative_projection_residual)
+
+
+@pytest.mark.filterwarnings("error")
 def test_pca_align_handles_constant_cloud_near_max_float_without_overflow() -> None:
     result = pca_align(np.full((4, 2), 1e308))
     assert np.isfinite(result.mean).all()
