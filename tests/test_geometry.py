@@ -446,6 +446,30 @@ def test_pca_align_handles_finite_clouds_near_max_float_without_overflow() -> No
 
 
 @pytest.mark.filterwarnings("error")
+def test_pca_align_replays_asymmetric_near_max_float_cloud() -> None:
+    offset = 1e308
+    step = np.spacing(offset)
+    cloud = np.array(
+        [
+            [offset - 2 * step, offset - step],
+            [offset - step, offset + 2 * step],
+            [offset + step, offset],
+            [offset + 2 * step, offset + step],
+        ]
+    )
+    result = pca_align(cloud)
+    replay = (
+        ((cloud - result.origin) / result.coordinate_scale - result.normalized_offset)
+        * result.coordinate_scale
+    ) @ result.rotation[list(result.kept_axes)].T
+
+    np.testing.assert_array_equal(replay, result.centroids)
+    translated = pca_align(cloud - offset)
+    assert result.kept_axes == translated.kept_axes
+    np.testing.assert_allclose(result.variance_ratio, translated.variance_ratio)
+
+
+@pytest.mark.filterwarnings("error")
 def test_pca_align_preserves_representable_large_translation_rank() -> None:
     offset = 1e308
     step = np.spacing(offset)
@@ -587,10 +611,11 @@ def test_pca_align_reports_transform_and_roundoff_cutoff_uncertainty() -> None:
         result = pca_align(original, var_tol=1e-12)
 
     np.testing.assert_array_equal(result.original_centroids, original)
-    np.testing.assert_allclose(
-        result.centroids,
-        (original - result.mean) @ result.rotation[list(result.kept_axes)].T,
-    )
+    replay = (
+        ((original - result.origin) / result.coordinate_scale - result.normalized_offset)
+        * result.coordinate_scale
+    ) @ result.rotation[list(result.kept_axes)].T
+    np.testing.assert_array_equal(result.centroids, replay)
     assert result.kept_axes == (0, 1)
     assert result.dropped_axes == (2,)
     assert result.absolute_projection_residual > 0

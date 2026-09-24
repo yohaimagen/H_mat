@@ -468,7 +468,8 @@ def build_leaf_test_matrices(
     with `beta in L^nei(alpha)`, `beta` is the *only* member of
     `L^nei(alpha)` (including `alpha` itself) active in the emitted `Omega`
     that contains it. Sampling the residual operator, in which only
-    `alpha`'s neighbor blocks survive, therefore gives
+    `alpha`'s neighbor blocks plus any far-field approximation error survive,
+    therefore gives
     `((A - A^{(L)}) @ Omega)[alpha.row_indices, :w_beta]` is the residual
     estimate of `A_{alpha,beta}` (equal only for exact prior factors):
     the other active boxes of that `Omega` contribute zero because they are

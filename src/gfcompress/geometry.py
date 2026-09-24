@@ -211,13 +211,22 @@ class PCAAlignment:
         original_centroids: Original, unmodified input coordinates.
         centroids: Centered, rotated centroids restricted to the retained
             principal axes, shape `(N, len(kept_axes))`.
-        mean: Centroid-cloud mean subtracted before rotation, shape
-            `(d_orig,)`.
+        mean: Finite reporting estimate of the centroid-cloud mean, shape
+            `(d_orig,)`. It is not the centering value to subtract when exact
+            replay matters at extreme magnitudes; use `origin`,
+            `coordinate_scale`, and `normalized_offset` instead.
+        origin: Stable anchor used before normalization, shape `(d_orig,)`.
+        coordinate_scale: Positive scale used for stable centering.
+        normalized_offset: Mean offset in normalized coordinates, shape
+            `(d_orig,)`. The returned reduced coordinates replay exactly as
+            `(((original_centroids - origin) / coordinate_scale -
+            normalized_offset) * coordinate_scale) @
+            rotation[list(kept_axes)].T` (with the same NumPy operations).
         rotation: Rows are the principal axes (right singular vectors of the
             centered cloud, descending singular value), shape
             `(d_orig, d_orig)`. The economical SVD mode supplies this directly
             when `N >= d_orig`; full matrices are used only for `N < d_orig`.
-            `centered @ rotation.T` gives the full
+            The replay formula above, with all axes selected, gives the full
             (unreduced) rotated cloud; `.centroids` is that restricted to
             `kept_axes`. It is complete even when `N < d_orig`; unobserved
             null directions are reported as zero singular values and dropped.
@@ -242,6 +251,9 @@ class PCAAlignment:
     original_centroids: NDArray[np.float64]
     centroids: NDArray[np.float64]
     mean: NDArray[np.float64]
+    origin: NDArray[np.float64]
+    coordinate_scale: float
+    normalized_offset: NDArray[np.float64]
     rotation: NDArray[np.float64]
     variance_ratio: NDArray[np.float64]
     kept_axes: tuple[int, ...]
@@ -300,13 +312,13 @@ def pca_align(
     # Keep centering in normalized coordinates. Reconstructing a large mean
     # and subtracting it from the original values can erase a representable
     # ulp-sized spread near max-float.
-    reference = centroids[0]
-    offsets = centroids - reference
+    origin = centroids[0]
+    offsets = centroids - origin
     if np.isfinite(offsets).all():
         coordinate_scale = float(np.max(np.abs(offsets)))
         normalized = offsets / coordinate_scale if coordinate_scale else offsets
         normalized_mean = normalized.mean(axis=0)
-        mean = reference + normalized_mean * coordinate_scale
+        mean = origin + normalized_mean * coordinate_scale
     else:
         # Opposite-sign near-max-float coordinates can overflow a direct
         # reference offset. Normalize before differencing in that case.
@@ -314,6 +326,10 @@ def pca_align(
         normalized = centroids / coordinate_scale
         normalized_mean = normalized.mean(axis=0)
         mean = normalized_mean * coordinate_scale
+        origin = np.zeros_like(origin)
+    # A constant cloud needs a positive replay scale even though its spread is
+    # zero; normalized coordinates are already zero in that case.
+    coordinate_scale = coordinate_scale or 1.0
     centered_normalized = normalized - normalized_mean
     centered = centered_normalized * coordinate_scale
 
@@ -380,6 +396,9 @@ def pca_align(
         original_centroids=centroids.copy(),
         centroids=reduced,
         mean=mean,
+        origin=origin.copy(),
+        coordinate_scale=coordinate_scale,
+        normalized_offset=normalized_mean.copy(),
         rotation=vt,
         variance_ratio=ratio,
         kept_axes=kept_axes,
