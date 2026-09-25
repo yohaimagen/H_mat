@@ -67,8 +67,15 @@ def test_inline_active_annotation_dispatches_clean_id(tmp_path: Path) -> None:
     assert calls.read_text().splitlines() == ["/task C.6"]
 
 
+def test_final_active_line_without_newline_dispatches(tmp_path: Path) -> None:
+    result, calls = _run(tmp_path, "C.6")
+
+    assert result.returncode == 0
+    assert calls.read_text().splitlines() == ["/task C.6"]
+
+
 def test_malformed_id_fails_before_any_launch(tmp_path: Path) -> None:
-    result, calls = _run(tmp_path, "C.6\nnot-a-task\n")
+    result, calls = _run(tmp_path, "C.6\nnot-a-task")
 
     assert result.returncode == 2
     assert "Invalid task id: not-a-task" in result.stderr

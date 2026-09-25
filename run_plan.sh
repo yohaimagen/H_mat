@@ -29,7 +29,7 @@ export CLAUDE_CODE_SUBAGENT_MODEL="claude-sonnet-4-6"
 mkdir -p "$LOG_DIR"
 
 tasks=()
-while IFS= read -r raw_task; do
+while IFS= read -r raw_task || [[ -n "$raw_task" ]]; do
   [[ "$raw_task" =~ \#[[:space:]]*done([[:space:]]|$) ]] && continue
   task="${raw_task%%#*}"
   task="${task#"${task%%[![:space:]]*}"}"
