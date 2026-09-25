@@ -28,6 +28,8 @@ from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists, build_lists
 from gfcompress.mockgf import MockGF
 from gfcompress.operators import MatVecOperator
+from gfcompress.peeling import peeled_matvec
+from gfcompress.randomized import orth
 from gfcompress.tree import TreeNode
 
 
@@ -202,12 +204,50 @@ def test_matvec_count_matches_test_matrix_count() -> None:
     k, p = 2, 2
 
     test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=3, side="col")
-    assert len(test_matrices) <= 6**mesh.d
+    assert len(test_matrices) <= 6**mesh.tree_dim
 
     column_bases(counting_op, root, lists, mesh, level, factors=[], k=k, p=p, seed=3)
 
     assert counting_op.matvec_calls == len(test_matrices)
     assert counting_op.column_count == len(test_matrices) * (k + p)
+
+
+def test_streamed_bases_keep_only_pair_samples_and_truncated_qr() -> None:
+    """The streamed path does not retain a full probe/sample per active box."""
+    mesh = _grid_mesh(8, 8)
+    root = build_tree(mesh, m=2)
+    lists = build_lists(root)
+    level = _first_admissible_level(root, lists)
+    bases = column_bases(MockGF(mesh), root, lists, mesh, level, [], k=2, p=2, seed=9)
+
+    # Advanced indexing plus the explicit QR copy leaves no full sample or
+    # economic-QR backing array reachable through a retained pair result.
+    assert all(cb.y_alpha.base is None and cb.u.base is None for cb in bases)
+
+
+def test_streaming_matches_fixed_materialized_path_at_identical_seed() -> None:
+    """Streaming changes lifetime, not fixed-path samples or sampled columns."""
+    mesh = _grid_mesh(8, 8)
+    root = build_tree(mesh, m=2)
+    lists = build_lists(root)
+    op = MockGF(mesh)
+    level = _first_admissible_level(root, lists)
+    k, p, seed = 2, 2, 12
+    probes = build_admissible_test_matrices(root, level, mesh, k, p, seed=seed)
+    materialized = {
+        box: (np.asarray(peeled_matvec(op, probe.omega, [])), probe.blocks[box])
+        for probe in probes
+        for box in probe.active_boxes
+    }
+
+    streamed = column_bases(op, root, lists, mesh, level, [], k=k, p=p, seed=seed)
+    assert len(streamed) == sum(len(lists.interaction[a]) for a in root.nodes_at_level(level))
+    for cb in streamed:
+        y, g = materialized[cb.beta]
+        expected = np.array(y[cb.alpha.row_indices, :], copy=True)
+        np.testing.assert_array_equal(cb.y_alpha, expected)
+        np.testing.assert_array_equal(cb.g_beta, g)
+        np.testing.assert_array_equal(cb.u, orth(expected, min(k, *expected.shape)))
 
 
 # ---------------------------------------------------------------------------

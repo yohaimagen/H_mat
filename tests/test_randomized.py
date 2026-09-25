@@ -32,9 +32,9 @@ def test_gaussian_shape() -> None:
     assert omega.shape == (10, 5)
 
 
-def test_gaussian_default_oversampling_is_zero() -> None:
+def test_gaussian_default_oversampling_is_ten() -> None:
     omega = gaussian(8, 4, seed=0)
-    assert omega.shape == (8, 4)
+    assert omega.shape == (8, 14)
 
 
 def test_gaussian_is_seedable_and_reproducible() -> None:

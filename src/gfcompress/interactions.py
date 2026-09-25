@@ -1,4 +1,4 @@
-"""Interaction lists `L^int` and the strong-admissibility predicate (Task 1.5).
+"""Interaction lists `L^int` and the strong-admissibility predicate (Task C.1).
 
 Per CLAUDE.md and the paper (Levitt & Martinsson 2024, S3, p.5 and Fig. 2/3,
 p.6), for a box `alpha`:
@@ -9,24 +9,18 @@ p.6), for a box `alpha`:
 - The **interaction list** `L^int(alpha)` is the set of children of the
   neighbors of `alpha`'s parent, excluding any box that is one of `alpha`'s
   own neighbors. On a regular grid this has at most `6^d - 3^d` entries.
-- A pair of boxes `(alpha, beta)` at the same level is **admissible** (the
-  block `A(I_alpha, I_beta)` is a candidate for low-rank compression) iff
-  `dist(alpha, beta) >= eta * max(diam(alpha), diam(beta))`, where `dist` is
-  the Euclidean gap distance between the two axis-aligned bounding boxes (zero
-  if they touch or overlap) and `diam` is `TreeNode.diam`.
+- The production far-field pairs are exactly the interaction-list pairs. The
+  geometric separation `dist(alpha, beta) / max(diam(alpha), diam(beta))` is
+  checked only as a diagnostic; it does not add or remove production pairs.
 
-These two notions are *combinatorially* consistent on the fixed uniform dyadic
-grid produced by `build_tree`/`gfcompress.build_tree`: for the right choice of
-`eta`, every box in `L^int(alpha)` tests admissible against `alpha` and every
-box in `L^nei(alpha)` tests inadmissible. See `DEFAULT_ETA` below for the
-value used and why.
+The interaction list is the production partition.  `is_admissible` is a
+geometric diagnostic for that partition; it does not select blocks at runtime.
 
 The `1/(r + gamma*L)^d` physics decay of the Green's function is used *only*
 by `suggest_eta` to recommend a separation parameter from a target relative
 error; it is never used as a standalone block-norm admissibility test (per
 CLAUDE.md, that would break the level-nested structure that peeling depends
-on). The geometric predicate `is_admissible` above is the only admissibility
-gate used anywhere else in this package.
+on). Neither `suggest_eta` nor `is_admissible` selects production blocks.
 """
 
 from __future__ import annotations
@@ -42,22 +36,25 @@ from gfcompress.tree import TreeNode
 #: Default strong-admissibility separation parameter for `is_admissible`.
 #:
 #: On the fixed uniform dyadic grid built by `build_tree`, same-level boxes
-#: are congruent axis-aligned cells of side `s`, so `diam = s * sqrt(d)`. A
-#: box `beta` in `alpha`'s interaction list (a child of a neighbor of
-#: `alpha`'s parent that is *not* itself a neighbor of `alpha`) is separated
-#: from `alpha` by a gap of at least one cell width `s` along some axis, i.e.
+#: are congruent axis-aligned cells of side `s` in the **tree's own**
+#: dimension `d_t = mesh.tree_dim` (Task R.2 decouples this from the elastic
+#: problem's `dof_row`; a reduced-dimension tree, e.g. a PCA-aligned 1D fault,
+#: has `d_t = 1` while `dof_row` stays 2), so `diam = s * sqrt(d_t)`. A box
+#: `beta` in `alpha`'s interaction list (a child of a neighbor of `alpha`'s
+#: parent that is *not* itself a neighbor of `alpha`) is separated from
+#: `alpha` by a gap of at least one cell width `s` along some axis, i.e.
 #: `dist(alpha, beta) >= s`. Hence
 #:
-#:     dist(alpha, beta) / max(diam(alpha), diam(beta)) >= 1 / sqrt(d)
+#:     dist(alpha, beta) / max(diam(alpha), diam(beta)) >= 1 / sqrt(d_t)
 #:
-#: which is `1/sqrt(2) ~= 0.707` in 2D and `1/sqrt(3) ~= 0.577` in 3D. Any
-#: `beta` in `L^nei(alpha)` (including `alpha` itself) touches or overlaps
-#: `alpha`, so `dist == 0` and is inadmissible for *any* `eta > 0`.
+#: which is `1/sqrt(1) = 1.0` for a 1D tree, `1/sqrt(2) ~= 0.707` for 2D, and
+#: `1/sqrt(3) ~= 0.577` for 3D. Any `beta` in `L^nei(alpha)` (including
+#: `alpha` itself) touches or overlaps `alpha`, so `dist == 0` and is
+#: inadmissible for *any* `eta > 0`.
 #:
-#: `DEFAULT_ETA = 0.5` is `<= 1/sqrt(d)` for both `d in {2, 3}`, so it
-#: classifies every interaction-list box as admissible and every neighbor box
-#: as inadmissible -- the geometric predicate and the combinatorial
-#: interaction-list/neighbor-list split agree exactly on this grid.
+#: `DEFAULT_ETA = 0.5` is a convenient diagnostic threshold: it is
+#: `<= 1/sqrt(d_t)` for every supported `d_t in {1, 2, 3}`. It has no role in
+#: production partitioning, which is determined entirely by the dyadic lists.
 DEFAULT_ETA = 0.5
 
 
@@ -84,16 +81,20 @@ def box_dist(box_a: NDArray[np.float64], box_b: NDArray[np.float64]) -> float:
     lo_a, hi_a = box_a[:, 0], box_a[:, 1]
     lo_b, hi_b = box_b[:, 0], box_b[:, 1]
 
-    gap = np.maximum(np.maximum(lo_a - hi_b, lo_b - hi_a), 0.0)
-    return float(np.linalg.norm(gap))
+    with np.errstate(over="ignore"):
+        gap = np.maximum(np.maximum(lo_a - hi_b, lo_b - hi_a), 0.0)
+        dist = float(np.hypot.reduce(gap))
+    if not np.isfinite(dist):
+        raise ValueError("box separation cannot be represented as a finite float")
+    return dist
 
 
 def is_admissible(alpha: TreeNode, beta: TreeNode, eta: float = DEFAULT_ETA) -> bool:
-    """Strong-admissibility predicate `dist(alpha, beta) >= eta * max(diam)`.
+    """Diagnostic strong-admissibility predicate.
 
-    This is the *only* admissibility gate used in this package (per
-    CLAUDE.md): it is purely geometric and never replaced by a block-norm or
-    physics-decay threshold.
+    Production block selection is the dyadic interaction-list partition,
+    rather than this geometric predicate.  This helper verifies the expected
+    separation of those blocks and is never a runtime gate.
 
     Args:
         alpha: First box.
@@ -173,7 +174,7 @@ class TreeLists:
     interaction: dict[TreeNode, list[TreeNode]]
 
 
-def build_lists(root: TreeNode, tol: float = 1e-9) -> TreeLists:
+def build_lists(root: TreeNode) -> TreeLists:
     """Build the neighbor and interaction lists for the whole tree once.
 
     Downstream code (`gfcompress.sampling.build_sampling_constraint`,
@@ -183,12 +184,10 @@ def build_lists(root: TreeNode, tol: float = 1e-9) -> TreeLists:
 
     Args:
         root: Root of the geometric cluster tree (e.g. from `build_tree`).
-        tol: Adjacency tolerance forwarded to `neighbor_lists`.
-
     Returns:
         A `TreeLists` with both maps.
     """
-    nei = neighbor_lists(root, tol=tol)
+    nei = neighbor_lists(root)
     interaction = interaction_lists(root, nei)
     return TreeLists(nei=nei, interaction=interaction)
 
@@ -198,9 +197,8 @@ def suggest_eta(gamma: float = 0.1, target_rel_error: float = 1e-2, d: int = 3) 
     `1/(r + gamma*L)^d` Green's-function decay.
 
     This is a *sanity-check / suggestion* helper only -- it is never used as
-    an admissibility gate (see module docstring and CLAUDE.md; the actual
-    gate is the geometric predicate `is_admissible`, with its own
-    grid-consistency-driven default `DEFAULT_ETA`).
+    an admissibility gate. The dyadic interaction list, rather than either
+    this helper or `is_admissible`, is the production partition.
 
     The elastostatic Green's function decays like `1/(r + gamma*L)^d`, where
     `r` is the box-to-box separation and `gamma*L` is a regularization

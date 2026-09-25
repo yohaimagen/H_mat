@@ -259,6 +259,16 @@ def test_bp3_shape_and_header_offset() -> None:
     assert gf.mesh.n_patches == 14000
 
 
+@_needs_bp3
+def test_bp3_pca_tree_preserves_operator_dofs_and_sizes() -> None:
+    gf = RealGF(_BP3_MAT, _BP3_CSV)
+
+    assert (gf.mesh.tree_dim, gf.mesh.dof_row, gf.mesh.dof_col) == (1, 2, 1)
+    assert (gf.mesh.n_rows, gf.mesh.n_cols) == gf.shape
+    assert gf.alignment.original_centroids.shape == (14000, 2)
+    assert gf.alignment.centroids.shape == (14000, 1)
+
+
 @_needs_bp7
 def test_bp7_shape_and_header_offset() -> None:
     header = read_petsc_mat_header(_BP7_MAT)
@@ -270,6 +280,16 @@ def test_bp7_shape_and_header_offset() -> None:
     assert gf.dof_row == 3
     assert gf.dof_col == 2
     assert gf.mesh.n_patches == 5520
+
+
+@_needs_bp7
+def test_bp7_pca_tree_preserves_operator_dofs_and_sizes() -> None:
+    gf = RealGF(_BP7_MAT, _BP7_CSV)
+
+    assert (gf.mesh.tree_dim, gf.mesh.dof_row, gf.mesh.dof_col) == (2, 3, 2)
+    assert (gf.mesh.n_rows, gf.mesh.n_cols) == gf.shape
+    assert gf.alignment.original_centroids.shape == (5520, 3)
+    assert gf.alignment.centroids.shape == (5520, 2)
 
 
 @_needs_bp3

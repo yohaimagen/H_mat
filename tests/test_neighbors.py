@@ -14,6 +14,7 @@ cases directly.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from gfcompress.build_tree import build_tree
 from gfcompress.geometry import FaultMesh
@@ -85,7 +86,27 @@ def test_boxes_adjacent_floating_point_tolerance() -> None:
     # b's lower edge is a hair below a's upper edge (round-off from a dyadic
     # split): without a tolerance this would register a tiny gap of 0.
     b = np.array([[1.0 - 1e-13, 2.0]])
-    assert boxes_adjacent(a, b)
+    assert boxes_adjacent(a, b, tol=1e-12)
+
+
+@pytest.mark.parametrize("tree_dim", [1, 2, 3])
+def test_integer_cell_stencil_handles_sparse_and_clustered_occupancy(tree_dim: int) -> None:
+    grid = np.array(list(np.ndindex(*(8,) * tree_dim)), dtype=float)
+    # Keep one dense corner cluster and isolated cells.  Empty cells must not
+    # alter coordinates or create neighbors beyond the stencil.
+    keep = np.sum(grid, axis=1) <= 2
+    keep |= np.all(grid == 7, axis=1)
+    centroids = grid[keep]
+    mesh = FaultMesh(centroids=centroids, L=np.ones(len(centroids)), dof_row=max(2, tree_dim))
+    root = build_tree(mesh, m=1)
+    lists = neighbor_lists(root)
+
+    for node, neighbors in lists.items():
+        assert len(neighbors) <= 3**tree_dim
+        for neighbor in neighbors:
+            assert all(
+                abs(a - b) <= 1 for a, b in zip(node.cell_coords, neighbor.cell_coords, strict=True)
+            )
 
 
 # ---------------------------------------------------------------------------

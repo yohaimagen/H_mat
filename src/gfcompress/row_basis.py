@@ -6,6 +6,9 @@ through `peeled_rmatvec` (Task 5.1) with the `side="row"` fixed periodic test
 matrices `Psi` (`gfcompress.fixed_pattern.build_admissible_test_matrices`,
 Task F.4) -- reused verbatim, not reinvented (FIXPLAN defect #6: an earlier
 attempt duplicated `fixed_pattern` with rows swapped in; that is forbidden).
+Each pair uses the same `k_eff = min(k, len(alpha.row_indices),
+len(beta.col_indices))` as the column pass, while the probes remain `k + p`
+wide.
 
 For tree level `l`, with the low-rank factors of levels `2, ..., l-1` already
 stored as a `gfcompress.peeling.Factors` list:
@@ -18,7 +21,7 @@ stored as a `gfcompress.peeling.Factors` list:
    `Psi`/`Z` whose active boxes include `alpha` (Eq. 4.4's transposed
    constraint, per the `fixed_pattern` module docstring), restrict to
    `beta`'s col-index set `I_beta = beta.col_indices` (`Z(I_beta, :)`), and
-   set `V_{alpha,beta} = qr(Z(I_beta, :), k)` (pivoted `orth`).
+   set `V_{alpha,beta} = qr(Z(I_beta, :), k_eff)` (pivoted `orth`).
 
 Per Eq. 4.3, the core-matrix solve also needs the Gaussian sketch block
 `G_alpha` used to generate `Z(I_beta, :)` -- `RowBasis` retains it
@@ -42,8 +45,11 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from gfcompress.column_basis import ColumnBasis
-from gfcompress.fixed_pattern import build_admissible_test_matrices
+from gfcompress.column_basis import ColumnBasis, _effective_rank
+from gfcompress.fixed_pattern import (
+    AdmissibleProbeSchedule,
+    build_admissible_schedule,
+)
 from gfcompress.geometry import FaultMesh
 from gfcompress.interactions import TreeLists
 from gfcompress.operators import MatVecOperator
@@ -64,7 +70,8 @@ class RowBasis:
         beta: The col box. `beta.col_indices` (length `dof_col * |beta|`)
             indexes the global col space `{0, ..., n_cols - 1}`.
         v: Orthonormal row-space basis `V_{alpha,beta}`, shape
-            `(len(beta.col_indices), k)`, satisfying `v.conj().T @ v ~= I_k`.
+            `(len(beta.col_indices), k_eff)`, satisfying
+            `v.conj().T @ v ~= I_k_eff`.
         g_alpha: The Gaussian sketch block used to generate the row sample
             `Z(I_beta, :)`, `tm.blocks[alpha]`, shape
             `(len(alpha.row_indices), k + p)` -- the `G_alpha` of Eq. 4.3.
@@ -84,8 +91,9 @@ def row_bases(
     level: int,
     factors: Factors,
     k: int,
-    p: int = 0,
+    p: int = 10,
     seed: int | None = None,
+    schedule: AdmissibleProbeSchedule | None = None,
 ) -> list[RowBasis]:
     """Compute the level-`level` row bases `V_{alpha,beta}` for every
     admissible pair `(alpha, beta)` at `level`.
@@ -103,8 +111,10 @@ def row_bases(
         factors: Flat list of `BlockFactor`s for levels `2, ..., level - 1`
             (`peeled_rmatvec` subtracts their adjoint contribution before
             sampling). Empty for the coarsest level with admissible pairs.
-        k: Target rank for each block's row basis.
-        p: Oversampling parameter for the test matrices. Defaults to `0`.
+        k: Positive target rank; each pair uses the shared
+            `k_eff = min(k, len(alpha.row_indices), len(beta.col_indices))`.
+        p: Oversampling parameter for the test matrices. Defaults to `10`;
+            pass `p=0` to disable oversampling explicitly.
         seed: Optional base seed forwarded to
             `gfcompress.fixed_pattern.build_admissible_test_matrices` for
             reproducibility. Passing the same `seed` as `column_bases` is
@@ -116,32 +126,26 @@ def row_bases(
         `level`, in the same order as `column_bases` (outer loop over
         `root.nodes_at_level(level)`, inner loop over each box's interaction
         list). Each `v` has orthonormal columns and shape
-        `(len(beta.col_indices), k)`.
+        `(len(beta.col_indices), k_eff)` for its pair.
     """
-    level_nodes = root.nodes_at_level(level)
-
-    test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=seed, side="row")
-
-    # Map each box (by identity) to the Z sample and G_alpha block from the
-    # Psi whose active_boxes include it -- Eq. 4.4's transposed constraint
-    # guarantees this Psi is unique per box.
-    z_for_box: dict[TreeNode, NDArray[np.float64]] = {}
-    g_for_box: dict[TreeNode, NDArray[np.float64]] = {}
-    for tm in test_matrices:
-        z = np.asarray(peeled_rmatvec(operator, tm.omega, factors), dtype=np.float64)
-        for box in tm.active_boxes:
-            z_for_box[box] = z
-            g_for_box[box] = tm.blocks[box]
-
-    result: list[RowBasis] = []
-    for alpha in level_nodes:
-        for beta in lists.interaction[alpha]:
-            z = z_for_box[alpha]
-            z_beta = z[beta.col_indices, :]
-            v = orth(z_beta, k)
-            result.append(RowBasis(alpha=alpha, beta=beta, v=v, g_alpha=g_for_box[alpha]))
-
-    return result
+    schedule = schedule or build_admissible_schedule(root, lists, level, mesh, k, p, seed, "row")
+    result: dict[tuple[TreeNode, TreeNode], RowBasis] = {}
+    for probe in schedule.probes:
+        realization = probe.realize()
+        z = np.asarray(peeled_rmatvec(operator, realization.omega, factors), dtype=np.float64)
+        for (alpha, beta), owner in schedule.owners.items():
+            if owner is probe:
+                z_beta = np.array(z[beta.col_indices, :], copy=True)
+                v = orth(z_beta, _effective_rank(alpha, beta, k)).copy()
+                result[(alpha, beta)] = RowBasis(
+                    alpha=alpha, beta=beta, v=v, g_alpha=realization.blocks[alpha]
+                )
+        del z, realization
+    return [
+        result[(alpha, beta)]
+        for alpha in root.nodes_at_level(level)
+        for beta in lists.interaction[alpha]
+    ]
 
 
 def core_matrices(col_bases: list[ColumnBasis], row_bases_: list[RowBasis]) -> Factors:
@@ -150,6 +154,7 @@ def core_matrices(col_bases: list[ColumnBasis], row_bases_: list[RowBasis]) -> F
     For each admissible pair `(alpha, beta)`, forms the core matrix
     `B_{alpha,beta}` via `gfcompress.randomized.core_matrix_solve` from
     `col_bases`'s `u`/`y_alpha`/`g_beta` and `row_bases_`'s `v`/`g_alpha`.
+    Their shared `k_eff` makes each core `B` shape `(k_eff, k_eff)`.
 
     Args:
         col_bases: Column bases for the level, from `column_bases`.

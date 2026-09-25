@@ -35,9 +35,13 @@ claude --model claude-opus-4-8
 
 Headless (whole plan):
 ```
-mkdir -p logs
-./run_plan.sh tasks.txt
+./run_plan.sh
 ```
+
+The runner locates the repository from its own path, uses its `.venv` test
+gate, and skips entries marked `# done`; the first dispatch from the checked-in
+list is C.6. Pass another task-list path to test a list without changing the
+repository list.
 
 ## CLAUDE.md should contain
 Project conventions every agent inherits: package layout, that tests use

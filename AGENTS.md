@@ -1,10 +1,11 @@
-# CLAUDE.md — project conventions
+# AGENTS.md — project conventions
 
 Black-box randomized H-matrix compression of elastostatic Green's Function
-matrices, after Levitt & Martinsson (2024). Resolve C.x in
+matrices, after Levitt & Martinsson (2024). Resolve tasks by id: C.x lives in
 `BP_COLORING_PLAN.md`, R.x in `REALGF_PLAN.md`, F.x in `FIXPLAN.md`, and
-historical numeric ids in `plan.md`. C.0 activated `BP_COLORING_PLAN.md` as
-the execution sequence; implement strictly one active task in `tasks.txt`.
+historical numeric ids in `plan.md`. `BP_COLORING_PLAN.md` is the active
+execution sequence after C.0; earlier plans remain the historical record.
+Implement strictly the one task you are given, in the order in `tasks.txt`.
 
 ## Tooling
 - Python, packaged with `pyproject.toml`. A project virtualenv lives at `.venv/`
@@ -37,35 +38,51 @@ formed is the `MockGF` test double and the dense near-field leaf blocks.
   row sampling and column sampling are not interchangeable. Respect this
   everywhere; do not assume square.
 
-## Admissibility — dyadic, paper-faithful
-- The dyadic interaction-list partition is the production far-field gate;
-  neighbor lists define the near field. `is_admissible` and `eta` are
-  diagnostics only and do not add or remove production pairs.
-- The `1/r^d` physics decay may sanity-check `eta`; never use a block-norm
-  threshold as an admissibility rule — it breaks the level-nested structure
-  peeling depends on.
-- At an intermediate level, neighbors plus interactions are a complete,
-  disjoint cover only of children of the parent-neighborhood. The global exact
-  cover is interactions across levels plus leaf neighbors. Tests should assert
-  both the appropriate local and global properties.
+## Admissibility and coverage — dyadic, paper-faithful
+- The production partition is the paper's dyadic interaction lists, using a
+  padded equal-sided hypercube in retained tree coordinates and integer cell
+  adjacency. Do not add a configurable geometric `eta` filter or use a
+  block-norm threshold as admissibility.
+- The interaction-list separation bound `dist/max(diam) >= 1/sqrt(tree_dim)` is
+  a diagnostic for equal-sided cells, subject to rounding. It does not make
+  every geometrically distant same-level pair an interaction: coarser levels
+  may already represent that pair.
+- Global coverage is the complete, disjoint union of interaction blocks over
+  levels `2..L` and neighboring leaf blocks at `L`. At an intermediate level,
+  neighbor and interaction lists cover only children of the parent-neighborhood;
+  tests must distinguish this local cover from global coverage.
 
 ## Scope
 - Format is **non-uniform H¹ only**. Uniform H¹ (§4.2) and H² (§4.3) are OUT of
   scope — do not implement them.
-- Build order: accept the C.11 fixed BP3/BP7 baselines before coloring work.
-  Coloring is a schedule optimization behind `sampling="fixed" | "coloring"`:
-  it must preserve the partition and match fixed-path quality. Compare measured
-  costs; retain fixed whenever it is cheaper or tied. Strict savings are an
-  experimental result, not a universal requirement.
+- Build order: finish and accept the C.11 fixed BP3/BP7 baselines before any
+  production coloring work. Coloring is a schedule optimization behind
+  `sampling="fixed" | "coloring"`: it must preserve the partition and match the
+  fixed-path quality. Compare measured schedule costs; retain fixed when it is
+  cheaper or tied, and record the fallback. Strict savings are an experimental
+  result, not a universal requirement.
 
 ## Testing rule — do not fake rank structure
 A random dense matrix has full-rank blocks and CANNOT validate a compressor.
 Low-rank/admissible-block tests must use blocks from the smooth `MockGF` kernel
 whose singular values genuinely decay. Near-diagonal blocks must NOT be low
 rank. Error is measured with the power-method relative-error utility through
-matvec/rmatvec only.
+matvec/rmatvec only. Include both genuine rank-truncation tests and
+exact-recovery/small-block boundary tests; do not treat an exact case as proof
+that nonzero singular values are truncated correctly.
 
 ## Git & GitHub flow
+- Codex model routing: `implementer` uses GPT-5.6 Terra (medium), `reviewer`
+  uses GPT-5.6 Sol (high), and `batch-reviewer` uses GPT-6 Astra (high).
+  Each requested task loops through implementation and Sol review until approved.
+  After the last requested task, Astra reviews the complete series. Batch fixes
+  return to Terra, then Sol, then Astra until explicit final approval.
+- For an explicitly requested sequential batch, use one cumulative delivery
+  branch and aggregate draft PR with incremental task reviews. Approved tasks
+  on that branch unlock the next requested task without intermediate merges.
+  Keep the PR draft until all task gates and final Astra review pass. This batch
+  rule supersedes the single-task branch/ready rules below for such requests.
+  Follow `.agents/skills/codex-task/SKILL.md`; preserve the Claude workflow.
 - Each task runs on its own branch `task/<id>` and a **draft PR** opened off
   `main`; the PR body states what is going to be done.
 - The implementer NEVER touches git. The orchestrator (`/task`) makes **one commit
@@ -75,8 +92,9 @@ matvec/rmatvec only.
 - The reviewer reads the branch diff (`git diff main...HEAD`); it does not commit
   and does not post to GitHub. On approval it also writes the final PR summary,
   which the orchestrator posts verbatim.
-- `.claude/hooks/guard.sh` (PreToolUse on Bash) is the hard stop for "no merges,
-  no writes to `main`", so agent separation is not what enforces that rule.
+- `.codex/hooks/guard.sh` is a repository artifact for the no-merge/no-main-write
+  policy, but its runtime activation must be verified before it is treated as an
+  enforcement boundary. The workflow restrictions apply regardless.
 - On approval the pipeline posts a final "what was implemented and how" comment
   and marks the PR **ready for review**. **A human merges the PR to `main`** — no
   agent merges, and nothing is pushed directly to `main`.
