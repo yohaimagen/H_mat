@@ -1,17 +1,22 @@
-"""The active task list must not redispatch superseded plans."""
+"""The active task list must not redispatch completed or superseded plans."""
 
 from pathlib import Path
 
 import pytest
 
 
-def test_c_series_is_active_and_historical_r_and_stage_7_are_comments() -> None:
+def test_c6_is_first_dispatchable_task_and_historical_work_is_marked_done() -> None:
     lines = Path("tasks.txt").read_text().splitlines()
-    active = {line.split()[0] for line in lines if line and not line.startswith("#")}
+    active = [
+        line.split()[0]
+        for line in lines
+        if line and not line.startswith("#") and "# done" not in line
+    ]
 
-    assert {"C.0", "C.11"} <= active
-    assert not active.intersection({"R.2", "R.3", "R.4", "R.5", "R.6", "R.7", "R.8"})
-    assert not active.intersection({"7.1", "7.2", "7.3", "7.4", "7.5"})
+    assert active[0] == "C.6"
+    assert "C.0" not in active
+    assert not set(active).intersection({"R.2", "R.3", "R.4", "R.5", "R.6", "R.7", "R.8"})
+    assert not set(active).intersection({"7.1", "7.2", "7.3", "7.4", "7.5"})
 
 
 @pytest.mark.parametrize(

@@ -458,15 +458,33 @@ def test_pca_align_replays_asymmetric_near_max_float_cloud() -> None:
         ]
     )
     result = pca_align(cloud)
-    replay = (
-        ((cloud - result.origin) / result.coordinate_scale - result.normalized_offset)
-        * result.coordinate_scale
-    ) @ result.rotation[list(result.kept_axes)].T
+    centered = (
+        (cloud - result.origin) / result.coordinate_scale - result.normalized_offset
+    ) * result.coordinate_scale
+    replay = (centered @ result.rotation.T)[:, result.kept_axes]
 
     np.testing.assert_array_equal(replay, result.centroids)
     translated = pca_align(cloud - offset)
     assert result.kept_axes == translated.kept_axes
     np.testing.assert_allclose(result.variance_ratio, translated.variance_ratio)
+
+
+@pytest.mark.filterwarnings("error")
+def test_pca_align_replays_dropped_axis_near_max_float_cloud() -> None:
+    """Replay slices only after the full rotation, including a null axis."""
+    offset = 1e308
+    step = np.spacing(offset)
+    cloud = np.array([[offset, offset], [offset + step, offset]], dtype=np.float64)
+
+    result = pca_align(cloud)
+    assert result.kept_axes == (0,)
+    assert result.dropped_axes == (1,)
+
+    centered = (
+        (cloud - result.origin) / result.coordinate_scale - result.normalized_offset
+    ) * result.coordinate_scale
+    replay = (centered @ result.rotation.T)[:, result.kept_axes]
+    np.testing.assert_array_equal(replay, result.centroids)
 
 
 @pytest.mark.filterwarnings("error")

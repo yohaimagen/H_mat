@@ -653,7 +653,7 @@ def test_period_three_wraparound_isolates_each_leaf_probe(tree_dim: int) -> None
 
 
 # ---------------------------------------------------------------------------
-# Leaf recovery through the residual operator A - A^(L)
+# Leaf recovery through the residual operator A - A^(L), given exact prior factors
 # ---------------------------------------------------------------------------
 
 
@@ -673,7 +673,7 @@ def _exact_factors(gf: MockGF, root: TreeNode, lists: TreeLists) -> Factors:
     return factors
 
 
-def test_leaf_test_matrices_recover_neighbor_blocks_through_peeling() -> None:
+def test_leaf_test_matrices_recover_neighbor_blocks_through_exact_peeling() -> None:
     mesh = _grid_mesh(16, 16, spacing=1.0)
     root = build_tree(mesh, m=4)
     level = _deepest_level(root)

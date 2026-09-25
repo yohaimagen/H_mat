@@ -239,9 +239,9 @@ def test_k_sweep_monotonic_error_and_exact_matvec_counts() -> None:
     # Discriminating check (the real work, per CLAUDE.md's near-field-
     # dominance warning): even the sweep's *worst* point (smallest k) must
     # still beat a leaves-only (far field dropped) baseline by a wide margin.
-    # `leaves_only` is independent of k/p (leaf blocks are dense/exact,
-    # untouched by any admissible-block factorization), so it is computed
-    # once here rather than once per (seed, k).
+    # `leaves_only` comes from this particular k/p run. Leaf blocks are exact
+    # only when preceding factors are exact, so approximate factors may make
+    # recovered leaves depend on k/p.
     op = MockGF(mesh)
     hmat = compress(op, mesh, m=m, k=ks[0], p=p, seed=seeds[0], sampling="fixed")
     rel_err_worst = relative_error(hmat, op, seed=1)

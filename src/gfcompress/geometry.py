@@ -218,17 +218,19 @@ class PCAAlignment:
         origin: Stable anchor used before normalization, shape `(d_orig,)`.
         coordinate_scale: Positive scale used for stable centering.
         normalized_offset: Mean offset in normalized coordinates, shape
-            `(d_orig,)`. The returned reduced coordinates replay exactly as
-            `(((original_centroids - origin) / coordinate_scale -
-            normalized_offset) * coordinate_scale) @
-            rotation[list(kept_axes)].T` (with the same NumPy operations).
+            `(d_orig,)`. To replay the returned reduced coordinates exactly,
+            first form the stable centered array
+            `((original_centroids - origin) / coordinate_scale -
+            normalized_offset) * coordinate_scale`, multiply it by the full
+            `rotation.T`, then select `[:, kept_axes]` (with the same NumPy
+            operations).
         rotation: Rows are the principal axes (right singular vectors of the
             centered cloud, descending singular value), shape
             `(d_orig, d_orig)`. The economical SVD mode supplies this directly
             when `N >= d_orig`; full matrices are used only for `N < d_orig`.
-            The replay formula above, with all axes selected, gives the full
-            (unreduced) rotated cloud; `.centroids` is that restricted to
-            `kept_axes`. It is complete even when `N < d_orig`; unobserved
+            The full replay operation above gives the unreduced rotated cloud;
+            `.centroids` is that array restricted to `kept_axes`. It is
+            complete even when `N < d_orig`; unobserved
             null directions are reported as zero singular values and dropped.
         variance_ratio: Explained-variance ratio `sigma_i^2 / sum(sigma_j^2)`
             per principal axis, shape `(d_orig,)` (see `rotation`), descending.
