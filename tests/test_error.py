@@ -146,6 +146,19 @@ def test_spectral_norm_of_diagonal_matrix_is_largest_singular_value() -> None:
     assert estimate == pytest.approx(10.0, rel=1e-6)
 
 
+def test_power_estimates_converge_from_independent_starts() -> None:
+    """A small exact reference checks both starts and iteration convergence."""
+    op = DenseOperator(np.diag(np.array([10.0, 9.0, 4.0, 1.0])))
+    exact = 10.0
+    first = [spectral_norm_power_method(op, n_iters=1, seed=seed) for seed in (91, 92, 93)]
+    converged = [spectral_norm_power_method(op, n_iters=50, seed=seed) for seed in (91, 92, 93)]
+
+    assert max(abs(value - exact) for value in converged) < 1e-6
+    assert max(abs(value - exact) for value in converged) < min(
+        abs(value - exact) for value in first
+    )
+
+
 def test_spectral_norm_of_zero_operator_is_zero() -> None:
     a = np.zeros((4, 3))
     op = DenseOperator(a)

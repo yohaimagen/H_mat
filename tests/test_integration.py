@@ -140,6 +140,70 @@ def _log_metrics(
     )
 
 
+def _assert_selected_block_accuracy(op: MockGF, hmat: HMatrix, levels: tuple[int, ...]) -> None:
+    """Compare selected compressed blocks with their best matching-rank SVDs."""
+    for level in levels:
+        factor = next(factor for factor in hmat.factors if factor.alpha.level == level)
+        block = op.block(factor.alpha.patch_indices, factor.beta.patch_indices)
+        singular_values = np.linalg.svd(block, compute_uv=False)
+        k_eff = factor.b.shape[0]
+        best_error = float(np.linalg.norm(singular_values[k_eff:]))
+        reconstruction_error = float(np.linalg.norm(block - factor.u @ factor.b @ factor.v.T))
+        scale = max(float(np.linalg.norm(block)), 1e-12)
+        # Randomized bases need not attain the optimum exactly.  The absolute
+        # floor keeps nearly exact small-block cases meaningful.
+        assert reconstruction_error <= 5 * best_error + 1e-10 * scale, (
+            f"level {level}: reconstructed={reconstruction_error / scale:.3e}, "
+            f"best_rank_{k_eff}={best_error / scale:.3e}"
+        )
+
+
+def _normalized_validation_vectors(mesh: FaultMesh, seed: int) -> tuple[np.ndarray, ...]:
+    """Independent localized and smooth vectors in both rectangular spaces."""
+    rng = np.random.default_rng(seed)
+
+    def normalized(vector: np.ndarray) -> np.ndarray:
+        return vector / np.linalg.norm(vector)
+
+    localized_col = np.zeros(mesh.n_cols)
+    localized_row = np.zeros(mesh.n_rows)
+    localized_col[rng.integers(mesh.n_cols)] = 1.0
+    localized_row[rng.integers(mesh.n_rows)] = 1.0
+    weights = np.arange(1, mesh.tree_dim + 1, dtype=float)
+    smooth_patch = np.cos(mesh.centroids @ weights)
+    return (
+        localized_col,
+        normalized(np.repeat(smooth_patch, mesh.dof_col)),
+        localized_row,
+        normalized(np.repeat(smooth_patch, mesh.dof_row)),
+    )
+
+
+def _assert_input_accuracy_and_adjoint(
+    hmat: HMatrix, op: MockGF, mesh: FaultMesh, validation_seed: int, improvement: float
+) -> None:
+    """Use validation vectors unrelated to the randomized construction sketches."""
+    localized_col, smooth_col, localized_row, smooth_row = _normalized_validation_vectors(
+        mesh, validation_seed
+    )
+    leaves_only = HMatrix(root=hmat.root, mesh=mesh, factors=[], leaves=hmat.leaves)
+    for vector, approximate, reference in (
+        (localized_col, hmat.matvec, op.matvec),
+        (smooth_col, hmat.matvec, op.matvec),
+        (localized_row, hmat.rmatvec, op.rmatvec),
+        (smooth_row, hmat.rmatvec, op.rmatvec),
+    ):
+        error = np.linalg.norm(approximate(vector) - reference(vector))
+        scale = max(float(np.linalg.norm(reference(vector))), 1e-12)
+        assert error / scale < 1e-6
+    error = np.linalg.norm(hmat.matvec(localized_col) - op.matvec(localized_col))
+    baseline = np.linalg.norm(leaves_only.matvec(localized_col) - op.matvec(localized_col))
+    assert error * improvement < baseline
+
+    x, y = smooth_col, smooth_row
+    np.testing.assert_allclose(np.vdot(hmat.matvec(x), y), np.vdot(x, hmat.rmatvec(y)))
+
+
 def test_integration_2d() -> None:
     mesh = _grid_mesh(32, 32)
     op = MockGF(mesh)
@@ -164,6 +228,8 @@ def test_integration_2d() -> None:
     assert (
         rel_err * 10 < rel_err_leaves_only
     ), f"rel_err={rel_err}, rel_err_leaves_only={rel_err_leaves_only}"
+    _assert_selected_block_accuracy(op, hmat, levels=(2, 3))
+    _assert_input_accuracy_and_adjoint(hmat, op, mesh, validation_seed=101, improvement=10)
 
     _log_metrics("2D 32x32 m=16 k=10 p=10", hmat, mesh, counting_op, setup_time)
 
@@ -206,5 +272,7 @@ def test_integration_3d() -> None:
     assert (
         rel_err * 5 < rel_err_leaves_only
     ), f"rel_err={rel_err}, rel_err_leaves_only={rel_err_leaves_only}"
+    _assert_selected_block_accuracy(op, hmat, levels=(2, 3))
+    _assert_input_accuracy_and_adjoint(hmat, op, mesh, validation_seed=103, improvement=5)
 
     _log_metrics("3D 8x16x16 m=8 k=6 p=6", hmat, mesh, counting_op, setup_time)
