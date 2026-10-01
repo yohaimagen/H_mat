@@ -205,36 +205,33 @@ def test_large_target_rank_is_capped_per_small_block() -> None:
 # ---------------------------------------------------------------------------
 # k sweep: 32x32/m=16 (depth 3, dof_col=1 so k up to 16 valid), p=4 fixed.
 # Measured (seeds 0-3, p=4): rel_err ~2.7e-7-3.6e-7 (k=2) down to ~5.6e-11-
-# 1.25e-10 (k=16), monotonically non-increasing at every seed tried (0-3;
-# 2 seeds asserted here to bound runtime).
+# 1.25e-10 (k=16).  The robust endpoint gap is retained; no randomized
+# intermediate-step monotonicity property is assumed.
 # ---------------------------------------------------------------------------
 
 
-def test_k_sweep_monotonic_error_and_exact_matvec_counts() -> None:
+def test_k_sweep_robust_endpoint_error_and_exact_matvec_counts() -> None:
     mesh = _grid_mesh(32, 32)
     m, p = 16, 4
     ks = [2, 4, 8, 12, 16]
     seeds = [0, 1]  # trend verified across seeds 0-3 during design; 2 asserted here
 
     t0 = time.time()
+    errors_by_k: dict[int, list[float]] = {k: [] for k in ks}
     for seed in seeds:
-        errs = []
         for k in ks:
             observed, rel_err = _observed_counts(mesh, m, k, p, seed)
             predicted = _predicted_counts(mesh, m, k, p)
             assert (
                 observed == predicted
             ), f"seed={seed} k={k}: observed={observed}, predicted={predicted}"
-            errs.append(rel_err)
+            errors_by_k[k].append(rel_err)
 
-        for i in range(len(errs) - 1):
-            assert errs[i] >= errs[i + 1] - 1e-14, (
-                f"seed={seed}: error increased going k={ks[i]} -> k={ks[i + 1]}: "
-                f"{errs[i]} -> {errs[i + 1]}"
-            )
-        # Wide end-to-end spread: k=16's error is orders of magnitude below
-        # k=2's (measured ratio ~4e3-6e3 across seeds); 100x is a safe floor.
-        assert errs[0] > errs[-1] * 100, f"seed={seed}: errs={errs}"
+    assert max(errors_by_k[2]) < 4e-7
+    assert max(errors_by_k[16]) < 2e-10
+    # Measured endpoint ratios are ~4e3-6e3.  Comparing the worst high-rank
+    # run to the best low-rank run makes this robust to seed pairing.
+    assert max(errors_by_k[16]) * 1000 < min(errors_by_k[2]), errors_by_k
 
     # Discriminating check (the real work, per CLAUDE.md's near-field-
     # dominance warning): even the sweep's *worst* point (smallest k) must
@@ -307,13 +304,9 @@ def test_p_sweep_accuracy_and_exact_matvec_counts() -> None:
 
 
 def test_m_sweep_leaf_size_changes_depth_error_and_matvec_counts() -> None:
-    """Measured (seeds 0-3, k=4, p=4): rel_err decreases monotonically as m
-    grows (~9e-8 at m=8 down to ~4-5e-8 at m=100) at every seed tried -- an
-    empirical trend on this fixture, not a general claim (coarser leaves here
-    both shrink the tree and grow the exact dense near-field blocks, and both
-    measured effects point the same way; not derived from a general
-    property). 2 of the 4 measured seeds are asserted here to bound
-    runtime."""
+    """Measured endpoints (seeds 0-3, k=4, p=4) are ~9e-8 at m=8 and
+    ~4-5e-8 at m=100.  Only that robust endpoint comparison is asserted;
+    randomized intermediate-step monotonicity is not a general property."""
     mesh = _grid_mesh(32, 32)
     k, p = 4, 4
     ms = [8, 20, 100]
@@ -325,21 +318,21 @@ def test_m_sweep_leaf_size_changes_depth_error_and_matvec_counts() -> None:
         root = build_tree(mesh, m)
         assert _deepest_level(root) == expected_depths[m], f"m={m}"
 
+    errors_by_m: dict[int, list[float]] = {m: [] for m in ms}
     for seed in seeds:
-        errs = []
         for m in ms:
             observed, rel_err = _observed_counts(mesh, m, k, p, seed)
             predicted = _predicted_counts(mesh, m, k, p)
             assert (
                 observed == predicted
             ), f"seed={seed} m={m}: observed={observed}, predicted={predicted}"
-            errs.append(rel_err)
+            errors_by_m[m].append(rel_err)
 
-        for i in range(len(errs) - 1):
-            assert errs[i] >= errs[i + 1] - 1e-14, (
-                f"seed={seed}: error increased going m={ms[i]} -> m={ms[i + 1]}: "
-                f"{errs[i]} -> {errs[i + 1]}"
-            )
+    assert max(errors_by_m[8]) < 2e-7
+    assert max(errors_by_m[100]) < 1e-7
+    # The measured endpoint gap is about 2x; retain a 20% robust margin
+    # across seeds instead of asserting a stepwise sweep trend.
+    assert max(errors_by_m[100]) * 1.2 < min(errors_by_m[8]), errors_by_m
 
     # Discriminating check at the shallowest tree (m=100, fewest compressed
     # levels -- the point most at risk of a vacuous pass): still beats

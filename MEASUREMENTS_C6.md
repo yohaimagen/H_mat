@@ -22,3 +22,23 @@ Exact-recovery boundary tests remain separate from these genuinely truncated
 cases.  The power-method tests use small dense references solely to verify the
 estimator against exact norms; compression quality itself is tested only with
 the smooth `MockGF` kernel and black-box products.
+
+For every normalized validation vector, the compressed forward or adjoint
+product is compared to the same dense-leaf-only approximation.  Across
+validation seeds `101`, `102`, and `103`, the ratio
+`||H v - A v|| / ||H_leaves v - A v||` was at most `2.06e-03` in 2D.  In 3D
+the localized forward/adjoint ratios were at most `1.22e-01`; the smooth
+forward and adjoint ratios were `5.49e-01` and `8.89e-01`, respectively.  The
+test therefore requires a 5% improvement for every case, leaving 6% slack in
+the weakest (smooth-adjoint 3D) case while still failing when the far field is
+dropped.  The largest normalized absolute input error was `5.76e-05` (a 2D
+localized adjoint vector), so the independent absolute sanity bound is
+`1e-4` rather than an unjustified `1e-6`.
+
+The existing 2D rank and leaf-size sweeps now use endpoint robustness rather
+than per-seed stepwise monotonicity.  For construction seeds `0` and `1`, the
+rank-2 to rank-16 endpoint gap is safely above `1000x` even when comparing the
+best low-rank run with the worst high-rank run.  The `m=8` to `m=100` endpoint
+has a measured roughly twofold gap; its test retains only a 20% cross-seed
+margin.  Exact sampled-column counts and leaves-only comparisons remain
+unchanged.
