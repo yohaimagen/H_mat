@@ -112,16 +112,24 @@ same immutable code revision with no findings, questions, or suggestions.
 Astra independently recorded 359 passing tests, 10 dataset-dependent skips,
 all static/shell/diff checks, reproduced C.4 measurements, and targeted
 geometry, rank, adjoint, ownership, lifetime, and dispatch diagnostics. The
-final aggregate summary was posted to PR #28, which was marked ready for human
-review. No agent merge or push to `main` occurred.
+final aggregate summary was posted to PR #28. The PR was briefly marked ready,
+then returned to draft after GitHub's Python 3.12 job exposed a NumPy 2.5.3
+stub incompatibility with the project's Python 3.10 mypy target.
+
+The CI-only fix at `46696159d537d39a836229917a7d12c72f8b6940` constrains
+NumPy below 2.5 only in the development extra; runtime support remains
+`numpy>=1.24`. Sol and Astra independently approved that exact code revision
+with no findings, questions, or suggestions. GitHub CI then passed on both
+Python 3.10 and 3.12. PR #28 was returned to ready-for-review status. No agent
+merge or push to `main` occurred.
 
 ## Baseline and usage record
 
 Working-tree baseline (includes preserved dirty R.2 corrections): 305 passed in
 109.23s with single-thread BLAS, NumPy 2.4.6 / SciPy 1.17.1. Ruff and Black pass;
 mypy passes 19 source files. Initial NumPy 2.5.3 stubs failed against the
-project Python 3.10 type target; environment aligned with source versions, no
-project configuration workaround. Editable import verified from this checkout.
+project Python 3.10 type target; the final branch records the compatible
+development-only NumPy bound. Editable import verified from this checkout.
 This is not committed-revision production evidence for C.0. Initial account-wide usage snapshot: 11%
 primary and 23% weekly. Record subsequent snapshots as account-wide observations.
 
