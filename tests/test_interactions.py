@@ -55,12 +55,12 @@ from gfcompress.tree import TreeNode
 
 def _grid_mesh(*shape: int, spacing: float = 1.0) -> FaultMesh:
     """Build a `FaultMesh` whose centroids form a regular grid of the given
-    `shape` (length `d`, `d in (2, 3)`), with unit spacing along each axis."""
+    `shape` (length `d in {1, 2, 3}`), with unit spacing along each axis."""
     axes = [np.arange(n, dtype=float) * spacing for n in shape]
     mesh_grids = np.meshgrid(*axes, indexing="ij")
     centroids = np.stack([g.ravel() for g in mesh_grids], axis=1)
     L = np.full(centroids.shape[0], 0.1 * spacing)
-    return FaultMesh(centroids=centroids, L=L)
+    return FaultMesh(centroids=centroids, L=L, dof_row=max(2, len(shape)))
 
 
 def _deepest_level(root: TreeNode) -> int:
@@ -256,6 +256,49 @@ def test_admissibility_symmetric() -> None:
         assert is_admissible(alpha, beta, DEFAULT_ETA) == is_admissible(beta, alpha, DEFAULT_ETA)
 
 
+@pytest.mark.parametrize("tree_dim", [1, 2, 3])
+def test_interaction_separation_has_dyadic_lower_bound(tree_dim: int) -> None:
+    """Each interaction pair is separated by at least one cell width."""
+    mesh = _grid_mesh(*(8,) * tree_dim)
+    root = build_tree(mesh, m=1)
+    lists = build_lists(root)
+    lower_bound = 1.0 / np.sqrt(tree_dim)
+
+    checked = 0
+    for level_nodes in root.iter_levels():
+        for alpha in level_nodes:
+            for beta in lists.interaction[alpha]:
+                separation = box_dist(alpha.bounding_box, beta.bounding_box) / max(
+                    alpha.diam, beta.diam
+                )
+                assert separation >= lower_bound - 1e-12
+                checked += 1
+
+    assert checked > 0
+
+
+def test_large_finite_coordinate_interactions_have_finite_geometry() -> None:
+    centroids = np.linspace(1.0e308, 1.1e308, 8)[:, None]
+    mesh = FaultMesh(centroids=centroids, L=np.ones(8), dof_row=2)
+    root = build_tree(mesh, m=1)
+    lists = build_lists(root)
+
+    assert all(np.isfinite(node.diam) for nodes in root.iter_levels() for node in nodes)
+
+    checked = 0
+    for level_nodes in root.iter_levels():
+        for alpha in level_nodes:
+            for beta in lists.interaction[alpha]:
+                dist = box_dist(alpha.bounding_box, beta.bounding_box)
+                ratio = dist / max(alpha.diam, beta.diam)
+                assert np.isfinite(dist)
+                assert np.isfinite(ratio)
+                assert ratio >= 1.0 - 1e-12
+                checked += 1
+
+    assert checked > 0
+
+
 # ---------------------------------------------------------------------------
 # "Fig. 3" tessellation: small uniform grid, complete + disjoint admissibility
 # cover at the deepest level.
@@ -355,6 +398,31 @@ def test_fig3_tessellation_3d() -> None:
                 assert not is_admissible(alpha, beta, DEFAULT_ETA)
             elif is_int:
                 assert is_admissible(alpha, beta, DEFAULT_ETA)
+
+
+@pytest.mark.parametrize("tree_dim", [1, 2, 3])
+def test_interactions_and_leaf_neighbors_cover_every_patch_pair_once(tree_dim: int) -> None:
+    shape = (8,) * tree_dim
+    if tree_dim == 1:
+        mesh = FaultMesh(centroids=np.arange(8, dtype=float)[:, None], L=np.ones(8), dof_row=2)
+    else:
+        mesh = _grid_mesh(*shape)
+    root = build_tree(mesh, m=1)
+    lists = build_lists(root)
+    leaf_level = _deepest_level(root)
+    coverage = np.zeros((mesh.n_patches, mesh.n_patches), dtype=np.intp)
+
+    for level_nodes in root.iter_levels():
+        if level_nodes[0].level < 2:
+            continue
+        for alpha in level_nodes:
+            for beta in lists.interaction[alpha]:
+                coverage[np.ix_(alpha.patch_indices, beta.patch_indices)] += 1
+    for alpha in root.nodes_at_level(leaf_level):
+        for beta in lists.nei[alpha]:
+            coverage[np.ix_(alpha.patch_indices, beta.patch_indices)] += 1
+
+    np.testing.assert_array_equal(coverage, np.ones_like(coverage))
 
 
 # ---------------------------------------------------------------------------

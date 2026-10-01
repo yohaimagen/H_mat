@@ -4,12 +4,12 @@ A single geometric cluster tree over the `N` patch centroids serves as both
 the row tree and the column tree. Each node holds the set of
 patch indices it covers (`patch_indices`) plus their patch-major flattened
 row/column index sets (`row_indices`/`col_indices`, via
-`FaultMesh.patch_to_rows`/`patch_to_cols`), axis-aligned bounding-box
-geometry (`bounding_box`, `center`, `diam`), and parent/child links.
+`FaultMesh.patch_to_rows`/`patch_to_cols`), axis-aligned cell geometry
+(`bounding_box`, `center`, `diam`), and parent/child links.
 
 This module provides only the node container, geometry helpers, and
 traversal utilities. The level-synchronous bisection builder lives in
-`build_tree.py` (Task F.1).
+`build_tree.py` (Task C.1).
 """
 
 from __future__ import annotations
@@ -41,8 +41,10 @@ class TreeNode:
             patch-major block-interleaved), shape
             `(dof_col * n_patches_in_node,)`.
         level: Depth of this node in the tree (root is level 0).
-        bounding_box: Axis-aligned bounding box of the node's patch
-            centroids, shape `(d, 2)` with `bounding_box[i] = (min_i, max_i)`.
+        bounding_box: Axis-aligned dyadic cell used by a tree built with
+            `build_tree`, shape `(d, 2)` with `bounding_box[i] = (lo_i,
+            hi_i)`. Nodes made directly by `make_node` instead use the
+            shrink-wrapped centroid bounds.
         center: Center of the bounding box, shape `(d,)`.
         diam: Diameter (Euclidean length of the bounding-box diagonal).
         parent: Parent node, or `None` for the root.
@@ -50,6 +52,9 @@ class TreeNode:
         index_in_level: This node's position in `root.nodes_at_level(level)`,
             set by the tree builder. Defaults to `-1` for nodes constructed
             outside of `build_tree` (e.g. directly via `make_node`).
+        cell_coords: Integer coordinate of this occupied cell in the level's
+            dyadic grid. The root is `(0, ..., 0)`; nodes constructed outside
+            `build_tree` leave this empty.
     """
 
     patch_indices: NDArray[np.intp]
@@ -62,6 +67,7 @@ class TreeNode:
     parent: TreeNode | None = None
     children: list[TreeNode] = field(default_factory=list)
     index_in_level: int = -1
+    cell_coords: tuple[int, ...] = ()
 
     @property
     def is_leaf(self) -> bool:
@@ -118,18 +124,21 @@ def make_node(
     parent: TreeNode | None = None,
 ) -> TreeNode:
     """Construct a `TreeNode` for the given patch subset, computing its
-    row/column index sets and bounding-box geometry from `mesh`.
+    row/column index sets and shrink-wrapped centroid geometry from `mesh`.
 
     Args:
-        mesh: The `FaultMesh` providing centroids and index-expansion
-            helpers.
+        mesh: The `FaultMesh` providing centroids and index-expansion helpers.
+            Nodes made outside the dyadic builder have no cell coordinate;
+            `build_tree` assigns the integer coordinate of every occupied
+            dyadic cell.
         patch_indices: Integer array of patch indices covered by the node.
         level: Depth of the node in the tree.
         parent: Parent node, or `None` for the root.
 
     Returns:
-        A `TreeNode` with `children=[]`; the caller (recursive builder) is
-        responsible for attaching children.
+        A `TreeNode` with `children=[]`; `build_tree` replaces its
+        shrink-wrapped geometry with the corresponding dyadic cell before
+        attaching it to the tree.
     """
     patch_indices = np.asarray(patch_indices, dtype=np.intp).reshape(-1)
     row_indices = mesh.patch_to_rows(patch_indices)
@@ -167,7 +176,13 @@ def _compute_geometry(
         raise ValueError(f"centroids must have shape (n, d) with n >= 1, got {centroids.shape}")
     mins = centroids.min(axis=0)
     maxs = centroids.max(axis=0)
+    with np.errstate(over="ignore"):
+        spans = maxs - mins
+    if not np.all(np.isfinite(spans)):
+        raise ValueError("bounding-box extent cannot be represented as a finite float")
     bounding_box = np.stack([mins, maxs], axis=1)
-    center = 0.5 * (mins + maxs)
-    diam = float(np.linalg.norm(maxs - mins))
+    center = mins + 0.5 * spans
+    diam = float(np.hypot.reduce(spans))
+    if not np.isfinite(diam):
+        raise ValueError("bounding-box diagonal cannot be represented as a finite float")
     return bounding_box, center, diam

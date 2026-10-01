@@ -1,5 +1,5 @@
 ---
-description: Run one PLAN.md task autonomously through open-PR → implement → review → fix-loop → finalize, leaving the PR ready for the human to merge. Usage: /task 3.2
+description: Run one routed task autonomously through open-PR → implement → review → fix-loop → finalize, leaving the PR ready for the human to merge. Usage: /task C.2
 ---
 
 You are the ORCHESTRATOR for task **$ARGUMENTS**. You run the ENTIRE pipeline
@@ -23,9 +23,15 @@ Git identity: this repo has no `user.name`/`user.email` configured. Commit with
 
 ## 0. Preflight
 
-Confirm task **$ARGUMENTS** exists in `PLAN.md` (Stage F tasks carry a one-line
-entry in `plan.md` and their full block in `FIXPLAN.md` — read the full block)
-and its prerequisites appear done: a prerequisite counts as done if its line in
+Resolve task **$ARGUMENTS** once, before preflight, as `task_plan`: `C.x` maps
+to `BP_COLORING_PLAN.md`, `R.x` to `REALGF_PLAN.md`, `F.x` to `FIXPLAN.md`, and
+a numeric id to `plan.md`. Confirm the concrete task exists in `task_plan`.
+For an F task, `plan.md` is only the historical one-line cross-reference; its
+authoritative full task block is in `FIXPLAN.md`.
+For example, `C.6` resolves `task_plan` to `BP_COLORING_PLAN.md`; `R.3`
+resolves `task_plan` to `REALGF_PLAN.md`; `F.2` resolves `task_plan` to
+`FIXPLAN.md`; and `3.2` resolves `task_plan` to `plan.md`.
+Then confirm its prerequisites appear done: a prerequisite counts as done if its line in
 `tasks.txt` is marked `# done` OR it landed on `main` as a `feat(task-<id>)`
 commit. Confirm HEAD is `main` and `.venv/bin/pytest -q` is green.
 
@@ -39,15 +45,17 @@ report. If a preflight check fails, STOP and report.
 git checkout -b task/$ARGUMENTS
 git -c user.name=yohaimagen -c user.email=mayochay@gmail.com commit --allow-empty -m "chore(task-$ARGUMENTS): open PR"
 git push -u origin task/$ARGUMENTS
-gh pr create --draft --base main --head task/$ARGUMENTS --title "task-$ARGUMENTS: <short title>" --body-file <plan>
+gh pr create --draft --base main --head task/$ARGUMENTS --title "task-$ARGUMENTS: <short title>" --body-file <task-body>
 ```
 Body = "what is going to be done": a 2–5 sentence scope summary, then a checklist
-of the task's Steps and expected Output. Write it with `--body-file` (never a
-heredoc with backticks inline). Capture the PR number and URL.
+of the concrete task block's Steps and expected Output from `task_plan`. Write
+it to `<task-body>` with `--body-file` (never a heredoc with backticks inline).
+Capture the PR number and URL.
 
 ## 2. implementer → commit (inline)
 
-Give the implementer the task id, the branch, and where the full task block lives.
+Give the implementer the task id, branch, and the full task block from
+`task_plan`.
 It returns a summary naming **the files it changed**.
 
 Stage EXACTLY those paths — never `git add -A`, never `git add .`:
@@ -68,8 +76,9 @@ Subject under ~72 chars.
 
 ## 3. reviewer
 
-Give it the task id and branch. It reviews `git diff main...HEAD` against
-`PLAN.md`/`FIXPLAN.md` AND the paper, and ends with a `VERDICT:` line.
+Give it the task id, branch, and `task_plan`. It reviews `git diff main...HEAD`
+against the concrete task block in `task_plan` and the paper, and ends with a
+`VERDICT:` line.
 
 ## 4. Fix loop (at most 3 rounds)
 

@@ -16,6 +16,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    # NumPy 2.5 stubs require Python 3.12 syntax, while mypy targets Python 3.10.
+    "numpy<2.5",
     "pytest>=7.4",
     "black>=24.0",
     "ruff>=0.4",

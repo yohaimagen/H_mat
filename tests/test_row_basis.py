@@ -31,7 +31,7 @@ from gfcompress.mockgf import MockGF
 from gfcompress.operators import MatVecOperator
 from gfcompress.peeling import BlockFactor, peeled_rmatvec
 from gfcompress.row_basis import RowBasis, core_matrices, row_bases
-from gfcompress.tree import TreeNode
+from gfcompress.tree import TreeNode, make_node
 
 
 def _grid_mesh(*shape: int, spacing: float = 1.0) -> FaultMesh:
@@ -89,6 +89,33 @@ class _CountingOperator(MatVecOperator):
     @property
     def shape(self) -> tuple[int, int]:
         return self.inner.shape
+
+
+def test_one_patch_rectangular_blocks_share_effective_rank_and_recover_exactly() -> None:
+    """A smooth MockGF 2-by-1 patch block remains valid when k is larger."""
+    mesh = FaultMesh(
+        centroids=np.array([[0.0, 0.0], [0.02, 0.01]]),
+        L=np.array([0.01, 0.01]),
+    )
+    root = make_node(mesh, np.array([0, 1]), level=0)
+    root.cell_coords = (0, 0)
+    alpha = make_node(mesh, np.array([0]), level=1, parent=root)
+    beta = make_node(mesh, np.array([1]), level=1, parent=root)
+    alpha.cell_coords = (0, 0)
+    beta.cell_coords = (3, 0)
+    root.children = [alpha, beta]
+    lists = TreeLists(
+        nei={root: [root], alpha: [alpha], beta: [beta]},
+        interaction={root: [], alpha: [beta], beta: [alpha]},
+    )
+
+    factors = compress_level(MockGF(mesh), root, lists, mesh, 1, factors=[], k=5, p=2, seed=4)
+    assert len(factors) == 2
+    for factor in factors:
+        assert factor.u.shape == (2, 1)
+        assert factor.v.shape == factor.b.shape == (1, 1)
+        exact = MockGF(mesh).block(factor.alpha.patch_indices, factor.beta.patch_indices)
+        np.testing.assert_allclose(factor.u @ factor.b @ factor.v.T, exact, atol=1e-11)
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +213,7 @@ def test_rmatvec_count_matches_test_matrix_count() -> None:
     k, p = 2, 2
 
     test_matrices = build_admissible_test_matrices(root, level, mesh, k, p, seed=3, side="row")
-    assert len(test_matrices) <= 6**mesh.d
+    assert len(test_matrices) <= 6**mesh.tree_dim
 
     row_bases(counting_op, root, lists, mesh, level, factors=[], k=k, p=p, seed=3)
 
@@ -326,8 +353,8 @@ def test_compress_level_matvec_budget() -> None:
 
     compress_level(counting_op, root, lists, mesh, level, factors=[], k=k, p=p, seed=9)
 
-    assert counting_op.matvec_calls <= 6**mesh.d
-    assert counting_op.rmatvec_calls <= 6**mesh.d
-    assert counting_op.matvec_calls + counting_op.rmatvec_calls <= 2 * 6**mesh.d
+    assert counting_op.matvec_calls <= 6**mesh.tree_dim
+    assert counting_op.rmatvec_calls <= 6**mesh.tree_dim
+    assert counting_op.matvec_calls + counting_op.rmatvec_calls <= 2 * 6**mesh.tree_dim
     assert counting_op.matvec_columns == counting_op.matvec_calls * (k + p)
     assert counting_op.rmatvec_columns == counting_op.rmatvec_calls * (k + p)

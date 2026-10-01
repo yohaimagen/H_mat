@@ -181,9 +181,16 @@ def _assemble(mesh: FaultMesh, eps: float) -> NDArray[np.float64]:
         Dense array of shape `(mesh.n_rows, mesh.n_cols)`.
     """
     n = mesh.n_patches
-    d = mesh.d
     dof_row = mesh.dof_row
     dof_col = mesh.dof_col
+    if mesh.tree_dim != dof_row:
+        raise ValueError(
+            f"MockGF requires a full-ambient mesh (tree_dim == dof_row): the kernel "
+            f"evaluates centroids as points in R^dof_row, but got tree_dim={mesh.tree_dim} "
+            f"!= dof_row={dof_row}. PCA-reduced meshes (Task R.2) are not physically "
+            "meaningful inputs to this synthetic kernel."
+        )
+    d = dof_row
 
     x = np.asarray(mesh.centroids, dtype=np.float64)
     diff = x[:, None, :] - x[None, :, :]
