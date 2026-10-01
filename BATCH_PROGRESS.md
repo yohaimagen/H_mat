@@ -46,7 +46,7 @@ activation has not been established and is not claimed as enforcement.
 | C.2 | 0c8df92 + b1a4b9f + 6604919 | APPROVED after 2 corrections | 340 tests; ruff/black/mypy independently pass | proceed C.3 |
 | C.3 | 8113385 + 4eb126e | APPROVED after 1 correction | full suite; ruff/black/mypy independently pass | proceed C.4 |
 | C.4 | fd88b43 + 9533703 + 94ef6b4 | APPROVED after 2 corrections | full suite; measurements reproduced; ruff/black/mypy independently pass | proceed C.5 |
-| C.5 | 09aeebd + 6c45588 + 336178b | APPROVED after 2 corrections | 352 tests; weakref lifetime proof; ruff/black/mypy independently pass | outer Astra review |
+| C.5 | 09aeebd + 6c45588 + 336178b | APPROVED after 2 corrections | 352 tests; weakref lifetime proof; ruff/black/mypy independently pass | outer Astra approved; human merge |
 
 Outer GPT-6 Astra stack review started at aggregate tip
 `e9b0876f478284b602376d66382b46bc7ac9fc5f`, covering the recorded batch range
@@ -87,6 +87,33 @@ from tests. The full suite, static checks, C.4 measurement reproduction, and
 7,500 randomized near-max translation checks otherwise pass. The configured
 three-round correction limit is reached; PR #28 remains draft and the outer
 Astra re-review is not started.
+
+User authorized Astra adjudication beyond the prior correction cap. Astra
+confirmed two blockers at `b195f2e33cdf722add55914874e95c5ef04efd15`:
+the PCA replay documentation/tests must use the implementation's canonical full
+rotation followed by retained-axis slicing, and `run_plan.sh` must skip
+completed/history entries, strip annotations, validate ids, and first dispatch
+exactly C.6 from the repository task list. Astra found the leaf-test assertions
+numerically sound (exact factors or tolerant approximate checks); only their
+overbroad prose needs cleanup. Full validation passed with 353 tests and 10
+dataset-dependent skips. PR #28 remains draft pending correction and re-review.
+
+The Astra-directed fix was committed at
+`b083cf54043c1a73db6be08b91a415ef6f04cddc`. Sol requested two focused test
+corrections: process and prevalidate a final task-list record without a trailing
+newline, and make the dropped-axis near-`1e308` PCA replay regression
+non-axis-aligned so it demonstrably fails under the former retained-axis-only
+multiplication order. All other runner, PCA, and leaf-prose checks passed.
+
+Sol approved the focused correction at
+`33dd0bb399ed26c7a74172042545aa7fabfefb84` with no remaining findings. The
+final outer GPT-6 Astra review then approved the complete C.0-C.5 stack at that
+same immutable code revision with no findings, questions, or suggestions.
+Astra independently recorded 359 passing tests, 10 dataset-dependent skips,
+all static/shell/diff checks, reproduced C.4 measurements, and targeted
+geometry, rank, adjoint, ownership, lifetime, and dispatch diagnostics. The
+final aggregate summary was posted to PR #28, which was marked ready for human
+review. No agent merge or push to `main` occurred.
 
 ## Baseline and usage record
 
