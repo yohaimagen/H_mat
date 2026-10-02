@@ -22,15 +22,19 @@ from numpy.typing import NDArray
 from scipy.spatial import cKDTree
 from scipy.stats import spearmanr
 
-from gfcompress.interactions import DEFAULT_ETA
+from gfcompress.build_tree import build_tree
+from gfcompress.interactions import DEFAULT_ETA, build_lists
 from gfcompress.operators import DenseOperator
 from gfcompress.realgf import (
     PETSC_MAT_CLASSID,
     RealGF,
+    RealGFSubset,
     _load_coords_csv,
     _row_pm_to_raw,
     patch_length_candidates,
     read_petsc_mat_header,
+    representative_patch_ids,
+    representative_subset,
 )
 
 REAL_GFS = Path(__file__).resolve().parent.parent / "real_gfs"
@@ -224,6 +228,51 @@ def test_realgf_tiny_synthetic_matvec_rmatvec_match_dense(tmp_path: Path) -> Non
     np.testing.assert_allclose(gf.matvec(omega1), reference.matvec(omega1))
 
 
+def test_realgf_component_ids_are_ordered_but_not_physical_labels(tmp_path: Path) -> None:
+    """CSV component ids are verified; the row layout is an explicit inference."""
+    mat_path, csv_path, _, _ = _tiny_synthetic_dataset(tmp_path)
+    gf = RealGF(mat_path, csv_path)
+
+    np.testing.assert_array_equal(gf.column_component_ids.reshape(-1, 2), [[0, 1]] * 8)
+    np.testing.assert_array_equal(gf.row_component_ids.reshape(-1, 3), [[0, 1, 2]] * 8)
+    assert not hasattr(gf, "column_component_labels")
+    assert not hasattr(gf, "row_component_labels")
+
+
+def test_realgf_tiny_synthetic_adjoint_and_component_sensitive_order(tmp_path: Path) -> None:
+    mat_path, csv_path, row_expected, col_expected = _tiny_synthetic_dataset(tmp_path)
+    gf = RealGF(mat_path, csv_path)
+    raw = (100 * np.arange(24)[:, None] + np.arange(16)[None, :]).astype(float)
+    dense_pm = raw[np.ix_(row_expected, col_expected)]
+
+    # A component-specific impulse catches an otherwise easy-to-miss swap of
+    # the two BP7 column components or any of the three row components.
+    omega = np.zeros(16)
+    omega[2 * 3 + 1] = 1.0
+    psi = np.zeros(24)
+    psi[3 * 5 + 2] = 1.0
+    np.testing.assert_allclose(gf.matvec(omega), dense_pm[:, 7])
+    np.testing.assert_allclose(gf.rmatvec(psi), dense_pm[17, :])
+    assert np.vdot(gf.matvec(omega), psi) == pytest.approx(np.vdot(omega, gf.rmatvec(psi)))
+
+
+def test_representative_subset_keeps_patch_major_maps_and_separated_regions(tmp_path: Path) -> None:
+    mat_path, csv_path, _, _ = _tiny_synthetic_dataset(tmp_path)
+    gf = RealGF(mat_path, csv_path)
+    subset = representative_subset(gf, max_patches=6, regions=3)
+
+    np.testing.assert_array_equal(
+        subset.patch_ids, representative_patch_ids(gf.original_centroids, 6, 3)
+    )
+    np.testing.assert_array_equal(subset.row_map, gf.mesh.patch_to_rows(subset.patch_ids))
+    np.testing.assert_array_equal(subset.col_map, gf.mesh.patch_to_cols(subset.patch_ids))
+    assert subset.shape == (18, 12)
+    assert np.unique(subset.patch_ids // gf.nbf).size == 2
+    omega = np.arange(subset.shape[1], dtype=float)
+    psi = np.arange(subset.shape[0], dtype=float)
+    assert np.vdot(subset.matvec(omega), psi) == pytest.approx(np.vdot(omega, subset.rmatvec(psi)))
+
+
 def test_load_coords_csv_col_permutation_is_bijection(tmp_path: Path) -> None:
     _, csv_path, _, col_expected = _tiny_synthetic_dataset(tmp_path)
     coords = _load_coords_csv(csv_path)
@@ -310,6 +359,23 @@ def test_bp7_permutation_roundtrips() -> None:
     # BP7 columns are genuinely blocked (dof_col=2): patch-major requires a
     # non-trivial permutation.
     assert not np.array_equal(gf.col_pm_to_raw, np.arange(gf.shape[1]))
+
+
+def _assert_adjoint(gf: RealGF) -> None:
+    rng = np.random.default_rng(7)
+    omega = rng.standard_normal((gf.shape[1], 2))
+    psi = rng.standard_normal((gf.shape[0], 2))
+    np.testing.assert_allclose(np.vdot(gf.matvec(omega), psi), np.vdot(omega, gf.rmatvec(psi)))
+
+
+@_needs_bp3
+def test_bp3_adjoint_consistency() -> None:
+    _assert_adjoint(RealGF(_BP3_MAT, _BP3_CSV))
+
+
+@_needs_bp7
+def test_bp7_adjoint_consistency() -> None:
+    _assert_adjoint(RealGF(_BP7_MAT, _BP7_CSV))
 
 
 def _row_layout_probe(gf: RealGF, patch: int) -> tuple[float, float, float, int, int, int]:
@@ -425,3 +491,55 @@ def test_L_candidate_sensitivity_bp7() -> None:
     }
     assert abs(fracs["representative"] - fracs["voronoi"]) < 0.05
     assert abs(fracs["representative"] - fracs["element"]) > 0.3
+
+
+def _subset_diagnostics(gf: RealGF, regions: int) -> tuple[RealGFSubset, int, int, int, int, int]:
+    """Fast, bounded real-data checks; never form the full source matrix."""
+    subset = representative_subset(gf, max_patches=192, regions=regions)
+    root = build_tree(subset.mesh, m=12)
+    lists = build_lists(root)
+    levels = list(root.iter_levels())
+    leaves = levels[-1]
+    interactions = sum(len(lists.interaction[node]) for nodes in levels[2:] for node in nodes)
+    occupancies = [len(node.patch_indices) for node in leaves]
+    # One genuine far-field block, recovered through a narrow matvec only.
+    alpha = next(node for nodes in levels[2:] for node in nodes if lists.interaction[node])
+    beta = lists.interaction[alpha][0]
+    probe = np.zeros((subset.shape[1], len(beta.col_indices)))
+    probe[beta.col_indices] = np.eye(len(beta.col_indices))
+    block = subset.matvec(probe)[alpha.row_indices]
+    singular_values = np.linalg.svd(block, compute_uv=False)
+    rank = int((singular_values > singular_values[0] * 1e-4).sum())
+    return subset, len(levels) - 1, interactions, max(occupancies), rank, min(block.shape)
+
+
+@_needs_bp3
+def test_bp3_subset_bp3_diagnostics_and_l_independence() -> None:
+    gf = RealGF(_BP3_MAT, _BP3_CSV)
+    subset, depth, interactions, occupancy, rank, block_width = _subset_diagnostics(gf, regions=4)
+    alternate, *_ = _subset_diagnostics(gf, regions=6)
+    assert subset.original_centroids.shape[1] == 2
+    assert subset.reduced_centroids.shape[1] == 1
+    assert depth >= 2 and interactions > 0 and occupancy <= 12
+    assert 0 < rank < block_width  # numerical far-field rank at 1e-4, not an exact rank claim
+    assert not np.array_equal(subset.patch_ids, alternate.patch_ids)
+    # L is metadata only; it cannot change the dyadic partition.
+    roots = [
+        build_tree(RealGF(_BP3_MAT, _BP3_CSV, l_method=name).mesh, m=12)
+        for name in ("representative", "voronoi", "element")
+    ]
+    assert [[node.cell_coords for node in list(root.iter_levels())[-1]] for root in roots].count(
+        [node.cell_coords for node in list(roots[0].iter_levels())[-1]]
+    ) == 3
+
+
+@_needs_bp7
+def test_bp7_subset_bp7_diagnostics_and_subset_sensitivity() -> None:
+    gf = RealGF(_BP7_MAT, _BP7_CSV)
+    first, depth, interactions, occupancy, rank, block_width = _subset_diagnostics(gf, regions=4)
+    second, *_ = _subset_diagnostics(gf, regions=6)
+    assert first.original_centroids.shape[1] == 3
+    assert first.reduced_centroids.shape[1] == 2
+    assert depth >= 2 and interactions > 0 and occupancy <= 12
+    assert 0 < rank < block_width
+    assert not np.array_equal(first.patch_ids, second.patch_ids)

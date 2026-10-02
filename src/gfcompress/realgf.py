@@ -61,6 +61,14 @@ measurement, not proof for every one of the 14000/16560 columns -- treat any
 future compression result on real data whose accuracy looks anomalously poor
 as reason to re-run this check first.
 
+Component metadata
+------------------
+The CSV verifies only integer ``slip_comp`` identifiers and their order; it
+does not name physical slip directions.  ``column_component_ids`` therefore
+reports those verified identifiers, while ``row_component_ids`` is explicitly
+the component-major-within-element *layout inference* used for the unlabelled
+file rows.  Neither array assigns physical component names.
+
 `L` (patch characteristic length)
 ----------------------------------
 `FaultMesh.L` is per-patch mesh metadata. It does not control the production
@@ -493,6 +501,11 @@ class RealGF(MatVecOperator):
         # Geometry may be numerically lower dimensional, but operator components
         # remain in the original patch-major elasticity layout.
         self.alignment: PCAAlignment = pca_align(coords.centroids)
+        self.original_centroids = self.alignment.original_centroids
+        self.column_component_ids = np.tile(np.arange(dof_col, dtype=np.intp), n_patches)
+        # Row component ids describe the tested blocked-row *layout*, not
+        # physical labels: the source format supplies no row-component CSV.
+        self.row_component_ids = np.tile(np.arange(dof_row, dtype=np.intp), n_patches)
         self.mesh = FaultMesh(
             centroids=self.alignment.centroids,
             L=self.patch_length_candidates[l_method],
@@ -525,6 +538,96 @@ class RealGF(MatVecOperator):
     def shape(self) -> tuple[int, int]:
         """`(n_rows, n_cols) = (header.rows, header.cols)`."""
         return (self.header.rows, self.header.cols)
+
+
+class RealGFSubset(MatVecOperator):
+    """Patch-restricted view of a :class:`RealGF`, without a dense block.
+
+    ``patch_ids`` are source patch ids in the deterministic order selected by
+    :func:`representative_patch_ids`.  ``row_map`` and ``col_map`` are the
+    corresponding source patch-major scalar indices.  Original coordinates
+    remain available for diagnostics; ``mesh`` uses the source's reduced PCA
+    coordinates so the tree sees exactly its intended geometry.
+    """
+
+    def __init__(self, source: RealGF, patch_ids: NDArray[np.integer]) -> None:
+        patch_ids = np.asarray(patch_ids, dtype=np.intp).reshape(-1)
+        if patch_ids.size == 0 or np.unique(patch_ids).size != patch_ids.size:
+            raise ValueError("patch_ids must be a non-empty set of distinct source patches")
+        if patch_ids.min() < 0 or patch_ids.max() >= source.mesh.n_patches:
+            raise ValueError("patch_ids are outside the source mesh")
+        self.source = source
+        self.patch_ids = patch_ids
+        self.row_map = source.mesh.patch_to_rows(patch_ids)
+        self.col_map = source.mesh.patch_to_cols(patch_ids)
+        self.original_centroids = source.original_centroids[patch_ids]
+        self.reduced_centroids = source.mesh.centroids[patch_ids]
+        self.mesh = FaultMesh(
+            centroids=self.reduced_centroids,
+            L=source.mesh.L[patch_ids],
+            dof_row=source.dof_row,
+        )
+
+    def matvec(self, omega: NDArray[np.floating]) -> NDArray[np.floating]:
+        full = np.zeros((self.source.shape[1],) + omega.shape[1:], dtype=omega.dtype)
+        full[self.col_map] = omega
+        return self.source.matvec(full)[self.row_map]
+
+    def rmatvec(self, psi: NDArray[np.floating]) -> NDArray[np.floating]:
+        full = np.zeros((self.source.shape[0],) + psi.shape[1:], dtype=psi.dtype)
+        full[self.row_map] = psi
+        return self.source.rmatvec(full)[self.col_map]
+
+    @property
+    def shape(self) -> tuple[int, int]:
+        return (len(self.row_map), len(self.col_map))
+
+
+def representative_patch_ids(
+    original_centroids: NDArray[np.float64],
+    max_patches: int = 128,
+    regions: int = 4,
+    lengths: NDArray[np.float64] | None = None,
+) -> NDArray[np.intp]:
+    """Choose a bounded, deterministic spatially separated patch subset.
+
+    The cloud is ordered along its longest physical axis, divided into
+    ``regions`` contiguous spatial bands, then sampled across the available
+    patch-length range within each band. This deliberately includes separated
+    regions and mesh resolutions; contiguous file indices play no role.
+    """
+    points = np.asarray(original_centroids, dtype=np.float64)
+    if points.ndim != 2 or len(points) == 0 or not np.isfinite(points).all():
+        raise ValueError("original_centroids must be a non-empty finite (N, d) array")
+    if max_patches < 1 or regions < 2:
+        raise ValueError("max_patches must be >= 1 and regions must be >= 2")
+    n = len(points)
+    if lengths is None:
+        lengths = np.ones(n)
+    lengths = np.asarray(lengths, dtype=np.float64)
+    if lengths.shape != (n,) or not np.isfinite(lengths).all():
+        raise ValueError("lengths must be finite with shape (N,)")
+    count = min(n, max_patches)
+    axis = int(np.ptp(points, axis=0).argmax())
+    ordered = np.argsort(points[:, axis], kind="stable")
+    bands = np.array_split(ordered, min(regions, count))
+    quotas = np.full(len(bands), count // len(bands), dtype=np.intp)
+    quotas[: count % len(bands)] += 1
+    chosen = [
+        band[np.argsort(lengths[band], kind="stable")][
+            np.linspace(0, len(band) - 1, quota, dtype=np.intp)
+        ]
+        for band, quota in zip(bands, quotas, strict=True)
+    ]
+    return np.sort(np.concatenate(chosen)).astype(np.intp, copy=False)
+
+
+def representative_subset(source: RealGF, max_patches: int = 128, regions: int = 4) -> RealGFSubset:
+    """Build the standard bounded real-data validation view of ``source``."""
+    return RealGFSubset(
+        source,
+        representative_patch_ids(source.original_centroids, max_patches, regions, source.mesh.L),
+    )
 
 
 def _invert_permutation(perm: NDArray[np.intp]) -> NDArray[np.intp]:
