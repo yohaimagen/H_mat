@@ -23,6 +23,7 @@ from scipy.spatial import cKDTree
 from scipy.stats import spearmanr
 
 from gfcompress.build_tree import build_tree
+from gfcompress.compress import compress
 from gfcompress.interactions import DEFAULT_ETA, build_lists
 from gfcompress.operators import DenseOperator
 from gfcompress.realgf import (
@@ -273,6 +274,46 @@ def test_representative_subset_keeps_patch_major_maps_and_separated_regions(tmp_
     assert np.vdot(subset.matvec(omega), psi) == pytest.approx(np.vdot(omega, subset.rmatvec(psi)))
 
 
+def test_subset_uses_only_selected_raw_entries_not_source_matvec(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mat_path, csv_path, row_expected, col_expected = _tiny_synthetic_dataset(tmp_path)
+    gf = RealGF(mat_path, csv_path)
+    subset = RealGFSubset(gf, np.array([1, 6], dtype=np.intp))
+    raw = (100 * np.arange(24)[:, None] + np.arange(16)[None, :]).astype(float)
+
+    def fail(_: NDArray[np.floating]) -> NDArray[np.floating]:
+        raise AssertionError("full source product must not be called")
+
+    monkeypatch.setattr(gf, "matvec", fail)
+    monkeypatch.setattr(gf, "rmatvec", fail)
+    expected = raw[np.ix_(row_expected[subset.row_map], col_expected[subset.col_map])]
+    omega = np.arange(subset.shape[1], dtype=float)
+    psi = np.arange(subset.shape[0], dtype=float)
+    np.testing.assert_allclose(subset.matvec(omega), expected @ omega)
+    np.testing.assert_allclose(subset.rmatvec(psi), expected.T @ psi)
+
+
+def test_representative_ids_are_spatial_not_file_contiguous(tmp_path: Path) -> None:
+    cloud = np.array([[100.0], [0.0], [101.0], [1.0], [200.0], [2.0], [201.0], [3.0]])
+    lengths = np.array([1.0, 10.0, 2.0, 20.0, 3.0, 30.0, 4.0, 40.0])
+    ids = representative_patch_ids(cloud, max_patches=4, regions=2, lengths=lengths)
+    np.testing.assert_array_equal(ids, [0, 1, 6, 7])
+
+    mat_path, csv_path, _, _ = _tiny_synthetic_dataset(tmp_path)
+    subset = RealGFSubset(RealGF(mat_path, csv_path), ids)
+    np.testing.assert_array_equal(subset.row_map, [0, 1, 2, 3, 4, 5, 18, 19, 20, 21, 22, 23])
+    np.testing.assert_array_equal(subset.col_map, [0, 1, 2, 3, 12, 13, 14, 15])
+
+
+@pytest.mark.parametrize("replacement", ["0.5,0,0,0,", "0,-1,0,0,", "0,0,1.5,0,", "0,0,0,2.5,"])
+def test_load_coords_csv_rejects_invalid_identifiers(tmp_path: Path, replacement: str) -> None:
+    _, csv_path, _, _ = _tiny_synthetic_dataset(tmp_path)
+    csv_path.write_text(csv_path.read_text().replace("0,0,0,0,", replacement, 1))
+    with pytest.raises(ValueError, match="finite non-negative integers"):
+        _load_coords_csv(csv_path)
+
+
 def test_load_coords_csv_col_permutation_is_bijection(tmp_path: Path) -> None:
     _, csv_path, _, col_expected = _tiny_synthetic_dataset(tmp_path)
     coords = _load_coords_csv(csv_path)
@@ -494,7 +535,7 @@ def test_L_candidate_sensitivity_bp7() -> None:
 
 
 def _subset_diagnostics(gf: RealGF, regions: int) -> tuple[RealGFSubset, int, int, int, int, int]:
-    """Fast, bounded real-data checks; never form the full source matrix."""
+    """Fast real-data compression evidence; only near leaves become dense."""
     subset = representative_subset(gf, max_patches=192, regions=regions)
     root = build_tree(subset.mesh, m=12)
     lists = build_lists(root)
@@ -502,26 +543,28 @@ def _subset_diagnostics(gf: RealGF, regions: int) -> tuple[RealGFSubset, int, in
     leaves = levels[-1]
     interactions = sum(len(lists.interaction[node]) for nodes in levels[2:] for node in nodes)
     occupancies = [len(node.patch_indices) for node in leaves]
-    # One genuine far-field block, recovered through a narrow matvec only.
-    alpha = next(node for nodes in levels[2:] for node in nodes if lists.interaction[node])
-    beta = lists.interaction[alpha][0]
-    probe = np.zeros((subset.shape[1], len(beta.col_indices)))
-    probe[beta.col_indices] = np.eye(len(beta.col_indices))
-    block = subset.matvec(probe)[alpha.row_indices]
-    singular_values = np.linalg.svd(block, compute_uv=False)
-    rank = int((singular_values > singular_values[0] * 1e-4).sum())
-    return subset, len(levels) - 1, interactions, max(occupancies), rank, min(block.shape)
+    hmat = compress(subset, subset.mesh, m=12, k=4, p=2, seed=0, sampling="fixed")
+    factor_levels = {factor.alpha.level for factor in hmat.factors}
+    reduced = sum(
+        factor.u.shape[1] < min(factor.u.shape[0], factor.v.shape[0]) for factor in hmat.factors
+    )
+    return subset, len(levels) - 1, interactions, max(occupancies), len(factor_levels), reduced
 
 
 @_needs_bp3
 def test_bp3_subset_bp3_diagnostics_and_l_independence() -> None:
     gf = RealGF(_BP3_MAT, _BP3_CSV)
-    subset, depth, interactions, occupancy, rank, block_width = _subset_diagnostics(gf, regions=4)
-    alternate, *_ = _subset_diagnostics(gf, regions=6)
+    subset, depth, interactions, occupancy, compressed_levels, reduced = _subset_diagnostics(
+        gf, regions=4
+    )
+    alternate, _, alt_interactions, alt_occupancy, alt_levels, alt_reduced = _subset_diagnostics(
+        gf, regions=6
+    )
     assert subset.original_centroids.shape[1] == 2
     assert subset.reduced_centroids.shape[1] == 1
     assert depth >= 2 and interactions > 0 and occupancy <= 12
-    assert 0 < rank < block_width  # numerical far-field rank at 1e-4, not an exact rank claim
+    assert compressed_levels >= 2 and reduced > 0
+    assert alt_interactions > 0 and alt_occupancy <= 12 and alt_levels >= 2 and alt_reduced > 0
     assert not np.array_equal(subset.patch_ids, alternate.patch_ids)
     # L is metadata only; it cannot change the dyadic partition.
     roots = [
@@ -536,10 +579,15 @@ def test_bp3_subset_bp3_diagnostics_and_l_independence() -> None:
 @_needs_bp7
 def test_bp7_subset_bp7_diagnostics_and_subset_sensitivity() -> None:
     gf = RealGF(_BP7_MAT, _BP7_CSV)
-    first, depth, interactions, occupancy, rank, block_width = _subset_diagnostics(gf, regions=4)
-    second, *_ = _subset_diagnostics(gf, regions=6)
+    first, depth, interactions, occupancy, compressed_levels, reduced = _subset_diagnostics(
+        gf, regions=4
+    )
+    second, _, alt_interactions, alt_occupancy, alt_levels, alt_reduced = _subset_diagnostics(
+        gf, regions=6
+    )
     assert first.original_centroids.shape[1] == 3
     assert first.reduced_centroids.shape[1] == 2
     assert depth >= 2 and interactions > 0 and occupancy <= 12
-    assert 0 < rank < block_width
+    assert compressed_levels >= 2 and reduced > 0
+    assert alt_interactions > 0 and alt_occupancy <= 12 and alt_levels >= 2 and alt_reduced > 0
     assert not np.array_equal(first.patch_ids, second.patch_ids)

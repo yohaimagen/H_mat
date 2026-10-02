@@ -256,10 +256,20 @@ def _load_coords_csv(path: str | Path, coord_tol: float = 1e-6) -> _CoordsData:
     if raw.ndim == 1:
         raw = raw[None, :]
 
-    col_idx = raw[:, 0].astype(np.int64)
-    element = raw[:, 1].astype(np.int64)
-    slip_comp = raw[:, 2].astype(np.int64)
-    basis_func = raw[:, 3].astype(np.int64)
+    if raw.ndim != 2 or raw.shape[1] < 6:
+        raise ValueError(f"{path}: expected identifier columns and at least two coordinates")
+
+    identifiers: list[NDArray[np.int64]] = []
+    for column, name in enumerate(("col_idx", "element", "slip_comp", "basis_func")):
+        values = raw[:, column]
+        if (
+            not np.isfinite(values).all()
+            or not np.equal(values, np.floor(values)).all()
+            or (values < 0).any()
+        ):
+            raise ValueError(f"{path}: {name} must contain finite non-negative integers")
+        identifiers.append(values.astype(np.int64))
+    col_idx, element, slip_comp, basis_func = identifiers
     coords = raw[:, 4:]
     d = coords.shape[1]
 
@@ -534,6 +544,34 @@ class RealGF(MatVecOperator):
         result: NDArray[np.floating] = z_raw[self.col_pm_to_raw]
         return result
 
+    def _restricted_matvec(
+        self, row_pm: NDArray[np.intp], col_pm: NDArray[np.intp], omega: NDArray[np.floating]
+    ) -> NDArray[np.floating]:
+        """Apply a patch-major suboperator without padding to the full domain."""
+        rows = self.row_pm_to_raw[row_pm]
+        cols = self.col_pm_to_raw[col_pm]
+        result = np.empty(
+            (len(rows),) + omega.shape[1:], dtype=np.result_type(self.mat.dtype, omega.dtype)
+        )
+        for start in range(0, len(rows), 64):
+            stop = min(start + 64, len(rows))
+            result[start:stop] = self.mat[np.ix_(rows[start:stop], cols)] @ omega
+        return result
+
+    def _restricted_rmatvec(
+        self, row_pm: NDArray[np.intp], col_pm: NDArray[np.intp], psi: NDArray[np.floating]
+    ) -> NDArray[np.floating]:
+        """Apply a suboperator adjoint, streaming selected raw rows only."""
+        rows = self.row_pm_to_raw[row_pm]
+        cols = self.col_pm_to_raw[col_pm]
+        result = np.zeros(
+            (len(cols),) + psi.shape[1:], dtype=np.result_type(self.mat.dtype, psi.dtype)
+        )
+        for start in range(0, len(rows), 64):
+            stop = min(start + 64, len(rows))
+            result += self.mat[np.ix_(rows[start:stop], cols)].conj().T @ psi[start:stop]
+        return result
+
     @property
     def shape(self) -> tuple[int, int]:
         """`(n_rows, n_cols) = (header.rows, header.cols)`."""
@@ -569,14 +607,10 @@ class RealGFSubset(MatVecOperator):
         )
 
     def matvec(self, omega: NDArray[np.floating]) -> NDArray[np.floating]:
-        full = np.zeros((self.source.shape[1],) + omega.shape[1:], dtype=omega.dtype)
-        full[self.col_map] = omega
-        return self.source.matvec(full)[self.row_map]
+        return self.source._restricted_matvec(self.row_map, self.col_map, omega)
 
     def rmatvec(self, psi: NDArray[np.floating]) -> NDArray[np.floating]:
-        full = np.zeros((self.source.shape[0],) + psi.shape[1:], dtype=psi.dtype)
-        full[self.row_map] = psi
-        return self.source.rmatvec(full)[self.col_map]
+        return self.source._restricted_rmatvec(self.row_map, self.col_map, psi)
 
     @property
     def shape(self) -> tuple[int, int]:
