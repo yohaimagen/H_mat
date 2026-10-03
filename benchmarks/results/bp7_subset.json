@@ -1,0 +1,23 @@
+{
+  "dataset": {
+    "data_root": "real_gfs",
+    "identity": "bp7"
+  },
+  "parameters": {
+    "max_patches": 192,
+    "regions": 4,
+    "sampling": "fixed"
+  },
+  "provenance": {
+    "commit": "593506249f85a9424f72c0014959e391e5f4573a",
+    "diff_hash": null,
+    "dirty": false
+  },
+  "reason": "C.7 real matrix/coordinate files are absent or ambiguous",
+  "required": {
+    "coordinates_glob": "real_gfs/gf_bp7/*_fbf_coords.csv",
+    "matrix": "real_gfs/gf_bp7/gf_mat.bin"
+  },
+  "schema_version": 1,
+  "status": "skipped"
+}
