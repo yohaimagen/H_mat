@@ -534,8 +534,16 @@ def test_L_candidate_sensitivity_bp7() -> None:
     assert abs(fracs["representative"] - fracs["element"]) > 0.3
 
 
-def _subset_diagnostics(gf: RealGF, regions: int) -> tuple[RealGFSubset, int, int, int, int, int]:
-    """Fast real-data compression evidence; only near leaves become dense."""
+def _subset_diagnostics(gf: RealGF, regions: int) -> tuple[
+    RealGFSubset,
+    int,
+    int,
+    tuple[int, int, int, int],
+    int,
+    int,
+    tuple[tuple[int, int, float], ...],
+]:
+    """Bounded real-data compression and far-field spectrum evidence."""
     subset = representative_subset(gf, max_patches=192, regions=regions)
     root = build_tree(subset.mesh, m=12)
     lists = build_lists(root)
@@ -548,24 +556,76 @@ def _subset_diagnostics(gf: RealGF, regions: int) -> tuple[RealGFSubset, int, in
     reduced = sum(
         factor.u.shape[1] < min(factor.u.shape[0], factor.v.shape[0]) for factor in hmat.factors
     )
-    return subset, len(levels) - 1, interactions, max(occupancies), len(factor_levels), reduced
+    spectra: list[tuple[int, int, float]] = []
+    for nodes in levels[2:]:
+        pairs = [(alpha, beta) for alpha in nodes for beta in lists.interaction[alpha]]
+        if not pairs:
+            continue
+        # Largest block exposes a nontrivial tail; cell coordinates break ties
+        # deterministically without relying on file order.
+        alpha, beta = sorted(
+            pairs,
+            key=lambda pair: (
+                -min(len(pair[0].row_indices), len(pair[1].col_indices)),
+                pair[0].cell_coords,
+                pair[1].cell_coords,
+            ),
+        )[0]
+        probe = np.zeros((subset.shape[1], len(beta.col_indices)))
+        probe[beta.col_indices] = np.eye(len(beta.col_indices))
+        singular_values = np.linalg.svd(subset.matvec(probe)[alpha.row_indices], compute_uv=False)
+        floor = 1e-14
+        assert singular_values[0] > floor
+        width = min(len(alpha.row_indices), len(beta.col_indices))
+        numerical_rank = int((singular_values > singular_values[0] * 1e-6).sum())
+        rank4_tail = float(
+            np.linalg.norm(singular_values[4:]) / max(np.linalg.norm(singular_values), floor)
+        )
+        spectra.append((width, numerical_rank, rank4_tail))
+    return (
+        subset,
+        len(levels) - 1,
+        interactions,
+        (len(occupancies), sum(occupancies), min(occupancies), max(occupancies)),
+        len(factor_levels),
+        reduced,
+        tuple(spectra),
+    )
+
+
+def _assert_subset_diagnostics(
+    diagnostic: tuple[
+        RealGFSubset,
+        int,
+        int,
+        tuple[int, int, int, int],
+        int,
+        int,
+        tuple[tuple[int, int, float], ...],
+    ],
+) -> None:
+    subset, depth, interactions, occupancy, compressed_levels, reduced, spectra = diagnostic
+    count, total, minimum, maximum = occupancy
+    assert count > 0 and total == subset.mesh.n_patches and 1 <= minimum <= maximum <= 12
+    assert depth >= 2 and interactions > 0 and compressed_levels >= 2 and reduced > 0
+    # Rank is measured at a 1e-6 relative singular-value threshold; rank-4
+    # tails are Frobenius-relative with a 1e-14 absolute denominator floor.
+    nontrivial = [(width, rank, tail) for width, rank, tail in spectra if width > 4]
+    assert len(nontrivial) >= 2
+    assert all(0 < rank < width and tail < 0.1 for width, rank, tail in nontrivial)
 
 
 @_needs_bp3
 def test_bp3_subset_bp3_diagnostics_and_l_independence() -> None:
     gf = RealGF(_BP3_MAT, _BP3_CSV)
-    subset, depth, interactions, occupancy, compressed_levels, reduced = _subset_diagnostics(
-        gf, regions=4
-    )
-    alternate, _, alt_interactions, alt_occupancy, alt_levels, alt_reduced = _subset_diagnostics(
-        gf, regions=6
-    )
+    diagnostic = _subset_diagnostics(gf, regions=4)
+    alternate = _subset_diagnostics(gf, regions=6)
+    subset = diagnostic[0]
     assert subset.original_centroids.shape[1] == 2
     assert subset.reduced_centroids.shape[1] == 1
-    assert depth >= 2 and interactions > 0 and occupancy <= 12
-    assert compressed_levels >= 2 and reduced > 0
-    assert alt_interactions > 0 and alt_occupancy <= 12 and alt_levels >= 2 and alt_reduced > 0
-    assert not np.array_equal(subset.patch_ids, alternate.patch_ids)
+    _assert_subset_diagnostics(diagnostic)
+    _assert_subset_diagnostics(alternate)
+    assert not np.array_equal(subset.patch_ids, alternate[0].patch_ids)
     # L is metadata only; it cannot change the dyadic partition.
     roots = [
         build_tree(RealGF(_BP3_MAT, _BP3_CSV, l_method=name).mesh, m=12)
@@ -579,15 +639,11 @@ def test_bp3_subset_bp3_diagnostics_and_l_independence() -> None:
 @_needs_bp7
 def test_bp7_subset_bp7_diagnostics_and_subset_sensitivity() -> None:
     gf = RealGF(_BP7_MAT, _BP7_CSV)
-    first, depth, interactions, occupancy, compressed_levels, reduced = _subset_diagnostics(
-        gf, regions=4
-    )
-    second, _, alt_interactions, alt_occupancy, alt_levels, alt_reduced = _subset_diagnostics(
-        gf, regions=6
-    )
+    diagnostic = _subset_diagnostics(gf, regions=4)
+    alternate = _subset_diagnostics(gf, regions=6)
+    first = diagnostic[0]
     assert first.original_centroids.shape[1] == 3
     assert first.reduced_centroids.shape[1] == 2
-    assert depth >= 2 and interactions > 0 and occupancy <= 12
-    assert compressed_levels >= 2 and reduced > 0
-    assert alt_interactions > 0 and alt_occupancy <= 12 and alt_levels >= 2 and alt_reduced > 0
-    assert not np.array_equal(first.patch_ids, second.patch_ids)
+    _assert_subset_diagnostics(diagnostic)
+    _assert_subset_diagnostics(alternate)
+    assert not np.array_equal(first.patch_ids, alternate[0].patch_ids)
