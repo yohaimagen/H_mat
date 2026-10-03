@@ -32,5 +32,7 @@ is reported after subtracting that measured subtotal.
 Run `benchmarks/subset.py --dataset bp3` (or `bp7`) for the C.7 subset
 contract. With data absent it writes an explicit JSON `status: "skipped"`
 record. With data present it records the representative subset's IDs/maps
-hashes, region choice, and a native-endian dense reference constructed from
-that bounded subset only; it never fabricates BP3/BP7 metrics.
+hashes, region choice, source file size/mtime identity, and a native-endian
+dense reference constructed from that bounded subset only. It then runs the
+same construction, error-validation, storage, and apply-time accounting core
+as the synthetic report; it never fabricates BP3/BP7 metrics.

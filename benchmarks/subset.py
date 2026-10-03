@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import time
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from gfcompress.benchmark import provenance, write_report
+from gfcompress.benchmark import benchmark_operator, provenance, write_report
+from gfcompress.operators import DenseOperator
 from gfcompress.realgf import RealGF, representative_subset
 
 
@@ -38,14 +40,36 @@ def report(data_root: Path, dataset: str, regions: int, max_patches: int) -> dic
                 "coordinates_glob": str(directory / "*_fbf_coords.csv"),
             },
         }
+    load_start = time.perf_counter()
     source = RealGF(matrix, csvs[0])
     subset = representative_subset(source, max_patches=max_patches, regions=regions)
     # This is intentionally bounded to the selected subset, then made native endian.
     identity = np.eye(subset.shape[1])
     dense = np.ascontiguousarray(subset.matvec(identity), dtype=np.float64)
+    measured = benchmark_operator(
+        subset,
+        subset.mesh,
+        dataset=common["dataset"],
+        m=12,
+        k=4,
+        p=2,
+        loading_seconds=time.perf_counter() - load_start,
+        dense_reference=DenseOperator(dense),
+    )
     return {
-        **common,
+        **measured,
         "status": "ready",
+        "dataset": {
+            **common["dataset"],
+            "source": {
+                "matrix": str(matrix),
+                "matrix_size": matrix.stat().st_size,
+                "matrix_mtime_ns": matrix.stat().st_mtime_ns,
+                "coordinates": str(csvs[0]),
+                "coordinates_size": csvs[0].stat().st_size,
+                "coordinates_mtime_ns": csvs[0].stat().st_mtime_ns,
+            },
+        },
         "subset": {
             "patch_ids": subset.patch_ids.tolist(),
             "patch_ids_hash": _identity(subset.patch_ids),
@@ -56,8 +80,8 @@ def report(data_root: Path, dataset: str, regions: int, max_patches: int) -> dic
             "dense_reference": "native-endian, subset-only; same RHS/timing protocol required",
         },
         "limitations": (
-            "This data-aware record establishes the bounded reference contract; run compression "
-            "accounting with the shared helpers after selecting C.10 operating parameters."
+            "RSS requires a fresh dataset-loading subprocess and is not run by "
+            "this in-process ready path."
         ),
     }
 

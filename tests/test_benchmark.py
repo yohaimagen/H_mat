@@ -5,12 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from gfcompress.benchmark import predict_fixed_products, representation_storage, synthetic_report
 from gfcompress.build_tree import build_tree
 from gfcompress.compress import CountingOperator, ProductCounts, compress
 from gfcompress.geometry import FaultMesh
 from gfcompress.mockgf import MockGF
+from gfcompress.operators import MatVecOperator
 
 
 def _mesh() -> FaultMesh:
@@ -33,9 +35,7 @@ def test_count_snapshot_and_reset_are_phase_boundaries() -> None:
 def test_fixed_prediction_matches_observed_columns_and_retained_storage(tmp_path: Path) -> None:
     mesh = _mesh()
     root = build_tree(mesh, m=2)
-    predicted = predict_fixed_products(
-        root, mesh, k=2, p=2, validation_matvec_columns=0, validation_rmatvec_columns=0
-    )
+    predicted = predict_fixed_products(root, mesh, k=2, p=2, validation=ProductCounts(0, 0, 0, 0))
     counted = CountingOperator(MockGF(mesh))
     hmat = compress(counted, mesh, m=2, k=2, p=2, seed=0)
     observed = counted.snapshot()
@@ -81,3 +81,40 @@ def test_synthetic_schema_separates_nonzero_validation_and_timing_phases() -> No
         )
     )
     assert timing["total_setup"] >= timing["loading_conversion"] + timing["geometry"]
+
+
+def test_subset_ready_report_runs_shared_measurement_core(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from benchmarks import subset as subset_cli
+
+    mesh = _mesh()
+    source = MockGF(mesh)
+
+    class TinySubset(MatVecOperator):
+        def __init__(self) -> None:
+            self.mesh = mesh
+            self.patch_ids = np.arange(mesh.n_patches, dtype=np.intp)
+            self.row_map = np.arange(mesh.n_rows, dtype=np.intp)
+            self.col_map = np.arange(mesh.n_cols, dtype=np.intp)
+
+        @property
+        def shape(self) -> tuple[int, int]:
+            return source.shape
+
+        def matvec(self, omega: np.ndarray) -> np.ndarray:
+            return source.matvec(omega)
+
+        def rmatvec(self, psi: np.ndarray) -> np.ndarray:
+            return source.rmatvec(psi)
+
+    data_dir = tmp_path / "gf_bp3"
+    data_dir.mkdir()
+    (data_dir / "gf_mat.bin").write_bytes(b"present")
+    (data_dir / "bp3_fbf_coords.csv").write_text("present", encoding="utf-8")
+    monkeypatch.setattr(subset_cli, "RealGF", lambda *_: object())
+    monkeypatch.setattr(subset_cli, "representative_subset", lambda *_args, **_kwargs: TinySubset())
+    report = subset_cli.report(tmp_path, "bp3", 4, 64)
+    assert report["status"] == "ready"
+    assert report["products"]["validation_observed"]["matvec_calls"] > 0
+    assert report["storage"]["dense_reference_bytes"] == mesh.n_rows * mesh.n_cols * 8

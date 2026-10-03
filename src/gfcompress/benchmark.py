@@ -26,6 +26,7 @@ from numpy.typing import NDArray
 
 from gfcompress.build_tree import build_tree
 from gfcompress.compress import CountingOperator, ProductCounts, compress_level
+from gfcompress.error import relative_error
 from gfcompress.fixed_pattern import build_admissible_schedule, build_leaf_schedule
 from gfcompress.geometry import FaultMesh
 from gfcompress.hmatrix import HMatrix
@@ -70,11 +71,11 @@ def predict_fixed_products(
     mesh: FaultMesh,
     k: int,
     p: int,
-    validation_matvec_columns: int = 2,
-    validation_rmatvec_columns: int = 3,
+    validation: ProductCounts,
+    lists: Any | None = None,
 ) -> PredictedProducts:
     """Predict fixed-path work from occupied groups, not period upper bounds."""
-    lists = build_lists(root)
+    lists = build_lists(root) if lists is None else lists
     leaf_level = _deepest_level(root)
     forward_calls = forward_columns = transpose_calls = transpose_columns = 0
     for level in range(2, leaf_level + 1):
@@ -89,12 +90,6 @@ def predict_fixed_products(
     leaf_columns = sum(probe.w_max for probe in leaf.probes)
     construction = ProductCounts(forward_calls, forward_columns, transpose_calls, transpose_columns)
     leaves = ProductCounts(len(leaf.probes), leaf_columns, 0, 0)
-    validation = ProductCounts(
-        int(validation_matvec_columns > 0),
-        validation_matvec_columns,
-        int(validation_rmatvec_columns > 0),
-        validation_rmatvec_columns,
-    )
     return PredictedProducts(
         construction, leaves, validation, _add_counts(_add_counts(construction, leaves), validation)
     )
@@ -290,33 +285,35 @@ def write_report(path: Path, report: dict[str, Any]) -> None:
     path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def synthetic_report(
+def benchmark_operator(
+    reference: MatVecOperator,
+    mesh: FaultMesh,
     *,
-    n_side: int = 8,
+    dataset: dict[str, Any],
     m: int = 2,
     k: int = 2,
     p: int = 2,
     seed: int = 0,
     repeats: int = 3,
+    validation_seed: int = 1,
+    validation_iters: int = 2,
+    loading_seconds: float = 0.0,
+    lists: Any | None = None,
+    dense_reference: MatVecOperator | None = None,
 ) -> dict[str, Any]:
-    """Run the compact MockGF report used by ``benchmarks/synthetic.py``."""
-    from gfcompress.mockgf import MockGF
-
-    axis = np.arange(n_side, dtype=float)
-    xx, yy = np.meshgrid(axis, axis, indexing="ij")
-    mesh = FaultMesh(np.column_stack((xx.ravel(), yy.ravel())), np.ones(n_side * n_side))
-    load_start = time.perf_counter()
-    operator = CountingOperator(MockGF(mesh))
-    load_seconds = time.perf_counter() - load_start
+    """Run the shared C.8 measurement core for any black-box operator."""
+    operator = CountingOperator(reference)
     geometry_start = time.perf_counter()
     root = build_tree(mesh, m)
-    build_lists(root)
+    lists = build_lists(root) if lists is None else lists
     geometry_seconds = time.perf_counter() - geometry_start
-    predicted = predict_fixed_products(root, mesh, k, p)
+    validation_counts = ProductCounts(
+        2 * validation_iters, 2 * validation_iters, 2 * validation_iters, 2 * validation_iters
+    )
+    predicted = predict_fixed_products(root, mesh, k, p, validation_counts, lists)
     setup_start = time.perf_counter()
     # Reuse the measured tree/list pair: this is the compressor's public loop,
     # split here only to expose geometry versus sampling/peeling time.
-    lists = build_lists(root)
     import gfcompress.column_basis as column_basis_module
     import gfcompress.row_basis as row_basis_module
 
@@ -352,26 +349,26 @@ def synthetic_report(
     sampling_seconds = time.perf_counter() - setup_start
     construction_total_observed = operator.reset()
     leaves_observed = _subtract_counts(construction_total_observed, admissible_observed)
-    operator.matvec(np.ones((mesh.n_cols, 2)))
-    operator.rmatvec(np.ones((mesh.n_rows, 3)))
+    error = relative_error(hmat, operator, n_iters=validation_iters, seed=validation_seed)
     validation_observed = operator.snapshot()
     total_observed = _add_counts(construction_total_observed, validation_observed)
     forward = time_products(hmat, transpose=False, rhs_columns=1, repeats=repeats, seed=seed)
     adjoint = time_products(hmat, transpose=True, rhs_columns=1, repeats=repeats, seed=seed + 1)
+    dense_operator = dense_reference or operator.inner
     dense_forward = time_products(
-        operator.inner, transpose=False, rhs_columns=1, repeats=repeats, seed=seed
+        dense_operator, transpose=False, rhs_columns=1, repeats=repeats, seed=seed
     )
     dense_adjoint = time_products(
-        operator.inner, transpose=True, rhs_columns=1, repeats=repeats, seed=seed + 1
+        dense_operator, transpose=True, rhs_columns=1, repeats=repeats, seed=seed + 1
     )
-    dense_bytes = native_dense_reference_bytes(operator.inner)
+    dense_bytes = native_dense_reference_bytes(dense_operator)
     storage = representation_storage(hmat, dense_reference_bytes=dense_bytes)
     return {
         "schema_version": 1,
         "provenance": provenance(),
-        "dataset": {"identity": "MockGF regular-grid", "n_side": n_side, "patches": mesh.n_patches},
+        "dataset": dataset,
         "environment": environment(),
-        "seeds": {"compression": seed, "apply": seed},
+        "seeds": {"compression": seed, "apply": seed, "validation": validation_seed},
         "parameters": {"m": m, "k": k, "p": p, "sampling": "fixed"},
         "timing_protocol": {
             "rhs_columns": 1,
@@ -391,13 +388,15 @@ def synthetic_report(
             "construction_total_observed": asdict(construction_total_observed),
             "validation_observed": asdict(validation_observed),
             "total_observed": asdict(total_observed),
+            "relative_error": error,
+            "validation_iterations": validation_iters,
         },
         "timing_seconds": {
-            "loading_conversion": load_seconds,
+            "loading_conversion": loading_seconds,
             "geometry": geometry_seconds,
             "sampling_peeling_exclusive": max(0.0, sampling_seconds - local_seconds),
             "local_factorizations": local_seconds,
-            "total_setup": load_seconds + geometry_seconds + sampling_seconds,
+            "total_setup": loading_seconds + geometry_seconds + sampling_seconds,
             "hmat_forward_warm": forward,
             "hmat_adjoint_warm": adjoint,
             "dense_forward_warm": dense_forward,
@@ -413,6 +412,30 @@ def synthetic_report(
             "reference_included_in_process_rss": True,
         },
     }
+
+
+def synthetic_report(
+    *, n_side: int = 8, m: int = 2, k: int = 2, p: int = 2, seed: int = 0, repeats: int = 3
+) -> dict[str, Any]:
+    """Run the compact MockGF report used by ``benchmarks/synthetic.py``."""
+    from gfcompress.mockgf import MockGF
+
+    axis = np.arange(n_side, dtype=float)
+    xx, yy = np.meshgrid(axis, axis, indexing="ij")
+    mesh = FaultMesh(np.column_stack((xx.ravel(), yy.ravel())), np.ones(n_side * n_side))
+    start = time.perf_counter()
+    reference = MockGF(mesh)
+    return benchmark_operator(
+        reference,
+        mesh,
+        dataset={"identity": "MockGF regular-grid", "n_side": n_side, "patches": mesh.n_patches},
+        m=m,
+        k=k,
+        p=p,
+        seed=seed,
+        repeats=repeats,
+        loading_seconds=time.perf_counter() - start,
+    )
 
 
 def synthetic_dense_only(n_side: int = 8) -> None:
