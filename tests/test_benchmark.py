@@ -7,7 +7,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from gfcompress.benchmark import predict_fixed_products, representation_storage, synthetic_report
+from gfcompress.benchmark import (
+    benchmark_operator,
+    predict_fixed_products,
+    representation_storage,
+    synthetic_report,
+)
 from gfcompress.build_tree import build_tree
 from gfcompress.compress import CountingOperator, ProductCounts, compress
 from gfcompress.geometry import FaultMesh
@@ -65,10 +70,17 @@ def test_fixed_prediction_matches_observed_columns_and_retained_storage(tmp_path
 def test_synthetic_schema_separates_nonzero_validation_and_timing_phases() -> None:
     report = synthetic_report(n_side=4, m=1, k=1, p=1, repeats=1)
     products = report["products"]
-    assert products["predicted"]["construction"] == products["construction_observed"]
-    assert products["predicted"]["leaves"] == products["leaves_observed"]
-    assert products["predicted"]["validation"] == products["validation_observed"]
-    assert products["predicted"]["total"] == products["total_observed"]
+    assert products["budget"]["construction"] == products["construction_observed"]
+    assert products["budget"]["leaves"] == products["leaves_observed"]
+    for direction in ("matvec_calls", "matvec_columns", "rmatvec_calls", "rmatvec_columns"):
+        assert (
+            products["validation_observed"][direction]
+            <= products["budget"]["validation_budget"][direction]
+        )
+    assert products["total_observed"] == {
+        key: products["construction_total_observed"][key] + products["validation_observed"][key]
+        for key in products["total_observed"]
+    }
     timing = report["timing_seconds"]
     assert all(
         timing[name] >= 0
@@ -81,6 +93,23 @@ def test_synthetic_schema_separates_nonzero_validation_and_timing_phases() -> No
         )
     )
     assert timing["total_setup"] >= timing["loading_conversion"] + timing["geometry"]
+
+
+def test_exact_recovery_uses_less_than_validation_budget() -> None:
+    mesh = _mesh()
+    report = benchmark_operator(
+        MockGF(mesh), mesh, dataset={"identity": "exact leaf"}, m=128, k=1, p=1, repeats=1
+    )
+    products = report["products"]
+    assert report["products"]["relative_error"] == pytest.approx(0.0)
+    assert (
+        products["validation_observed"]["matvec_calls"]
+        < products["budget"]["validation_budget"]["matvec_calls"]
+    )
+    assert products["total_observed"] == {
+        key: products["construction_total_observed"][key] + products["validation_observed"][key]
+        for key in products["total_observed"]
+    }
 
 
 def test_subset_ready_report_runs_shared_measurement_core(

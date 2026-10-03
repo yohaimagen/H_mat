@@ -39,12 +39,12 @@ from gfcompress.tree import TreeNode
 
 @dataclass(frozen=True)
 class PredictedProducts:
-    """Actual scheduled product widths, including optional validation work."""
+    """Exact scheduled construction work plus maximum validation work."""
 
     construction: ProductCounts
     leaves: ProductCounts
-    validation: ProductCounts
-    total: ProductCounts
+    validation_budget: ProductCounts
+    total_budget: ProductCounts
 
 
 @dataclass(frozen=True)
@@ -382,7 +382,7 @@ def benchmark_operator(
             ),
         },
         "products": {
-            "predicted": asdict(predicted),
+            "budget": asdict(predicted),
             "construction_observed": asdict(admissible_observed),
             "leaves_observed": asdict(leaves_observed),
             "construction_total_observed": asdict(construction_total_observed),

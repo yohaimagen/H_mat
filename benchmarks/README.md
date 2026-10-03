@@ -10,9 +10,11 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
 The report is JSON and records automatic Git provenance (commit, dirty flag,
 and dirty-diff hash), data identity, environment,
 seeds, parameters, product counts, storage, and timing protocol. Construction
-counts are snapped before application/error work. `predicted` counts use the
-occupied fixed-pattern groups and actual leaf widths; they include `k + p` and
-separates admissible construction, leaves, nonzero validation, and totals.
+counts are snapped before application/error work. `budget` counts use the
+occupied fixed-pattern groups and actual leaf widths; construction and leaves
+are exact, while validation/total budgets are upper bounds because the power
+method may converge early. Actual validation and total observations are
+recorded separately.
 
 `numerical_bytes` is the H-matrix's factor plus leaf allocations;
 `retained_allocation_bytes` additionally includes tree/index allocations.
