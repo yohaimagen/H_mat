@@ -79,7 +79,7 @@
     }
   },
   "provenance": {
-    "commit": "2e7b735f5c18e973b8ea2ef750572ffab3e1c806",
+    "commit": "e89a9b152d0861de88774b2b46397d0626ad91b6",
     "diff_hash": null,
     "dirty": false
   },
@@ -90,8 +90,8 @@
     "validation": 1
   },
   "storage": {
-    "compressed_peak_rss_bytes": 59621376,
-    "dense_peak_rss_bytes": 54296576,
+    "compressed_peak_rss_bytes": 57409536,
+    "dense_peak_rss_bytes": 55279616,
     "dense_reference_bytes": 65536,
     "dense_storage_ratio": 1.406982421875,
     "disk_cache_bytes": 0,
@@ -103,7 +103,7 @@
     "reference_excluded_from_representation": true,
     "reference_included_in_process_rss": true,
     "retained_allocation_bytes": 92208,
-    "rss_ratio": 1.0980687990343996,
+    "rss_ratio": 1.038529934795495,
     "tree_index_bytes": 12272
   },
   "timing_protocol": {
@@ -114,14 +114,14 @@
     "warning": "sampled columns and wall time are reported separately; no byte-swap speedup claim"
   },
   "timing_seconds": {
-    "dense_adjoint_warm": 1.2916668007771175e-06,
-    "dense_forward_warm": 1.6110013045060139e-06,
-    "geometry": 0.0025436669966438785,
-    "hmat_adjoint_warm": 0.005896083333936986,
-    "hmat_forward_warm": 0.005268666665263784,
-    "loading_conversion": 0.00018716599879553542,
-    "local_factorizations": 0.07030191981175449,
-    "sampling_peeling_exclusive": 0.09492349718493642,
-    "total_setup": 0.16795624999213032
+    "dense_adjoint_warm": 1.6389991894053917e-06,
+    "dense_forward_warm": 1.2776654330082238e-06,
+    "geometry": 0.0025013749982463196,
+    "hmat_adjoint_warm": 0.005611930333543569,
+    "hmat_forward_warm": 0.005102875002194196,
+    "loading_conversion": 0.0001796669967006892,
+    "local_factorizations": 0.0673486814412172,
+    "sampling_peeling_exclusive": 0.0925452345618396,
+    "total_setup": 0.1625749579980038
   }
 }
