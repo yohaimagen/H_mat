@@ -19,6 +19,32 @@
     "sampling": "fixed"
   },
   "products": {
+    "budget": {
+      "construction": {
+        "matvec_calls": 52,
+        "matvec_columns": 208,
+        "rmatvec_calls": 52,
+        "rmatvec_columns": 208
+      },
+      "leaves": {
+        "matvec_calls": 9,
+        "matvec_columns": 9,
+        "rmatvec_calls": 0,
+        "rmatvec_columns": 0
+      },
+      "total_budget": {
+        "matvec_calls": 65,
+        "matvec_columns": 221,
+        "rmatvec_calls": 56,
+        "rmatvec_columns": 212
+      },
+      "validation_budget": {
+        "matvec_calls": 4,
+        "matvec_columns": 4,
+        "rmatvec_calls": 4,
+        "rmatvec_columns": 4
+      }
+    },
     "construction_observed": {
       "matvec_calls": 52,
       "matvec_columns": 208,
@@ -37,32 +63,6 @@
       "rmatvec_calls": 0,
       "rmatvec_columns": 0
     },
-    "predicted": {
-      "construction": {
-        "matvec_calls": 52,
-        "matvec_columns": 208,
-        "rmatvec_calls": 52,
-        "rmatvec_columns": 208
-      },
-      "leaves": {
-        "matvec_calls": 9,
-        "matvec_columns": 9,
-        "rmatvec_calls": 0,
-        "rmatvec_columns": 0
-      },
-      "total": {
-        "matvec_calls": 65,
-        "matvec_columns": 221,
-        "rmatvec_calls": 56,
-        "rmatvec_columns": 212
-      },
-      "validation": {
-        "matvec_calls": 4,
-        "matvec_columns": 4,
-        "rmatvec_calls": 4,
-        "rmatvec_columns": 4
-      }
-    },
     "relative_error": 3.8018217818538176e-07,
     "total_observed": {
       "matvec_calls": 65,
@@ -79,7 +79,7 @@
     }
   },
   "provenance": {
-    "commit": "e89a9b152d0861de88774b2b46397d0626ad91b6",
+    "commit": "3826f0d6215be18dba8ea8768ee14a802f733e58",
     "diff_hash": null,
     "dirty": false
   },
@@ -90,8 +90,8 @@
     "validation": 1
   },
   "storage": {
-    "compressed_peak_rss_bytes": 57409536,
-    "dense_peak_rss_bytes": 55279616,
+    "compressed_peak_rss_bytes": 58474496,
+    "dense_peak_rss_bytes": 55312384,
     "dense_reference_bytes": 65536,
     "dense_storage_ratio": 1.406982421875,
     "disk_cache_bytes": 0,
@@ -103,7 +103,7 @@
     "reference_excluded_from_representation": true,
     "reference_included_in_process_rss": true,
     "retained_allocation_bytes": 92208,
-    "rss_ratio": 1.038529934795495,
+    "rss_ratio": 1.0571682464454977,
     "tree_index_bytes": 12272
   },
   "timing_protocol": {
@@ -114,14 +114,14 @@
     "warning": "sampled columns and wall time are reported separately; no byte-swap speedup claim"
   },
   "timing_seconds": {
-    "dense_adjoint_warm": 1.6389991894053917e-06,
-    "dense_forward_warm": 1.2776654330082238e-06,
-    "geometry": 0.0025013749982463196,
-    "hmat_adjoint_warm": 0.005611930333543569,
-    "hmat_forward_warm": 0.005102875002194196,
-    "loading_conversion": 0.0001796669967006892,
-    "local_factorizations": 0.0673486814412172,
-    "sampling_peeling_exclusive": 0.0925452345618396,
-    "total_setup": 0.1625749579980038
+    "dense_adjoint_warm": 1.722333157279839e-06,
+    "dense_forward_warm": 1.2916668007771175e-06,
+    "geometry": 0.0026196249964414164,
+    "hmat_adjoint_warm": 0.005624125001001327,
+    "hmat_forward_warm": 0.005118013667621805,
+    "loading_conversion": 0.0001862499993876554,
+    "local_factorizations": 0.0665275898645632,
+    "sampling_peeling_exclusive": 0.09233382713864557,
+    "total_setup": 0.16166729199903784
   }
 }
