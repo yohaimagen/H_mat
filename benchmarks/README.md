@@ -3,21 +3,22 @@
 Run the reproducible synthetic report with one BLAS thread:
 
 ```sh
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 GFCOMPRESS_REVISION=$(git rev-parse HEAD) \
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
   .venv/bin/python benchmarks/synthetic.py
 ```
 
-The report is JSON and records the revision, data identity, environment,
+The report is JSON and records automatic Git provenance (commit, dirty flag,
+and dirty-diff hash), data identity, environment,
 seeds, parameters, product counts, storage, and timing protocol. Construction
 counts are snapped before application/error work. `predicted` counts use the
 occupied fixed-pattern groups and actual leaf widths; they include `k + p` and
-have separate validation fields. The current synthetic entry point has no
-validation probes, so those fields are zero.
+separates admissible construction, leaves, nonzero validation, and totals.
 
 `numerical_bytes` is the H-matrix's factor plus leaf allocations;
 `retained_allocation_bytes` additionally includes tree/index allocations.
-Both exclude the dense reference. `peak_rss_bytes` is collected in a spawned
-process and does include the reference operator, which is why
+Both exclude the dense reference. `compressed_peak_rss_bytes` and
+`dense_peak_rss_bytes` are collected in separate spawned processes; the
+compressed process does include the reference operator, which is why
 `dense_storage_ratio` and `rss_ratio` are intentionally different quantities.
 Disk cache size is zero unless a caller passes a cache path to
 `representation_storage`.
@@ -25,8 +26,11 @@ Disk cache size is zero unless a caller passes a cache path to
 The reported dense comparison uses a native-endian reference, identical RHS
 width, thread settings, and one warm product before repeated timings. Sampled
 columns are not a wall-clock speedup claim. Local factorization timing is
-`null`: it is not separately observable without changing compressor math.
+measured by benchmark-only wrappers around QR/core routines; sampling/peeling
+is reported after subtracting that measured subtotal.
 
-BP3/BP7 data are intentionally not fabricated. Their C.7 tests continue to
-skip when the source files are absent; a future data-aware runner should call
-the same helpers on `representative_subset` and preserve this schema.
+Run `benchmarks/subset.py --dataset bp3` (or `bp7`) for the C.7 subset
+contract. With data absent it writes an explicit JSON `status: "skipped"`
+record. With data present it records the representative subset's IDs/maps
+hashes, region choice, and a native-endian dense reference constructed from
+that bounded subset only; it never fabricates BP3/BP7 metrics.

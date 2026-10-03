@@ -7,7 +7,12 @@ import argparse
 from functools import partial
 from pathlib import Path
 
-from gfcompress.benchmark import isolated_peak_rss, synthetic_report, write_report
+from gfcompress.benchmark import (
+    isolated_peak_rss,
+    synthetic_dense_only,
+    synthetic_report,
+    write_report,
+)
 
 
 def main() -> None:
@@ -17,11 +22,12 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
     run = partial(synthetic_report, n_side=args.n_side, seed=args.seed)
-    report, peak_rss = isolated_peak_rss(run)
+    report, compressed_peak = isolated_peak_rss(run)
+    _, dense_peak = isolated_peak_rss(synthetic_dense_only, args.n_side)
     storage = report["storage"]
-    storage["peak_rss_bytes"] = peak_rss
-    dense_bytes = storage["dense_reference_bytes"]
-    storage["rss_ratio"] = peak_rss / dense_bytes if dense_bytes else None
+    storage["compressed_peak_rss_bytes"] = compressed_peak
+    storage["dense_peak_rss_bytes"] = dense_peak
+    storage["rss_ratio"] = compressed_peak / dense_peak if dense_peak else None
     write_report(args.output, report)
     print(args.output)
 

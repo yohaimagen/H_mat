@@ -8,10 +8,12 @@ silently charged to construction.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import platform
 import resource
+import subprocess
 import sys
 import time
 from collections.abc import Callable, Sequence
@@ -23,7 +25,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from gfcompress.build_tree import build_tree
-from gfcompress.compress import CountingOperator, compress_level
+from gfcompress.compress import CountingOperator, ProductCounts, compress_level
 from gfcompress.fixed_pattern import build_admissible_schedule, build_leaf_schedule
 from gfcompress.geometry import FaultMesh
 from gfcompress.hmatrix import HMatrix
@@ -38,14 +40,10 @@ from gfcompress.tree import TreeNode
 class PredictedProducts:
     """Actual scheduled product widths, including optional validation work."""
 
-    matvec_calls: int
-    matvec_columns: int
-    rmatvec_calls: int
-    rmatvec_columns: int
-    leaf_matvec_calls: int
-    leaf_matvec_columns: int
-    validation_matvec_columns: int = 0
-    validation_rmatvec_columns: int = 0
+    construction: ProductCounts
+    leaves: ProductCounts
+    validation: ProductCounts
+    total: ProductCounts
 
 
 @dataclass(frozen=True)
@@ -57,6 +55,7 @@ class Storage:
     numerical_bytes: int
     retained_allocation_bytes: int
     tree_index_bytes: int
+    mesh_bytes: int
     peak_rss_bytes: int | None
     disk_cache_bytes: int
     dense_reference_bytes: int
@@ -71,8 +70,8 @@ def predict_fixed_products(
     mesh: FaultMesh,
     k: int,
     p: int,
-    validation_matvec_columns: int = 0,
-    validation_rmatvec_columns: int = 0,
+    validation_matvec_columns: int = 2,
+    validation_rmatvec_columns: int = 3,
 ) -> PredictedProducts:
     """Predict fixed-path work from occupied groups, not period upper bounds."""
     lists = build_lists(root)
@@ -88,15 +87,34 @@ def predict_fixed_products(
         transpose_columns += len(transpose.probes) * width
     leaf = build_leaf_schedule(root, lists, leaf_level, mesh)
     leaf_columns = sum(probe.w_max for probe in leaf.probes)
+    construction = ProductCounts(forward_calls, forward_columns, transpose_calls, transpose_columns)
+    leaves = ProductCounts(len(leaf.probes), leaf_columns, 0, 0)
+    validation = ProductCounts(
+        int(validation_matvec_columns > 0),
+        validation_matvec_columns,
+        int(validation_rmatvec_columns > 0),
+        validation_rmatvec_columns,
+    )
     return PredictedProducts(
-        matvec_calls=forward_calls + len(leaf.probes),
-        matvec_columns=forward_columns + leaf_columns + validation_matvec_columns,
-        rmatvec_calls=transpose_calls,
-        rmatvec_columns=transpose_columns + validation_rmatvec_columns,
-        leaf_matvec_calls=len(leaf.probes),
-        leaf_matvec_columns=leaf_columns,
-        validation_matvec_columns=validation_matvec_columns,
-        validation_rmatvec_columns=validation_rmatvec_columns,
+        construction, leaves, validation, _add_counts(_add_counts(construction, leaves), validation)
+    )
+
+
+def _add_counts(left: ProductCounts, right: ProductCounts) -> ProductCounts:
+    return ProductCounts(
+        left.matvec_calls + right.matvec_calls,
+        left.matvec_columns + right.matvec_columns,
+        left.rmatvec_calls + right.rmatvec_calls,
+        left.rmatvec_columns + right.rmatvec_columns,
+    )
+
+
+def _subtract_counts(total: ProductCounts, part: ProductCounts) -> ProductCounts:
+    return ProductCounts(
+        total.matvec_calls - part.matvec_calls,
+        total.matvec_columns - part.matvec_columns,
+        total.rmatvec_calls - part.rmatvec_calls,
+        total.rmatvec_columns - part.rmatvec_columns,
     )
 
 
@@ -115,7 +133,7 @@ def _allocation_bytes(arrays: Sequence[NDArray[Any]]) -> int:
     return total
 
 
-def tree_index_bytes(root: TreeNode) -> int:
+def _tree_arrays(root: TreeNode) -> list[NDArray[Any]]:
     """Bytes in tree geometry and index arrays, counted by backing allocation."""
     arrays: list[NDArray[Any]] = []
     for nodes in root.iter_levels():
@@ -129,7 +147,20 @@ def tree_index_bytes(root: TreeNode) -> int:
                     node.center,
                 )
             )
-    return _allocation_bytes(arrays)
+    return arrays
+
+
+def tree_index_bytes(root: TreeNode) -> int:
+    """Bytes in tree geometry and index arrays, counted by backing allocation."""
+    return _allocation_bytes(_tree_arrays(root))
+
+
+def _cache_bytes(path: Path | None) -> int:
+    if path is None or not path.exists():
+        return 0
+    if path.is_file():
+        return path.stat().st_size
+    return sum(child.stat().st_size for child in path.rglob("*") if child.is_file())
 
 
 def representation_storage(
@@ -146,13 +177,19 @@ def representation_storage(
     leaf_bytes = _allocation_bytes(leaf_arrays)
     numerical = _allocation_bytes([*factor_arrays, *leaf_arrays])
     tree_bytes = tree_index_bytes(hmat.root)
-    cache_bytes = 0 if cache_path is None or not cache_path.exists() else cache_path.stat().st_size
+    mesh_arrays = [hmat.mesh.centroids, hmat.mesh.L]
+    mesh_bytes = _allocation_bytes(mesh_arrays)
+    retained = _allocation_bytes(
+        [*factor_arrays, *leaf_arrays, *_tree_arrays(hmat.root), *mesh_arrays]
+    )
+    cache_bytes = _cache_bytes(cache_path)
     return Storage(
         factor_bytes=factor_bytes,
         leaf_bytes=leaf_bytes,
         numerical_bytes=numerical,
-        retained_allocation_bytes=numerical + tree_bytes,
+        retained_allocation_bytes=retained,
         tree_index_bytes=tree_bytes,
+        mesh_bytes=mesh_bytes,
         peak_rss_bytes=peak_rss_bytes,
         disk_cache_bytes=cache_bytes,
         dense_reference_bytes=dense_reference_bytes,
@@ -235,6 +272,18 @@ def environment() -> dict[str, str]:
     }
 
 
+def provenance() -> dict[str, Any]:
+    """Read revision and dirty state from Git; never trust an environment label."""
+    root = Path(__file__).resolve().parents[2]
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    diff = subprocess.check_output(["git", "diff", "--binary", "HEAD"], cwd=root)
+    return {
+        "commit": commit,
+        "dirty": bool(diff),
+        "diff_hash": hashlib.sha256(diff).hexdigest() if diff else None,
+    }
+
+
 def write_report(path: Path, report: dict[str, Any]) -> None:
     """Write a deterministic, human-diffable JSON benchmark result."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -268,13 +317,45 @@ def synthetic_report(
     # Reuse the measured tree/list pair: this is the compressor's public loop,
     # split here only to expose geometry versus sampling/peeling time.
     lists = build_lists(root)
-    factors: Factors = []
-    for level in range(2, _deepest_level(root) + 1):
-        factors += compress_level(operator, root, lists, mesh, level, factors, k, p, seed)
-    leaves = extract_leaves(operator, root, lists, mesh, _deepest_level(root), factors)
+    import gfcompress.column_basis as column_basis_module
+    import gfcompress.row_basis as row_basis_module
+
+    local_seconds = 0.0
+    original_column_orth = getattr(column_basis_module, "orth")  # noqa: B009
+    original_row_orth = getattr(row_basis_module, "orth")  # noqa: B009
+    original_core = getattr(row_basis_module, "core_matrix_solve")  # noqa: B009
+
+    def timed(function: Callable[..., T]) -> Callable[..., T]:
+        def wrapper(*args: Any, **kwargs: Any) -> T:
+            nonlocal local_seconds
+            start = time.perf_counter()
+            result = function(*args, **kwargs)
+            local_seconds += time.perf_counter() - start
+            return result
+
+        return wrapper
+
+    setattr(column_basis_module, "orth", timed(original_column_orth))  # noqa: B010
+    setattr(row_basis_module, "orth", timed(original_row_orth))  # noqa: B010
+    setattr(row_basis_module, "core_matrix_solve", timed(original_core))  # noqa: B010
+    try:
+        factors: Factors = []
+        for level in range(2, _deepest_level(root) + 1):
+            factors += compress_level(operator, root, lists, mesh, level, factors, k, p, seed)
+        admissible_observed = operator.snapshot()
+        leaves = extract_leaves(operator, root, lists, mesh, _deepest_level(root), factors)
+    finally:
+        setattr(column_basis_module, "orth", original_column_orth)  # noqa: B010
+        setattr(row_basis_module, "orth", original_row_orth)  # noqa: B010
+        setattr(row_basis_module, "core_matrix_solve", original_core)  # noqa: B010
     hmat = HMatrix(root=root, mesh=mesh, factors=factors, leaves=leaves)
     sampling_seconds = time.perf_counter() - setup_start
-    construction = operator.snapshot()
+    construction_total_observed = operator.reset()
+    leaves_observed = _subtract_counts(construction_total_observed, admissible_observed)
+    operator.matvec(np.ones((mesh.n_cols, 2)))
+    operator.rmatvec(np.ones((mesh.n_rows, 3)))
+    validation_observed = operator.snapshot()
+    total_observed = _add_counts(construction_total_observed, validation_observed)
     forward = time_products(hmat, transpose=False, rhs_columns=1, repeats=repeats, seed=seed)
     adjoint = time_products(hmat, transpose=True, rhs_columns=1, repeats=repeats, seed=seed + 1)
     dense_forward = time_products(
@@ -287,7 +368,7 @@ def synthetic_report(
     storage = representation_storage(hmat, dense_reference_bytes=dense_bytes)
     return {
         "schema_version": 1,
-        "revision": os.environ.get("GFCOMPRESS_REVISION", "unknown"),
+        "provenance": provenance(),
         "dataset": {"identity": "MockGF regular-grid", "n_side": n_side, "patches": mesh.n_patches},
         "environment": environment(),
         "seeds": {"compression": seed, "apply": seed},
@@ -303,13 +384,20 @@ def synthetic_report(
                 "sampled columns and wall time are reported separately; no byte-swap speedup claim"
             ),
         },
-        "products": {"predicted": asdict(predicted), "construction_observed": asdict(construction)},
+        "products": {
+            "predicted": asdict(predicted),
+            "construction_observed": asdict(admissible_observed),
+            "leaves_observed": asdict(leaves_observed),
+            "construction_total_observed": asdict(construction_total_observed),
+            "validation_observed": asdict(validation_observed),
+            "total_observed": asdict(total_observed),
+        },
         "timing_seconds": {
             "loading_conversion": load_seconds,
             "geometry": geometry_seconds,
-            "sampling_peeling": sampling_seconds,
-            "local_factorizations": None,
-            "total_setup": geometry_seconds + sampling_seconds,
+            "sampling_peeling_exclusive": max(0.0, sampling_seconds - local_seconds),
+            "local_factorizations": local_seconds,
+            "total_setup": load_seconds + geometry_seconds + sampling_seconds,
             "hmat_forward_warm": forward,
             "hmat_adjoint_warm": adjoint,
             "dense_forward_warm": dense_forward,
@@ -327,15 +415,27 @@ def synthetic_report(
     }
 
 
+def synthetic_dense_only(n_side: int = 8) -> None:
+    """Allocate only the native dense reference for its fresh-process RSS."""
+    from gfcompress.mockgf import MockGF
+
+    axis = np.arange(n_side, dtype=float)
+    xx, yy = np.meshgrid(axis, axis, indexing="ij")
+    mesh = FaultMesh(np.column_stack((xx.ravel(), yy.ravel())), np.ones(n_side * n_side))
+    MockGF(mesh)
+
+
 __all__ = [
     "PredictedProducts",
     "Storage",
     "environment",
+    "provenance",
     "isolated_peak_rss",
     "native_dense_reference_bytes",
     "predict_fixed_products",
     "representation_storage",
     "synthetic_report",
+    "synthetic_dense_only",
     "time_products",
     "tree_index_bytes",
     "write_report",
