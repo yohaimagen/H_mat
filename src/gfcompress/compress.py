@@ -26,6 +26,8 @@ leaf-probe-wide) block of columns, not a single vector.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -202,6 +204,16 @@ def _validate_inputs(
         raise ValueError(f"operator shape must be {expected}, got {shape!r}")
 
 
+@dataclass(frozen=True)
+class ProductCounts:
+    """Forward and transpose product counts at one instant."""
+
+    matvec_calls: int
+    matvec_columns: int
+    rmatvec_calls: int
+    rmatvec_columns: int
+
+
 class CountingOperator(MatVecOperator):
     """`MatVecOperator` wrapper counting `matvec`/`rmatvec` columns issued.
 
@@ -241,10 +253,32 @@ class CountingOperator(MatVecOperator):
         self.rmatvec_columns += psi.shape[1] if psi.ndim == 2 else 1
         return self.inner.rmatvec(psi)
 
+    def snapshot(self) -> ProductCounts:
+        """Return an immutable count snapshot, suitable for phase boundaries."""
+        return ProductCounts(
+            self.matvec_calls,
+            self.matvec_columns,
+            self.rmatvec_calls,
+            self.rmatvec_columns,
+        )
+
+    def reset(self) -> ProductCounts:
+        """Return the current counts and reset them to zero."""
+        before = self.snapshot()
+        self.matvec_calls = self.matvec_columns = 0
+        self.rmatvec_calls = self.rmatvec_columns = 0
+        return before
+
     @property
     def shape(self) -> tuple[int, int]:
         """`inner.shape`."""
         return self.inner.shape
 
 
-__all__ = ["SUPPORTED_SAMPLING", "CountingOperator", "compress", "compress_level"]
+__all__ = [
+    "SUPPORTED_SAMPLING",
+    "CountingOperator",
+    "ProductCounts",
+    "compress",
+    "compress_level",
+]

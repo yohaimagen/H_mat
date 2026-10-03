@@ -1,0 +1,77 @@
+{
+  "dataset": {
+    "identity": "MockGF regular-grid",
+    "n_side": 8,
+    "patches": 64
+  },
+  "environment": {
+    "numpy": "2.4.6",
+    "omp_num_threads": "1",
+    "openblas_num_threads": "1",
+    "platform": "macOS-26.7.1-arm64-arm-64bit",
+    "processor": "arm",
+    "python": "3.12.9"
+  },
+  "parameters": {
+    "k": 2,
+    "m": 2,
+    "p": 2,
+    "sampling": "fixed"
+  },
+  "products": {
+    "construction_observed": {
+      "matvec_calls": 61,
+      "matvec_columns": 217,
+      "rmatvec_calls": 52,
+      "rmatvec_columns": 208
+    },
+    "predicted": {
+      "leaf_matvec_calls": 9,
+      "leaf_matvec_columns": 9,
+      "matvec_calls": 61,
+      "matvec_columns": 217,
+      "rmatvec_calls": 52,
+      "rmatvec_columns": 208,
+      "validation_matvec_columns": 0,
+      "validation_rmatvec_columns": 0
+    }
+  },
+  "revision": "3c8d7f1",
+  "schema_version": 1,
+  "seeds": {
+    "apply": 0,
+    "compression": 0
+  },
+  "storage": {
+    "dense_reference_bytes": 65536,
+    "dense_storage_ratio": 1.383544921875,
+    "disk_cache_bytes": 0,
+    "factor_bytes": 70656,
+    "leaf_bytes": 7744,
+    "numerical_bytes": 78400,
+    "peak_rss_bytes": 59129856,
+    "reference_excluded_from_representation": true,
+    "reference_included_in_process_rss": true,
+    "retained_allocation_bytes": 90672,
+    "rss_ratio": 902.25,
+    "tree_index_bytes": 12272
+  },
+  "timing_protocol": {
+    "cache": "one warm product before repeated warm timings",
+    "dense_reference": "native-endian on the same process, thread settings, RHS width, and convention",
+    "repeats": 3,
+    "rhs_columns": 1,
+    "warning": "sampled columns and wall time are reported separately; no byte-swap speedup claim"
+  },
+  "timing_seconds": {
+    "dense_adjoint_warm": 1.5416662790812552e-06,
+    "dense_forward_warm": 1.4443333687571187e-06,
+    "geometry": 0.004546124997432344,
+    "hmat_adjoint_warm": 0.007455708332903062,
+    "hmat_forward_warm": 0.005787888667934264,
+    "loading_conversion": 0.0002460839968989603,
+    "local_factorizations": null,
+    "sampling_peeling": 0.19297666600323282,
+    "total_setup": 0.19752279100066517
+  }
+}
