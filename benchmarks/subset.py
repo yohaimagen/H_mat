@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from gfcompress.benchmark import benchmark_operator, provenance, write_report
+from gfcompress.benchmark import benchmark_operator, isolated_peak_rss, provenance, write_report
 from gfcompress.operators import DenseOperator
 from gfcompress.realgf import RealGF, representative_subset
 
@@ -59,6 +59,11 @@ def report(data_root: Path, dataset: str, regions: int, max_patches: int) -> dic
     return {
         **measured,
         "status": "ready",
+        "parameters": {
+            **measured["parameters"],
+            "regions": regions,
+            "max_patches": max_patches,
+        },
         "dataset": {
             **common["dataset"],
             "source": {
@@ -80,10 +85,40 @@ def report(data_root: Path, dataset: str, regions: int, max_patches: int) -> dic
             "dense_reference": "native-endian, subset-only; same RHS/timing protocol required",
         },
         "limitations": (
-            "RSS requires a fresh dataset-loading subprocess and is not run by "
-            "this in-process ready path."
+            "Direct report() omits RSS; the CLI attaches comparable fresh-process dense and "
+            "compressed peaks."
         ),
     }
+
+
+def dense_only(data_root: Path, dataset: str, regions: int, max_patches: int) -> None:
+    """Load and touch exactly the bounded native dense reference, without an H-matrix."""
+    directory = data_root / f"gf_{dataset}"
+    matrix = directory / "gf_mat.bin"
+    csvs = sorted(directory.glob("*_fbf_coords.csv"))
+    if not matrix.is_file() or len(csvs) != 1:
+        return
+    subset = representative_subset(
+        RealGF(matrix, csvs[0]), max_patches=max_patches, regions=regions
+    )
+    dense = np.ascontiguousarray(subset.matvec(np.eye(subset.shape[1])), dtype=np.float64)
+    DenseOperator(dense).matvec(np.ones(subset.shape[1]))
+
+
+def with_rss(report_value: dict[str, Any], compressed_peak: int, dense_peak: int) -> dict[str, Any]:
+    """Attach comparable fresh-process peaks to a completed ready report."""
+    storage = report_value["storage"]
+    storage["compressed_peak_rss_bytes"] = compressed_peak
+    storage["dense_peak_rss_bytes"] = dense_peak
+    storage["rss_ratio"] = compressed_peak / dense_peak if dense_peak else None
+    return report_value
+
+
+def _available(data_root: Path, dataset: str) -> bool:
+    directory = data_root / f"gf_{dataset}"
+    return (directory / "gf_mat.bin").is_file() and len(
+        list(directory.glob("*_fbf_coords.csv"))
+    ) == 1
 
 
 def main() -> None:
@@ -95,7 +130,17 @@ def main() -> None:
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     output = args.output or Path(f"benchmarks/results/{args.dataset}_subset.json")
-    write_report(output, report(args.data_root, args.dataset, args.regions, args.max_patches))
+    if _available(args.data_root, args.dataset):
+        measured, compressed_peak = isolated_peak_rss(
+            report, args.data_root, args.dataset, args.regions, args.max_patches
+        )
+        _, dense_peak = isolated_peak_rss(
+            dense_only, args.data_root, args.dataset, args.regions, args.max_patches
+        )
+        value = with_rss(measured, compressed_peak, dense_peak)
+    else:
+        value = report(args.data_root, args.dataset, args.regions, args.max_patches)
+    write_report(output, value)
     print(output)
 
 

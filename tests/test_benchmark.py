@@ -116,5 +116,24 @@ def test_subset_ready_report_runs_shared_measurement_core(
     monkeypatch.setattr(subset_cli, "representative_subset", lambda *_args, **_kwargs: TinySubset())
     report = subset_cli.report(tmp_path, "bp3", 4, 64)
     assert report["status"] == "ready"
+    assert report["parameters"] == {
+        "m": 12,
+        "k": 4,
+        "p": 2,
+        "sampling": "fixed",
+        "regions": 4,
+        "max_patches": 64,
+    }
     assert report["products"]["validation_observed"]["matvec_calls"] > 0
     assert report["storage"]["dense_reference_bytes"] == mesh.n_rows * mesh.n_cols * 8
+
+
+def test_subset_rss_finalization_uses_comparable_peaks() -> None:
+    from benchmarks.subset import with_rss
+
+    report = with_rss({"storage": {}}, 300, 200)
+    assert report["storage"] == {
+        "compressed_peak_rss_bytes": 300,
+        "dense_peak_rss_bytes": 200,
+        "rss_ratio": 1.5,
+    }
