@@ -8,9 +8,9 @@ records and are noisy at these small sizes.
 
 | Dataset | Choice `(m,k,p)` | Worst global error | Bytes | Columns | Forward / adjoint apply | Decision |
 |---|---|---:|---:|---:|---:|---|
-| BP3 | primary `(8,4,2)` | `2.90e-10` | 223,104 | 285 | 0.651 / 0.660 ms | Accuracy margin dominates; apply times are tied within noise. |
-| BP3 | alternative `(8,3,2)` | `7.26e-9` | 180,792 | 241 | 0.662 / 0.657 ms | Smaller storage/sample cost, weaker accuracy. |
-| BP3 | alternative `(8,4,1)` | `1.53e-8` | 223,104 | 241 | 0.649 / 0.667 ms | Fewer columns only; weaker accuracy. |
+| BP3 | primary `(8,4,2)` | `2.90e-10` | 223,104 | 285 | 0.644 / 0.640 ms | Accuracy margin dominates; apply times are tied within noise. |
+| BP3 | alternative `(8,3,2)` | `7.26e-9` | 180,792 | 241 | 0.639 / 0.639 ms | Smaller storage/sample cost, weaker accuracy. |
+| BP3 | alternative `(8,4,1)` | `1.53e-8` | 223,104 | 241 | 0.644 / 0.650 ms | Fewer columns only; weaker accuracy. |
 | BP7 | primary `(8,4,2)` | `5.26e-5` | 1,240,744 | 1,146 | 8.527 / 8.409 ms | Best accuracy and leaves-only margin; timing advantage is not claimed. |
 | BP7 | alternative `(8,4,1)` | `6.21e-5` | 1,240,744 | 970 | 8.181 / 8.186 ms | Fewer columns and slightly faster in this subset timing; weaker component margin. |
 | BP7 | alternative `(8,3,2)` | `9.89e-5` | 1,035,024 | 970 | 8.038 / 7.947 ms | Lowest storage/sample cost; least accuracy headroom. |
