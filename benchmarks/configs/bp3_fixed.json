@@ -1,0 +1,31 @@
+{
+  "acceptance": {
+    "absolute_response_floor": 1.0,
+    "comparison_relative_slack": 0.1,
+    "component_response_error_max": 5e-08,
+    "frozen": true,
+    "global_relative_error_max": 1e-08,
+    "input_response_error_max": 1e-08,
+    "leaves_only_improvement_min": 1000.0,
+    "reason": "Frozen from all 3 construction seeds x 2 independent validation starts on the C.7 192-patch subset. The selected-block limit is response-relative for deterministic unit drives, so zero output is 1.0 and cannot pass. Limits retain margin above observed worst cases; they are subset criteria, not full-baseline claims.",
+    "selected_block_output_error_max": 0.0003
+  },
+  "construction_seeds": [11, 23, 37],
+  "dataset": "bp3",
+  "full_runs": "opt-in",
+  "sampling": "fixed",
+  "schema_version": 1,
+  "selection": {
+    "alternatives": [
+      {"k": 3, "m": 8, "p": 2, "reason": "lower storage and 44 fewer construction columns; weaker but still measured accuracy"},
+      {"k": 4, "m": 8, "p": 1, "reason": "fewer construction columns; lower accuracy margin than primary"}
+    ],
+    "locking_rule": "a primary requires a measured leaves-only improvement factor and all additional block/input checks",
+    "primary": {"k": 4, "m": 8, "p": 2, "reason": "best worst-seed global and input accuracy; all leaves-only improvements exceed 2000"},
+    "required_measures": ["global_error", "selected_block_errors", "component_index_group_errors", "localized_smooth_errors", "leaves_only_improvement", "storage", "sampled_columns", "apply_cost"],
+    "rule": "retain every seed; never choose a favorable seed or subset"
+  },
+  "sweep": {"k": [3, 4], "m": [8, 12], "p": [1, 2]},
+  "validation": {"absolute_response_floor": 1.0, "power_iterations": 4, "status": "frozen from measured subset behavior; full runs remain opt-in"},
+  "validation_seeds": [101, 103]
+}

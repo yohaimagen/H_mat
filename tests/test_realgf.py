@@ -22,15 +22,20 @@ from numpy.typing import NDArray
 from scipy.spatial import cKDTree
 from scipy.stats import spearmanr
 
-from gfcompress.interactions import DEFAULT_ETA
+from gfcompress.build_tree import build_tree
+from gfcompress.compress import compress
+from gfcompress.interactions import DEFAULT_ETA, build_lists
 from gfcompress.operators import DenseOperator
 from gfcompress.realgf import (
     PETSC_MAT_CLASSID,
     RealGF,
+    RealGFSubset,
     _load_coords_csv,
     _row_pm_to_raw,
     patch_length_candidates,
     read_petsc_mat_header,
+    representative_patch_ids,
+    representative_subset,
 )
 
 REAL_GFS = Path(__file__).resolve().parent.parent / "real_gfs"
@@ -224,6 +229,91 @@ def test_realgf_tiny_synthetic_matvec_rmatvec_match_dense(tmp_path: Path) -> Non
     np.testing.assert_allclose(gf.matvec(omega1), reference.matvec(omega1))
 
 
+def test_realgf_component_ids_are_ordered_but_not_physical_labels(tmp_path: Path) -> None:
+    """CSV component ids are verified; the row layout is an explicit inference."""
+    mat_path, csv_path, _, _ = _tiny_synthetic_dataset(tmp_path)
+    gf = RealGF(mat_path, csv_path)
+
+    np.testing.assert_array_equal(gf.column_component_ids.reshape(-1, 2), [[0, 1]] * 8)
+    np.testing.assert_array_equal(gf.row_component_ids.reshape(-1, 3), [[0, 1, 2]] * 8)
+    assert not hasattr(gf, "column_component_labels")
+    assert not hasattr(gf, "row_component_labels")
+
+
+def test_realgf_tiny_synthetic_adjoint_and_component_sensitive_order(tmp_path: Path) -> None:
+    mat_path, csv_path, row_expected, col_expected = _tiny_synthetic_dataset(tmp_path)
+    gf = RealGF(mat_path, csv_path)
+    raw = (100 * np.arange(24)[:, None] + np.arange(16)[None, :]).astype(float)
+    dense_pm = raw[np.ix_(row_expected, col_expected)]
+
+    # A component-specific impulse catches an otherwise easy-to-miss swap of
+    # the two BP7 column components or any of the three row components.
+    omega = np.zeros(16)
+    omega[2 * 3 + 1] = 1.0
+    psi = np.zeros(24)
+    psi[3 * 5 + 2] = 1.0
+    np.testing.assert_allclose(gf.matvec(omega), dense_pm[:, 7])
+    np.testing.assert_allclose(gf.rmatvec(psi), dense_pm[17, :])
+    assert np.vdot(gf.matvec(omega), psi) == pytest.approx(np.vdot(omega, gf.rmatvec(psi)))
+
+
+def test_representative_subset_keeps_patch_major_maps_and_separated_regions(tmp_path: Path) -> None:
+    mat_path, csv_path, _, _ = _tiny_synthetic_dataset(tmp_path)
+    gf = RealGF(mat_path, csv_path)
+    subset = representative_subset(gf, max_patches=6, regions=3)
+
+    np.testing.assert_array_equal(
+        subset.patch_ids, representative_patch_ids(gf.original_centroids, 6, 3)
+    )
+    np.testing.assert_array_equal(subset.row_map, gf.mesh.patch_to_rows(subset.patch_ids))
+    np.testing.assert_array_equal(subset.col_map, gf.mesh.patch_to_cols(subset.patch_ids))
+    assert subset.shape == (18, 12)
+    assert np.unique(subset.patch_ids // gf.nbf).size == 2
+    omega = np.arange(subset.shape[1], dtype=float)
+    psi = np.arange(subset.shape[0], dtype=float)
+    assert np.vdot(subset.matvec(omega), psi) == pytest.approx(np.vdot(omega, subset.rmatvec(psi)))
+
+
+def test_subset_uses_only_selected_raw_entries_not_source_matvec(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mat_path, csv_path, row_expected, col_expected = _tiny_synthetic_dataset(tmp_path)
+    gf = RealGF(mat_path, csv_path)
+    subset = RealGFSubset(gf, np.array([1, 6], dtype=np.intp))
+    raw = (100 * np.arange(24)[:, None] + np.arange(16)[None, :]).astype(float)
+
+    def fail(_: NDArray[np.floating]) -> NDArray[np.floating]:
+        raise AssertionError("full source product must not be called")
+
+    monkeypatch.setattr(gf, "matvec", fail)
+    monkeypatch.setattr(gf, "rmatvec", fail)
+    expected = raw[np.ix_(row_expected[subset.row_map], col_expected[subset.col_map])]
+    omega = np.arange(subset.shape[1], dtype=float)
+    psi = np.arange(subset.shape[0], dtype=float)
+    np.testing.assert_allclose(subset.matvec(omega), expected @ omega)
+    np.testing.assert_allclose(subset.rmatvec(psi), expected.T @ psi)
+
+
+def test_representative_ids_are_spatial_not_file_contiguous(tmp_path: Path) -> None:
+    cloud = np.array([[100.0], [0.0], [101.0], [1.0], [200.0], [2.0], [201.0], [3.0]])
+    lengths = np.array([1.0, 10.0, 2.0, 20.0, 3.0, 30.0, 4.0, 40.0])
+    ids = representative_patch_ids(cloud, max_patches=4, regions=2, lengths=lengths)
+    np.testing.assert_array_equal(ids, [0, 1, 6, 7])
+
+    mat_path, csv_path, _, _ = _tiny_synthetic_dataset(tmp_path)
+    subset = RealGFSubset(RealGF(mat_path, csv_path), ids)
+    np.testing.assert_array_equal(subset.row_map, [0, 1, 2, 3, 4, 5, 18, 19, 20, 21, 22, 23])
+    np.testing.assert_array_equal(subset.col_map, [0, 1, 2, 3, 12, 13, 14, 15])
+
+
+@pytest.mark.parametrize("replacement", ["0.5,0,0,0,", "0,-1,0,0,", "0,0,1.5,0,", "0,0,0,2.5,"])
+def test_load_coords_csv_rejects_invalid_identifiers(tmp_path: Path, replacement: str) -> None:
+    _, csv_path, _, _ = _tiny_synthetic_dataset(tmp_path)
+    csv_path.write_text(csv_path.read_text().replace("0,0,0,0,", replacement, 1))
+    with pytest.raises(ValueError, match="finite non-negative integers"):
+        _load_coords_csv(csv_path)
+
+
 def test_load_coords_csv_col_permutation_is_bijection(tmp_path: Path) -> None:
     _, csv_path, _, col_expected = _tiny_synthetic_dataset(tmp_path)
     coords = _load_coords_csv(csv_path)
@@ -310,6 +400,23 @@ def test_bp7_permutation_roundtrips() -> None:
     # BP7 columns are genuinely blocked (dof_col=2): patch-major requires a
     # non-trivial permutation.
     assert not np.array_equal(gf.col_pm_to_raw, np.arange(gf.shape[1]))
+
+
+def _assert_adjoint(gf: RealGF) -> None:
+    rng = np.random.default_rng(7)
+    omega = rng.standard_normal((gf.shape[1], 2))
+    psi = rng.standard_normal((gf.shape[0], 2))
+    np.testing.assert_allclose(np.vdot(gf.matvec(omega), psi), np.vdot(omega, gf.rmatvec(psi)))
+
+
+@_needs_bp3
+def test_bp3_adjoint_consistency() -> None:
+    _assert_adjoint(RealGF(_BP3_MAT, _BP3_CSV))
+
+
+@_needs_bp7
+def test_bp7_adjoint_consistency() -> None:
+    _assert_adjoint(RealGF(_BP7_MAT, _BP7_CSV))
 
 
 def _row_layout_probe(gf: RealGF, patch: int) -> tuple[float, float, float, int, int, int]:
@@ -425,3 +532,137 @@ def test_L_candidate_sensitivity_bp7() -> None:
     }
     assert abs(fracs["representative"] - fracs["voronoi"]) < 0.05
     assert abs(fracs["representative"] - fracs["element"]) > 0.3
+
+
+def _subset_diagnostics(gf: RealGF, regions: int) -> tuple[
+    RealGFSubset,
+    int,
+    int,
+    tuple[int, int, int, int],
+    int,
+    int,
+    tuple[tuple[int, int, float], ...],
+]:
+    """Bounded real-data compression and far-field spectrum evidence."""
+    subset = representative_subset(gf, max_patches=192, regions=regions)
+    root = build_tree(subset.mesh, m=12)
+    lists = build_lists(root)
+    levels = list(root.iter_levels())
+    leaves = levels[-1]
+    interactions = sum(len(lists.interaction[node]) for nodes in levels[2:] for node in nodes)
+    occupancies = [len(node.patch_indices) for node in leaves]
+    hmat = compress(subset, subset.mesh, m=12, k=4, p=2, seed=0, sampling="fixed")
+    factor_levels = {factor.alpha.level for factor in hmat.factors}
+    reduced = sum(
+        factor.u.shape[1] < min(factor.u.shape[0], factor.v.shape[0]) for factor in hmat.factors
+    )
+    spectra: list[tuple[int, int, float]] = []
+    for nodes in levels[2:]:
+        pairs = [(alpha, beta) for alpha in nodes for beta in lists.interaction[alpha]]
+        if not pairs:
+            continue
+        # Largest block exposes a nontrivial tail; cell coordinates break ties
+        # deterministically without relying on file order.
+        alpha, beta = sorted(
+            pairs,
+            key=lambda pair: (
+                -min(len(pair[0].row_indices), len(pair[1].col_indices)),
+                pair[0].cell_coords,
+                pair[1].cell_coords,
+            ),
+        )[0]
+        probe = np.zeros((subset.shape[1], len(beta.col_indices)))
+        probe[beta.col_indices] = np.eye(len(beta.col_indices))
+        singular_values = np.linalg.svd(subset.matvec(probe)[alpha.row_indices], compute_uv=False)
+        floor = 1e-14
+        assert singular_values[0] > floor
+        width = min(len(alpha.row_indices), len(beta.col_indices))
+        numerical_rank = int((singular_values > singular_values[0] * 1e-6).sum())
+        rank4_tail = float(
+            np.linalg.norm(singular_values[4:]) / max(np.linalg.norm(singular_values), floor)
+        )
+        spectra.append((width, numerical_rank, rank4_tail))
+    return (
+        subset,
+        len(levels) - 1,
+        interactions,
+        (len(occupancies), sum(occupancies), min(occupancies), max(occupancies)),
+        len(factor_levels),
+        reduced,
+        tuple(spectra),
+    )
+
+
+def _assert_subset_diagnostics(
+    diagnostic: tuple[
+        RealGFSubset,
+        int,
+        int,
+        tuple[int, int, int, int],
+        int,
+        int,
+        tuple[tuple[int, int, float], ...],
+    ],
+) -> None:
+    subset, depth, interactions, occupancy, compressed_levels, reduced, spectra = diagnostic
+    count, total, minimum, maximum = occupancy
+    assert count > 0 and total == subset.mesh.n_patches and 1 <= minimum <= maximum <= 12
+    assert depth >= 2 and interactions > 0 and compressed_levels >= 2 and reduced > 0
+    # Rank is measured at a 1e-6 relative singular-value threshold; rank-4
+    # tails are Frobenius-relative with a 1e-14 absolute denominator floor.
+    # These are diagnostics, not a claim that every real far-field block is
+    # rank-deficient at that threshold (BP7 is not; see MEASUREMENTS_C7.md).
+    nontrivial = [(width, rank, tail) for width, rank, tail in spectra if width > 4]
+    assert len(nontrivial) >= 2
+    assert all(0 < rank <= width and 0.0 <= tail < 1.0 for width, rank, tail in nontrivial)
+    # At least one deterministic block has a decaying rank-4 tail.  The
+    # dataset-specific tests below record whether that evidence is uniformly
+    # strong or mixed; do not turn it into a universal low-rank assumption.
+    assert any(tail < 0.1 for _, _, tail in nontrivial)
+
+
+@_needs_bp3
+def test_bp3_subset_bp3_diagnostics_and_l_independence() -> None:
+    gf = RealGF(_BP3_MAT, _BP3_CSV)
+    diagnostic = _subset_diagnostics(gf, regions=4)
+    alternate = _subset_diagnostics(gf, regions=6)
+    subset = diagnostic[0]
+    assert subset.original_centroids.shape[1] == 2
+    assert subset.reduced_centroids.shape[1] == 1
+    _assert_subset_diagnostics(diagnostic)
+    _assert_subset_diagnostics(alternate)
+    for item in (diagnostic, alternate):
+        nontrivial = [spectrum for spectrum in item[-1] if spectrum[0] > 4]
+        assert all(rank < width and tail < 1e-3 for width, rank, tail in nontrivial)
+    assert not np.array_equal(subset.patch_ids, alternate[0].patch_ids)
+    # L is metadata only; it cannot change the dyadic partition.
+    roots = [
+        build_tree(RealGF(_BP3_MAT, _BP3_CSV, l_method=name).mesh, m=12)
+        for name in ("representative", "voronoi", "element")
+    ]
+    assert [[node.cell_coords for node in list(root.iter_levels())[-1]] for root in roots].count(
+        [node.cell_coords for node in list(roots[0].iter_levels())[-1]]
+    ) == 3
+
+
+@_needs_bp7
+def test_bp7_subset_bp7_diagnostics_and_subset_sensitivity() -> None:
+    gf = RealGF(_BP7_MAT, _BP7_CSV)
+    diagnostic = _subset_diagnostics(gf, regions=4)
+    alternate = _subset_diagnostics(gf, regions=6)
+    first = diagnostic[0]
+    assert first.original_centroids.shape[1] == 3
+    assert first.reduced_centroids.shape[1] == 2
+    _assert_subset_diagnostics(diagnostic)
+    _assert_subset_diagnostics(alternate)
+    bp7_spectra = [spectrum for item in (diagnostic, alternate) for spectrum in item[-1]]
+    # The deterministic largest blocks are full numerical rank at 1e-6 even
+    # though most have a decaying rank-4 tail.  One level's 0.278 tail is a
+    # deliberate regression guard against falsely advertising universal rank-4
+    # behavior; it is documented as a limitation rather than tuned away.
+    assert all(rank == width for width, rank, _ in bp7_spectra)
+    tails = [tail for _, _, tail in bp7_spectra]
+    assert max(tails) > 0.2
+    assert max(tails) < 0.3
+    assert sum(tail < 0.1 for tail in tails) >= len(tails) - 1
+    assert not np.array_equal(first.patch_ids, alternate[0].patch_ids)
