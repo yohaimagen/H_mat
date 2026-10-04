@@ -40,10 +40,10 @@
       "saved": 13920
     },
     "warm_seconds": {
-      "after_adjoint": 0.0049171354497957506,
-      "after_forward": 0.004462102099932963,
-      "before_adjoint": 0.005665966699598357,
-      "before_forward": 0.005067385399888736,
+      "after_adjoint": 0.004986185400048271,
+      "after_forward": 0.0046117978999973275,
+      "before_adjoint": 0.005756731249857694,
+      "before_forward": 0.0051897687502787445,
       "repeats": 20
     }
   },
@@ -54,9 +54,9 @@
     "sampling": "fixed"
   },
   "provenance": {
-    "commit": "3267c91d3911079934c1d587069258574de35d2d",
-    "diff_hash": "a28b26b775b081a918fbe934975da5936a5fc946c1d32e4e59fee609f0bac151",
-    "dirty": true
+    "commit": "c826c718e22a7262fc0805a6798b537cf8c55f8a",
+    "diff_hash": null,
+    "dirty": false
   },
   "schema_version": 1
 }
