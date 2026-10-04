@@ -1,0 +1,6 @@
+{
+  "acceptance": {"absolute_response_floor": null, "comparison_relative_slack": null, "frozen": false, "global_relative_error_max": null, "leaves_only_improvement_min": null, "reason": "requires measured BP3/BP7 sweep records before thresholds can be derived"},
+  "construction_seeds": [11, 23, 37], "dataset": "bp3", "full_runs": "opt-in", "sampling": "fixed", "schema_version": 1,
+  "selection": {"alternatives": [], "locking_rule": "a primary requires a measured leaves-only improvement factor and all additional block/input checks", "primary": null, "required_measures": ["global_error", "selected_block_errors", "component_index_group_errors", "localized_smooth_errors", "leaves_only_improvement", "storage", "sampled_columns", "apply_cost"], "rule": "retain every seed; never choose a favorable seed or subset"},
+  "sweep": {"k": [3, 4], "m": [8, 12], "p": [1, 2]}, "validation_seeds": [101, 103]
+}

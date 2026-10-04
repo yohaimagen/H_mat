@@ -45,3 +45,10 @@ entry count is not less than their dense block's entry count.  That fraction
 is a diagnostic only: C.9 deliberately leaves dense far-field fallback,
 tree-order permutation, and a native-endian cache out of production unless
 real-data measurements justify them.
+
+`benchmarks/c10.py --dataset bp3` (or `bp7`) writes a blocked record if the
+real matrix is missing. It never turns an old subset report into an operating
+point. With the matrix present, add `--run` to opt into the bounded fixed
+sweep. The tracked `benchmarks/configs/*_fixed.json` files are deliberately
+unlocked: they specify independent seeds and required diagnostics but contain
+no invented primary configuration or acceptance threshold.
