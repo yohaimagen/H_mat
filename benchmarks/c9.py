@@ -16,8 +16,14 @@ def main() -> None:
     )
     parser.add_argument("--n-side", type=int, default=8)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--validation-seed", type=int)
     args = parser.parse_args()
-    write_report(args.output, c9_synthetic_report(n_side=args.n_side, seed=args.seed))
+    write_report(
+        args.output,
+        c9_synthetic_report(
+            n_side=args.n_side, seed=args.seed, validation_seed=args.validation_seed
+        ),
+    )
     print(args.output)
 
 

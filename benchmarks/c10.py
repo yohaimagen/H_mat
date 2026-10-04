@@ -10,7 +10,10 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from gfcompress.benchmark import provenance, write_report
+from gfcompress.operators import DenseOperator
 from gfcompress.realgf import RealGF, representative_subset
 from gfcompress.study import fixed_sweep
 
@@ -88,7 +91,12 @@ def report(
         }
     source = source_type(matrix, coordinates[0])
     subset = subset_builder(source, max_patches=192, regions=4)
+    # C.7/C.8 permit this bounded native-endian subset reference.  It is
+    # built once per report and supplied only for dense timing/storage baselines.
+    dense = np.ascontiguousarray(subset.matvec(np.eye(subset.shape[1])), dtype=np.float64)
+    dense_reference = DenseOperator(dense)
     sweep = config["sweep"]
+    metadata: dict[str, Any] = {}
     records = fixed_sweep(
         subset,
         subset.mesh,
@@ -99,11 +107,14 @@ def report(
         validation_seeds=config["validation_seeds"],
         absolute_floor=config["validation"]["absolute_response_floor"],
         validation_iterations=config["validation"]["power_iterations"],
+        dense_reference=dense_reference,
+        metadata=metadata,
     )
     frozen = config["acceptance"]["frozen"]
     return {
         **common,
         "status": "measured_locked" if frozen else "measured_unlocked",
+        **metadata,
         "source": {"matrix": _file_identity(matrix), "coordinates": _file_identity(coordinates[0])},
         "subset": {
             "patch_count": subset.mesh.n_patches,

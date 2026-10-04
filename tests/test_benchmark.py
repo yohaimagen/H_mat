@@ -176,3 +176,18 @@ def test_subset_rss_finalization_uses_comparable_peaks() -> None:
         "dense_peak_rss_bytes": 200,
         "rss_ratio": 1.5,
     }
+
+
+def test_c9_report_records_nondefault_and_derived_seeds() -> None:
+    from gfcompress.benchmark import c9_synthetic_report
+
+    report = c9_synthetic_report(n_side=4, m=1, k=1, p=1, seed=17, validation_seed=41)
+    assert report["seeds"] == {
+        "construction": 17,
+        "equivalence_forward": 108,
+        "equivalence_adjoint": 109,
+        "application_forward": 17,
+        "application_adjoint": 18,
+        "validation": 41,
+    }
+    assert report["measurements"]["equivalence"]["power_relative_difference"] == pytest.approx(0.0)

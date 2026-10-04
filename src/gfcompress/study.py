@@ -154,6 +154,8 @@ def fixed_sweep(
     validation_seeds: Sequence[int],
     absolute_floor: float = 1e-12,
     validation_iterations: int = 4,
+    dense_reference: MatVecOperator | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Run a bounded all-seed fixed sweep without outcome-dependent filtering."""
     validate_seed_plan(construction_seeds, validation_seeds)
@@ -171,7 +173,15 @@ def fixed_sweep(
             seed=construction_seed,
             validation_seed=validation_seeds[0],
             validation_iters=validation_iterations,
+            dense_reference=dense_reference,
         )
+        if metadata is not None and not metadata:
+            metadata.update(
+                {
+                    "environment": measurement["environment"],
+                    "timing_protocol": measurement["timing_protocol"],
+                }
+            )
         hmat = compress(reference, mesh, m=m, k=k, p=p, seed=construction_seed, sampling="fixed")
         for validation_seed in validation_seeds:
             records.append(

@@ -11,6 +11,7 @@ import pytest
 
 from gfcompress.geometry import FaultMesh
 from gfcompress.mockgf import MockGF
+from gfcompress.operators import MatVecOperator
 from gfcompress.study import configuration_schema, fixed_sweep, validate_seed_plan
 
 
@@ -104,12 +105,23 @@ def test_runner_consumes_injected_tracked_config_and_records_source_subset_ident
     (directory / "bp3_fbf_coords.csv").write_text("coordinates", encoding="utf-8")
     mesh = _mesh()
 
-    class Subset(MockGF):
+    class Subset(MatVecOperator):
         def __init__(self) -> None:
-            super().__init__(mesh)
+            self._inner = MockGF(mesh)
+            self.mesh = mesh
             self.patch_ids = np.arange(mesh.n_patches, dtype=np.intp)
             self.row_map = np.arange(mesh.n_rows, dtype=np.intp)
             self.col_map = np.arange(mesh.n_cols, dtype=np.intp)
+
+        @property
+        def shape(self) -> tuple[int, int]:
+            return self._inner.shape
+
+        def matvec(self, omega: np.ndarray) -> np.ndarray:
+            return self._inner.matvec(omega)
+
+        def rmatvec(self, psi: np.ndarray) -> np.ndarray:
+            return self._inner.rmatvec(psi)
 
     result = module.report(
         tmp_path,
@@ -124,7 +136,12 @@ def test_runner_consumes_injected_tracked_config_and_records_source_subset_ident
     assert result["subset"]["patch_ids_hash"]
     record = result["records"][0]
     assert record["absolute_floor"] == 1e-9
+    assert record["selection_measurements"]["storage"]["dense_reference_bytes"] > 0
+    assert record["selection_measurements"]["storage"]["dense_storage_ratio"] is not None
     assert record["diagnostics"]["global_relative_error"] >= 0
+    assert result["environment"]["python"]
+    assert result["timing_protocol"]["rhs_columns"] == 1
+    assert "warm" in result["timing_protocol"]["cache"]
 
     config["selection"]["primary"] = {"m": 1, "k": 1, "p": 1}
     config["selection"]["alternatives"] = [{"m": 2, "k": 1, "p": 1}]

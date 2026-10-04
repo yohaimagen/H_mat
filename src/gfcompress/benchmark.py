@@ -446,7 +446,14 @@ def synthetic_report(
 
 
 def c9_synthetic_report(
-    *, n_side: int = 8, m: int = 2, k: int = 2, p: int = 2, seed: int = 0, repeats: int = 20
+    *,
+    n_side: int = 8,
+    m: int = 2,
+    k: int = 2,
+    p: int = 2,
+    seed: int = 0,
+    repeats: int = 20,
+    validation_seed: int | None = None,
 ) -> dict[str, Any]:
     """Measure C.9's final-factor representation on the compact MockGF case.
 
@@ -468,9 +475,10 @@ def c9_synthetic_report(
     leaves = extract_leaves(reference, root, lists, mesh, _deepest_level(root), factors)
     before = HMatrix(root=root, mesh=mesh, factors=factors, leaves=leaves)
     after = HMatrix(root=root, mesh=mesh, factors=finalize_factors(factors), leaves=leaves)
-    rng = np.random.default_rng(seed + 91)
-    x = rng.standard_normal(mesh.n_cols)
-    y = rng.standard_normal(mesh.n_rows)
+    validation_seed = seed + 93 if validation_seed is None else validation_seed
+    forward_equivalence_seed, adjoint_equivalence_seed = seed + 91, seed + 92
+    x = np.random.default_rng(forward_equivalence_seed).standard_normal(mesh.n_cols)
+    y = np.random.default_rng(adjoint_equivalence_seed).standard_normal(mesh.n_rows)
     forward_difference = float(np.linalg.norm(before.dot(x) - after.dot(x)))
     adjoint_difference = float(np.linalg.norm(before.rdot(y) - after.rdot(y)))
     economy = factor_economy(factors)
@@ -481,6 +489,14 @@ def c9_synthetic_report(
         "provenance": provenance(),
         "dataset": {"identity": "MockGF regular-grid", "n_side": n_side, "patches": mesh.n_patches},
         "parameters": {"m": m, "k": k, "p": p, "sampling": "fixed"},
+        "seeds": {
+            "construction": seed,
+            "equivalence_forward": forward_equivalence_seed,
+            "equivalence_adjoint": adjoint_equivalence_seed,
+            "application_forward": seed,
+            "application_adjoint": seed + 1,
+            "validation": validation_seed,
+        },
         "environment": environment(),
         "measurements": {
             "far_field": {
@@ -495,6 +511,9 @@ def c9_synthetic_report(
             "equivalence": {
                 "forward_absolute_difference": forward_difference,
                 "adjoint_absolute_difference": adjoint_difference,
+                "power_relative_difference": relative_error(
+                    before, after, n_iters=4, seed=validation_seed
+                ),
             },
             "storage_bytes": {
                 "before": before_storage.factor_bytes,
