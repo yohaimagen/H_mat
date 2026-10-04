@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -16,9 +17,33 @@ from gfcompress.study import fixed_sweep
 
 def _load_config(dataset: str, config_path: Path | None) -> dict[str, Any]:
     path = config_path or Path(f"benchmarks/configs/{dataset}_fixed.json")
-    config = json.loads(path.read_text(encoding="utf-8"))
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(loaded, Mapping) or not all(isinstance(key, str) for key in loaded):
+        raise ValueError(f"{path}: configuration must be a JSON object with string keys")
+    config: dict[str, Any] = dict(loaded)
     if config.get("dataset") != dataset or config.get("sampling") != "fixed":
         raise ValueError(f"{path}: expected fixed configuration for {dataset}")
+    required = (
+        "sweep",
+        "construction_seeds",
+        "validation_seeds",
+        "validation",
+        "selection",
+        "acceptance",
+    )
+    if any(
+        not isinstance(config.get(name), Mapping)
+        for name in ("sweep", "validation", "selection", "acceptance")
+    ) or any(name not in config for name in required):
+        raise ValueError(f"{path}: missing required C.10 configuration fields")
+    for name in ("m", "k", "p"):
+        if name not in config["sweep"]:
+            raise ValueError(f"{path}: sweep.{name} is required")
+    for name in ("power_iterations", "absolute_response_floor", "status"):
+        if name not in config["validation"]:
+            raise ValueError(f"{path}: validation.{name} is required")
+    if not isinstance(config["acceptance"].get("frozen"), bool):
+        raise ValueError(f"{path}: acceptance.frozen must be boolean")
     return config
 
 
@@ -75,9 +100,10 @@ def report(
         absolute_floor=config["validation"]["absolute_response_floor"],
         validation_iterations=config["validation"]["power_iterations"],
     )
+    frozen = config["acceptance"]["frozen"]
     return {
         **common,
-        "status": "measured_unlocked",
+        "status": "measured_locked" if frozen else "measured_unlocked",
         "source": {"matrix": _file_identity(matrix), "coordinates": _file_identity(coordinates[0])},
         "subset": {
             "patch_count": subset.mesh.n_patches,
@@ -88,7 +114,12 @@ def report(
             "col_map_hash": _array_hash(subset.col_map),
         },
         "records": records,
-        "acceptance": "selection/tolerance locking remains a human-reviewed measurement step",
+        "acceptance": (
+            "frozen configuration was consumed; recorded thresholds still require review against "
+            "the measured records"
+            if frozen
+            else "selection/tolerance locking remains a human-reviewed measurement step"
+        ),
     }
 
 

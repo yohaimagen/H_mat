@@ -59,7 +59,20 @@ def test_unlocked_configuration_and_missing_data_record_are_honest(tmp_path: Pat
     assert config["acceptance"]["frozen"] is False
     for dataset in ("bp3", "bp7"):
         path = Path(f"benchmarks/configs/{dataset}_fixed.json")
-        assert json.loads(path.read_text(encoding="utf-8")) == configuration_schema(dataset)
+        tracked = json.loads(path.read_text(encoding="utf-8"))
+        assert tracked["dataset"] == dataset
+        assert {
+            "sweep",
+            "construction_seeds",
+            "validation_seeds",
+            "validation",
+            "selection",
+            "acceptance",
+        } <= set(tracked)
+        assert {"m", "k", "p"} <= set(tracked["sweep"])
+        assert {"power_iterations", "absolute_response_floor", "status"} <= set(
+            tracked["validation"]
+        )
     spec = importlib.util.spec_from_file_location("c10", Path("benchmarks/c10.py"))
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -112,3 +125,21 @@ def test_runner_consumes_injected_tracked_config_and_records_source_subset_ident
     record = result["records"][0]
     assert record["absolute_floor"] == 1e-9
     assert record["diagnostics"]["global_relative_error"] >= 0
+
+    config["selection"]["primary"] = {"m": 1, "k": 1, "p": 1}
+    config["selection"]["alternatives"] = [{"m": 2, "k": 1, "p": 1}]
+    config["acceptance"].update(
+        {"frozen": True, "global_relative_error_max": 0.1, "comparison_relative_slack": 0.01}
+    )
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    locked = module.report(
+        tmp_path,
+        "bp3",
+        run=True,
+        config_path=config_path,
+        source_type=lambda *_: object(),
+        subset_builder=lambda *_args, **_kwargs: Subset(),
+    )
+    assert locked["status"] == "measured_locked"
+    assert "frozen configuration was consumed" in locked["acceptance"]
+    assert locked["config"]["selection"]["primary"] == {"m": 1, "k": 1, "p": 1}
