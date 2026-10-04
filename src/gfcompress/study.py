@@ -105,7 +105,7 @@ def _direction_diagnostics(
         groups[str(component)] = _response(hmat, reference, x, floor, transpose=transpose)
     improvement = {
         name: value["leaves_only"]["relative_with_floor"]
-        / max(value["compressed"]["relative_with_floor"], floor)
+        / max(value["compressed"]["relative_with_floor"], np.finfo(float).tiny)
         for name, value in input_errors.items()
     }
     return {

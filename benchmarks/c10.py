@@ -59,6 +59,78 @@ def _array_hash(array: Any) -> str:
     return hashlib.sha256(array.tobytes()).hexdigest()
 
 
+def _acceptance_evaluation(config: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Evaluate frozen subset criteria over every primary seed/start record."""
+    primary = config["selection"]["primary"]
+    if primary is None:
+        return {"evaluated": False, "reason": "no primary configuration is selected"}
+    selected = [
+        record
+        for record in records
+        if all(record["parameters"][name] == primary[name] for name in ("m", "k", "p"))
+    ]
+    if not selected:
+        return {"evaluated": False, "reason": "primary has no sweep records"}
+    checks = config["acceptance"]
+    observed = {
+        "global_relative_error_max": max(
+            record["diagnostics"]["global_relative_error"] for record in selected
+        ),
+        "selected_block_output_error_max": max(
+            value["relative_with_floor"]
+            for record in selected
+            for value in record["diagnostics"]["selected_block_output_errors"].values()
+        ),
+        "component_response_error_max": max(
+            value["relative_with_floor"]
+            for record in selected
+            for side in ("forward", "adjoint")
+            for value in record["diagnostics"][side]["component_index_group_errors"].values()
+        ),
+        "input_response_error_max": max(
+            value["compressed"]["relative_with_floor"]
+            for record in selected
+            for side in ("forward", "adjoint")
+            for value in record["diagnostics"][side]["input_errors"].values()
+        ),
+        "leaves_only_improvement_min": min(
+            value
+            for record in selected
+            for side in ("forward", "adjoint")
+            for value in record["diagnostics"][side]["leaves_only_improvement_factor"].values()
+        ),
+    }
+    passing = {
+        name: observed[name] <= checks[name]
+        for name in (
+            "global_relative_error_max",
+            "selected_block_output_error_max",
+            "component_response_error_max",
+            "input_response_error_max",
+        )
+    }
+    passing["leaves_only_improvement_min"] = (
+        observed["leaves_only_improvement_min"] >= checks["leaves_only_improvement_min"]
+    )
+    return {
+        "evaluated": True,
+        "primary_record_count": len(selected),
+        "observed": observed,
+        "thresholds": {
+            name: checks[name]
+            for name in (
+                "global_relative_error_max",
+                "selected_block_output_error_max",
+                "component_response_error_max",
+                "input_response_error_max",
+                "leaves_only_improvement_min",
+            )
+        },
+        "passes": passing,
+        "all_pass": all(passing.values()),
+    }
+
+
 def report(
     data_root: Path,
     dataset: str,
@@ -111,6 +183,7 @@ def report(
         metadata=metadata,
     )
     frozen = config["acceptance"]["frozen"]
+    evaluation = _acceptance_evaluation(config, records)
     return {
         **common,
         "status": "measured_locked" if frozen else "measured_unlocked",
@@ -125,9 +198,9 @@ def report(
             "col_map_hash": _array_hash(subset.col_map),
         },
         "records": records,
+        "acceptance_evaluation": evaluation,
         "acceptance": (
-            "frozen configuration was consumed; recorded thresholds still require review against "
-            "the measured records"
+            "frozen configuration was consumed and evaluated over every primary seed/start record"
             if frozen
             else "selection/tolerance locking remains a human-reviewed measurement step"
         ),

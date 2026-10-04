@@ -51,6 +51,7 @@ def test_seed_plan_rejects_favorable_selection_and_sweep_records_all_pairs() -> 
         assert all(
             "leaves_only" in value for value in diagnostics[direction]["input_errors"].values()
         )
+        assert min(diagnostics[direction]["leaves_only_improvement_factor"].values()) > 1
     assert diagnostics["selected_block_output_errors"]
 
 
@@ -146,7 +147,15 @@ def test_runner_consumes_injected_tracked_config_and_records_source_subset_ident
     config["selection"]["primary"] = {"m": 1, "k": 1, "p": 1}
     config["selection"]["alternatives"] = [{"m": 2, "k": 1, "p": 1}]
     config["acceptance"].update(
-        {"frozen": True, "global_relative_error_max": 0.1, "comparison_relative_slack": 0.01}
+        {
+            "frozen": True,
+            "global_relative_error_max": 0.1,
+            "selected_block_output_error_max": 1.0,
+            "component_response_error_max": 1.0,
+            "input_response_error_max": 1.0,
+            "leaves_only_improvement_min": 1.0,
+            "comparison_relative_slack": 0.01,
+        }
     )
     config_path.write_text(json.dumps(config), encoding="utf-8")
     locked = module.report(
@@ -160,3 +169,4 @@ def test_runner_consumes_injected_tracked_config_and_records_source_subset_ident
     assert locked["status"] == "measured_locked"
     assert "frozen configuration was consumed" in locked["acceptance"]
     assert locked["config"]["selection"]["primary"] == {"m": 1, "k": 1, "p": 1}
+    assert locked["acceptance_evaluation"]["evaluated"]

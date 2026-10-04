@@ -610,9 +610,15 @@ def _assert_subset_diagnostics(
     assert depth >= 2 and interactions > 0 and compressed_levels >= 2 and reduced > 0
     # Rank is measured at a 1e-6 relative singular-value threshold; rank-4
     # tails are Frobenius-relative with a 1e-14 absolute denominator floor.
+    # These are diagnostics, not a claim that every real far-field block is
+    # rank-deficient at that threshold (BP7 is not; see MEASUREMENTS_C7.md).
     nontrivial = [(width, rank, tail) for width, rank, tail in spectra if width > 4]
     assert len(nontrivial) >= 2
-    assert all(0 < rank < width and tail < 0.1 for width, rank, tail in nontrivial)
+    assert all(0 < rank <= width and 0.0 <= tail < 1.0 for width, rank, tail in nontrivial)
+    # At least one deterministic block has a decaying rank-4 tail.  The
+    # dataset-specific tests below record whether that evidence is uniformly
+    # strong or mixed; do not turn it into a universal low-rank assumption.
+    assert any(tail < 0.1 for _, _, tail in nontrivial)
 
 
 @_needs_bp3
@@ -625,6 +631,9 @@ def test_bp3_subset_bp3_diagnostics_and_l_independence() -> None:
     assert subset.reduced_centroids.shape[1] == 1
     _assert_subset_diagnostics(diagnostic)
     _assert_subset_diagnostics(alternate)
+    for item in (diagnostic, alternate):
+        nontrivial = [spectrum for spectrum in item[-1] if spectrum[0] > 4]
+        assert all(rank < width and tail < 1e-3 for width, rank, tail in nontrivial)
     assert not np.array_equal(subset.patch_ids, alternate[0].patch_ids)
     # L is metadata only; it cannot change the dyadic partition.
     roots = [
@@ -646,4 +655,14 @@ def test_bp7_subset_bp7_diagnostics_and_subset_sensitivity() -> None:
     assert first.reduced_centroids.shape[1] == 2
     _assert_subset_diagnostics(diagnostic)
     _assert_subset_diagnostics(alternate)
+    bp7_spectra = [spectrum for item in (diagnostic, alternate) for spectrum in item[-1]]
+    # The deterministic largest blocks are full numerical rank at 1e-6 even
+    # though most have a decaying rank-4 tail.  One level's 0.278 tail is a
+    # deliberate regression guard against falsely advertising universal rank-4
+    # behavior; it is documented as a limitation rather than tuned away.
+    assert all(rank == width for width, rank, _ in bp7_spectra)
+    tails = [tail for _, _, tail in bp7_spectra]
+    assert max(tails) > 0.2
+    assert max(tails) < 0.3
+    assert sum(tail < 0.1 for tail in tails) >= len(tails) - 1
     assert not np.array_equal(first.patch_ids, alternate[0].patch_ids)
