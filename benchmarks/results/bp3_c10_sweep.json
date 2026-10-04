@@ -23,7 +23,7 @@
       "global_relative_error_max": 1e-08,
       "input_response_error_max": 1e-08,
       "leaves_only_improvement_min": 1000.0,
-      "selected_block_output_error_max": 0.01
+      "selected_block_output_error_max": 1e-05
     }
   },
   "config": {
@@ -36,7 +36,7 @@
       "input_response_error_max": 1e-08,
       "leaves_only_improvement_min": 1000.0,
       "reason": "Frozen from all 3 construction seeds x 2 independent validation starts on the C.7 192-patch subset. Limits retain margin above the primary's observed worst cases; they are subset criteria, not full-baseline claims.",
-      "selected_block_output_error_max": 0.01
+      "selected_block_output_error_max": 1e-05
     },
     "construction_seeds": [
       11,
@@ -114,7 +114,7 @@
     "python": "3.12.9"
   },
   "provenance": {
-    "commit": "21e3e37e36ddf24429721d25ad6909862d82138f",
+    "commit": "5797cdd056bf40cf1df9de7625e6ba54fdf5df10",
     "diff_hash": null,
     "dirty": false
   },
@@ -259,10 +259,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.7083345533659062e-06,
-          "dense_forward_warm": 4.666663395861785e-06,
-          "hmat_adjoint_warm": 0.0006719303346471861,
-          "hmat_forward_warm": 0.0006534723361255601
+          "dense_adjoint_warm": 2.6666675694286823e-06,
+          "dense_forward_warm": 4.694666131399572e-06,
+          "hmat_adjoint_warm": 0.0006427499999214584,
+          "hmat_forward_warm": 0.0006257083296077326
         },
         "sampled_columns": {
           "budget": {
@@ -482,10 +482,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.7083345533659062e-06,
-          "dense_forward_warm": 4.666663395861785e-06,
-          "hmat_adjoint_warm": 0.0006719303346471861,
-          "hmat_forward_warm": 0.0006534723361255601
+          "dense_adjoint_warm": 2.6666675694286823e-06,
+          "dense_forward_warm": 4.694666131399572e-06,
+          "hmat_adjoint_warm": 0.0006427499999214584,
+          "hmat_forward_warm": 0.0006257083296077326
         },
         "sampled_columns": {
           "budget": {
@@ -705,10 +705,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.846999753577014e-06,
-          "dense_forward_warm": 5.0696641361961765e-06,
-          "hmat_adjoint_warm": 0.000651999997595946,
-          "hmat_forward_warm": 0.0006522223314580818
+          "dense_adjoint_warm": 2.847329596988857e-06,
+          "dense_forward_warm": 5.028002002897362e-06,
+          "hmat_adjoint_warm": 0.0006374303338816389,
+          "hmat_forward_warm": 0.0006369446685615306
         },
         "sampled_columns": {
           "budget": {
@@ -928,10 +928,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.846999753577014e-06,
-          "dense_forward_warm": 5.0696641361961765e-06,
-          "hmat_adjoint_warm": 0.000651999997595946,
-          "hmat_forward_warm": 0.0006522223314580818
+          "dense_adjoint_warm": 2.847329596988857e-06,
+          "dense_forward_warm": 5.028002002897362e-06,
+          "hmat_adjoint_warm": 0.0006374303338816389,
+          "hmat_forward_warm": 0.0006369446685615306
         },
         "sampled_columns": {
           "budget": {
@@ -1151,10 +1151,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.972000705388685e-06,
-          "dense_forward_warm": 5.09733702832212e-06,
-          "hmat_adjoint_warm": 0.0006566250037091473,
-          "hmat_forward_warm": 0.0006998750031925738
+          "dense_adjoint_warm": 2.986329491250217e-06,
+          "dense_forward_warm": 5.180666145558159e-06,
+          "hmat_adjoint_warm": 0.000652069667315421,
+          "hmat_forward_warm": 0.0006413056641273821
         },
         "sampled_columns": {
           "budget": {
@@ -1374,10 +1374,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.972000705388685e-06,
-          "dense_forward_warm": 5.09733702832212e-06,
-          "hmat_adjoint_warm": 0.0006566250037091473,
-          "hmat_forward_warm": 0.0006998750031925738
+          "dense_adjoint_warm": 2.986329491250217e-06,
+          "dense_forward_warm": 5.180666145558159e-06,
+          "hmat_adjoint_warm": 0.000652069667315421,
+          "hmat_forward_warm": 0.0006413056641273821
         },
         "sampled_columns": {
           "budget": {
@@ -1597,10 +1597,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.861003546665112e-06,
-          "dense_forward_warm": 6.222001199300091e-06,
-          "hmat_adjoint_warm": 0.0006567916667942578,
-          "hmat_forward_warm": 0.0006621249970824769
+          "dense_adjoint_warm": 2.88900143156449e-06,
+          "dense_forward_warm": 4.749997363736232e-06,
+          "hmat_adjoint_warm": 0.0006569443357875571,
+          "hmat_forward_warm": 0.000653083329477037
         },
         "sampled_columns": {
           "budget": {
@@ -1820,10 +1820,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.861003546665112e-06,
-          "dense_forward_warm": 6.222001199300091e-06,
-          "hmat_adjoint_warm": 0.0006567916667942578,
-          "hmat_forward_warm": 0.0006621249970824769
+          "dense_adjoint_warm": 2.88900143156449e-06,
+          "dense_forward_warm": 4.749997363736232e-06,
+          "hmat_adjoint_warm": 0.0006569443357875571,
+          "hmat_forward_warm": 0.000653083329477037
         },
         "sampled_columns": {
           "budget": {
@@ -2043,10 +2043,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.860998696026703e-06,
-          "dense_forward_warm": 4.958332283422351e-06,
-          "hmat_adjoint_warm": 0.0006493333348771557,
-          "hmat_forward_warm": 0.0006858473352622241
+          "dense_adjoint_warm": 2.999998590288063e-06,
+          "dense_forward_warm": 4.861334067148467e-06,
+          "hmat_adjoint_warm": 0.0006237500007652367,
+          "hmat_forward_warm": 0.0006348613339165846
         },
         "sampled_columns": {
           "budget": {
@@ -2266,10 +2266,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.860998696026703e-06,
-          "dense_forward_warm": 4.958332283422351e-06,
-          "hmat_adjoint_warm": 0.0006493333348771557,
-          "hmat_forward_warm": 0.0006858473352622241
+          "dense_adjoint_warm": 2.999998590288063e-06,
+          "dense_forward_warm": 4.861334067148467e-06,
+          "hmat_adjoint_warm": 0.0006237500007652367,
+          "hmat_forward_warm": 0.0006348613339165846
         },
         "sampled_columns": {
           "budget": {
@@ -2489,10 +2489,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.9443326639011502e-06,
-          "dense_forward_warm": 4.9720013824601965e-06,
-          "hmat_adjoint_warm": 0.0006605416662447775,
-          "hmat_forward_warm": 0.0006529860014173513
+          "dense_adjoint_warm": 3.0693336157128215e-06,
+          "dense_forward_warm": 4.9026663570354385e-06,
+          "hmat_adjoint_warm": 0.0006385696663831671,
+          "hmat_forward_warm": 0.0006387083364340166
         },
         "sampled_columns": {
           "budget": {
@@ -2712,10 +2712,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.9443326639011502e-06,
-          "dense_forward_warm": 4.9720013824601965e-06,
-          "hmat_adjoint_warm": 0.0006605416662447775,
-          "hmat_forward_warm": 0.0006529860014173513
+          "dense_adjoint_warm": 3.0693336157128215e-06,
+          "dense_forward_warm": 4.9026663570354385e-06,
+          "hmat_adjoint_warm": 0.0006385696663831671,
+          "hmat_forward_warm": 0.0006387083364340166
         },
         "sampled_columns": {
           "budget": {
@@ -2935,10 +2935,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.6389995279411473e-06,
-          "dense_forward_warm": 4.791669198311865e-06,
-          "hmat_adjoint_warm": 0.0006673750031040981,
-          "hmat_forward_warm": 0.0006485136642974491
+          "dense_adjoint_warm": 2.916669473052025e-06,
+          "dense_forward_warm": 4.999999267359574e-06,
+          "hmat_adjoint_warm": 0.0006495140017553543,
+          "hmat_forward_warm": 0.0006444999986949066
         },
         "sampled_columns": {
           "budget": {
@@ -3158,10 +3158,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.6389995279411473e-06,
-          "dense_forward_warm": 4.791669198311865e-06,
-          "hmat_adjoint_warm": 0.0006673750031040981,
-          "hmat_forward_warm": 0.0006485136642974491
+          "dense_adjoint_warm": 2.916669473052025e-06,
+          "dense_forward_warm": 4.999999267359574e-06,
+          "hmat_adjoint_warm": 0.0006495140017553543,
+          "hmat_forward_warm": 0.0006444999986949066
         },
         "sampled_columns": {
           "budget": {
@@ -3381,10 +3381,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.9030003740141788e-06,
-          "dense_forward_warm": 5.09733702832212e-06,
-          "hmat_adjoint_warm": 0.000677764003436702,
-          "hmat_forward_warm": 0.0006592500042946389
+          "dense_adjoint_warm": 2.972330548800528e-06,
+          "dense_forward_warm": 4.860999373098214e-06,
+          "hmat_adjoint_warm": 0.0006364029977703467,
+          "hmat_forward_warm": 0.0006442223336004341
         },
         "sampled_columns": {
           "budget": {
@@ -3604,10 +3604,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.9030003740141788e-06,
-          "dense_forward_warm": 5.09733702832212e-06,
-          "hmat_adjoint_warm": 0.000677764003436702,
-          "hmat_forward_warm": 0.0006592500042946389
+          "dense_adjoint_warm": 2.972330548800528e-06,
+          "dense_forward_warm": 4.860999373098214e-06,
+          "hmat_adjoint_warm": 0.0006364029977703467,
+          "hmat_forward_warm": 0.0006442223336004341
         },
         "sampled_columns": {
           "budget": {
@@ -3827,10 +3827,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.860998696026703e-06,
-          "dense_forward_warm": 5.041666251296799e-06,
-          "hmat_adjoint_warm": 0.0006505139996685708,
-          "hmat_forward_warm": 0.000643444664698715
+          "dense_adjoint_warm": 2.9443326639011502e-06,
+          "dense_forward_warm": 5.1389991616209345e-06,
+          "hmat_adjoint_warm": 0.0006559583368167902,
+          "hmat_forward_warm": 0.0006491666669414068
         },
         "sampled_columns": {
           "budget": {
@@ -4050,10 +4050,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.860998696026703e-06,
-          "dense_forward_warm": 5.041666251296799e-06,
-          "hmat_adjoint_warm": 0.0006505139996685708,
-          "hmat_forward_warm": 0.000643444664698715
+          "dense_adjoint_warm": 2.9443326639011502e-06,
+          "dense_forward_warm": 5.1389991616209345e-06,
+          "hmat_adjoint_warm": 0.0006559583368167902,
+          "hmat_forward_warm": 0.0006491666669414068
         },
         "sampled_columns": {
           "budget": {
@@ -4273,10 +4273,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.9166646224136152e-06,
-          "dense_forward_warm": 5.111001276721557e-06,
-          "hmat_adjoint_warm": 0.000708874998963438,
-          "hmat_forward_warm": 0.0006508193328045309
+          "dense_adjoint_warm": 2.88900143156449e-06,
+          "dense_forward_warm": 5.055670044384897e-06,
+          "hmat_adjoint_warm": 0.0006623750038367385,
+          "hmat_forward_warm": 0.0006528056692332029
         },
         "sampled_columns": {
           "budget": {
@@ -4496,10 +4496,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.9166646224136152e-06,
-          "dense_forward_warm": 5.111001276721557e-06,
-          "hmat_adjoint_warm": 0.000708874998963438,
-          "hmat_forward_warm": 0.0006508193328045309
+          "dense_adjoint_warm": 2.88900143156449e-06,
+          "dense_forward_warm": 5.055670044384897e-06,
+          "hmat_adjoint_warm": 0.0006623750038367385,
+          "hmat_forward_warm": 0.0006528056692332029
         },
         "sampled_columns": {
           "budget": {
@@ -4719,10 +4719,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.8193365627278886e-06,
-          "dense_forward_warm": 4.944333340972662e-06,
-          "hmat_adjoint_warm": 0.0006295696657616645,
-          "hmat_forward_warm": 0.0006729859984867895
+          "dense_adjoint_warm": 2.9443326639011502e-06,
+          "dense_forward_warm": 5.055330499696235e-06,
+          "hmat_adjoint_warm": 0.0006402916624210775,
+          "hmat_forward_warm": 0.0006438749987864867
         },
         "sampled_columns": {
           "budget": {
@@ -4942,10 +4942,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.8193365627278886e-06,
-          "dense_forward_warm": 4.944333340972662e-06,
-          "hmat_adjoint_warm": 0.0006295696657616645,
-          "hmat_forward_warm": 0.0006729859984867895
+          "dense_adjoint_warm": 2.9443326639011502e-06,
+          "dense_forward_warm": 5.055330499696235e-06,
+          "hmat_adjoint_warm": 0.0006402916624210775,
+          "hmat_forward_warm": 0.0006438749987864867
         },
         "sampled_columns": {
           "budget": {
@@ -5165,10 +5165,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.860998696026703e-06,
-          "dense_forward_warm": 5.083338085872431e-06,
-          "hmat_adjoint_warm": 0.0006596250022994354,
-          "hmat_forward_warm": 0.0006439030015220245
+          "dense_adjoint_warm": 2.916669473052025e-06,
+          "dense_forward_warm": 4.930334398522973e-06,
+          "hmat_adjoint_warm": 0.0006256943306652829,
+          "hmat_forward_warm": 0.0006296803330769762
         },
         "sampled_columns": {
           "budget": {
@@ -5388,10 +5388,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.860998696026703e-06,
-          "dense_forward_warm": 5.083338085872431e-06,
-          "hmat_adjoint_warm": 0.0006596250022994354,
-          "hmat_forward_warm": 0.0006439030015220245
+          "dense_adjoint_warm": 2.916669473052025e-06,
+          "dense_forward_warm": 4.930334398522973e-06,
+          "hmat_adjoint_warm": 0.0006256943306652829,
+          "hmat_forward_warm": 0.0006296803330769762
         },
         "sampled_columns": {
           "budget": {
@@ -5611,10 +5611,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.847004604215423e-06,
-          "dense_forward_warm": 5.000004117997984e-06,
-          "hmat_adjoint_warm": 0.0006562916678376496,
-          "hmat_forward_warm": 0.0006442640005843714
+          "dense_adjoint_warm": 2.9026656799639263e-06,
+          "dense_forward_warm": 5.09733702832212e-06,
+          "hmat_adjoint_warm": 0.0006532916643967231,
+          "hmat_forward_warm": 0.0006528473362171402
         },
         "sampled_columns": {
           "budget": {
@@ -5834,10 +5834,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.847004604215423e-06,
-          "dense_forward_warm": 5.000004117997984e-06,
-          "hmat_adjoint_warm": 0.0006562916678376496,
-          "hmat_forward_warm": 0.0006442640005843714
+          "dense_adjoint_warm": 2.9026656799639263e-06,
+          "dense_forward_warm": 5.09733702832212e-06,
+          "hmat_adjoint_warm": 0.0006532916643967231,
+          "hmat_forward_warm": 0.0006528473362171402
         },
         "sampled_columns": {
           "budget": {
@@ -6057,10 +6057,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.846999753577014e-06,
-          "dense_forward_warm": 5.013668366397421e-06,
-          "hmat_adjoint_warm": 0.0006611666661531975,
-          "hmat_forward_warm": 0.0006580140034202486
+          "dense_adjoint_warm": 2.5556655600667e-06,
+          "dense_forward_warm": 4.583329427987337e-06,
+          "hmat_adjoint_warm": 0.0006522916664835066,
+          "hmat_forward_warm": 0.0006303193367784843
         },
         "sampled_columns": {
           "budget": {
@@ -6280,10 +6280,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.846999753577014e-06,
-          "dense_forward_warm": 5.013668366397421e-06,
-          "hmat_adjoint_warm": 0.0006611666661531975,
-          "hmat_forward_warm": 0.0006580140034202486
+          "dense_adjoint_warm": 2.5556655600667e-06,
+          "dense_forward_warm": 4.583329427987337e-06,
+          "hmat_adjoint_warm": 0.0006522916664835066,
+          "hmat_forward_warm": 0.0006303193367784843
         },
         "sampled_columns": {
           "budget": {
@@ -6503,10 +6503,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 3.0556645166749754e-06,
-          "dense_forward_warm": 5.014003060447673e-06,
-          "hmat_adjoint_warm": 0.0006684719992335886,
-          "hmat_forward_warm": 0.0006647640014610564
+          "dense_adjoint_warm": 3.1249995420997343e-06,
+          "dense_forward_warm": 4.971996531821787e-06,
+          "hmat_adjoint_warm": 0.0006317639975653341,
+          "hmat_forward_warm": 0.0006441389996325597
         },
         "sampled_columns": {
           "budget": {
@@ -6726,10 +6726,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 3.0556645166749754e-06,
-          "dense_forward_warm": 5.014003060447673e-06,
-          "hmat_adjoint_warm": 0.0006684719992335886,
-          "hmat_forward_warm": 0.0006647640014610564
+          "dense_adjoint_warm": 3.1249995420997343e-06,
+          "dense_forward_warm": 4.971996531821787e-06,
+          "hmat_adjoint_warm": 0.0006317639975653341,
+          "hmat_forward_warm": 0.0006441389996325597
         },
         "sampled_columns": {
           "budget": {
@@ -6949,10 +6949,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.736332438265284e-06,
-          "dense_forward_warm": 4.916665299485127e-06,
-          "hmat_adjoint_warm": 0.0006544166632617513,
-          "hmat_forward_warm": 0.0006751390028512105
+          "dense_adjoint_warm": 2.8749976384763918e-06,
+          "dense_forward_warm": 5.027997152258952e-06,
+          "hmat_adjoint_warm": 0.0006604583322769031,
+          "hmat_forward_warm": 0.0006412223350101461
         },
         "sampled_columns": {
           "budget": {
@@ -7172,10 +7172,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.736332438265284e-06,
-          "dense_forward_warm": 4.916665299485127e-06,
-          "hmat_adjoint_warm": 0.0006544166632617513,
-          "hmat_forward_warm": 0.0006751390028512105
+          "dense_adjoint_warm": 2.8749976384763918e-06,
+          "dense_forward_warm": 5.027997152258952e-06,
+          "hmat_adjoint_warm": 0.0006604583322769031,
+          "hmat_forward_warm": 0.0006412223350101461
         },
         "sampled_columns": {
           "budget": {
@@ -7395,10 +7395,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.9026656799639263e-06,
-          "dense_forward_warm": 5.083333235234022e-06,
-          "hmat_adjoint_warm": 0.0006631806706233571,
-          "hmat_forward_warm": 0.0006848473373490075
+          "dense_adjoint_warm": 2.8886667375142374e-06,
+          "dense_forward_warm": 5.0696641361961765e-06,
+          "hmat_adjoint_warm": 0.0006451806693803519,
+          "hmat_forward_warm": 0.0006357776631678765
         },
         "sampled_columns": {
           "budget": {
@@ -7618,10 +7618,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.9026656799639263e-06,
-          "dense_forward_warm": 5.083333235234022e-06,
-          "hmat_adjoint_warm": 0.0006631806706233571,
-          "hmat_forward_warm": 0.0006848473373490075
+          "dense_adjoint_warm": 2.8886667375142374e-06,
+          "dense_forward_warm": 5.0696641361961765e-06,
+          "hmat_adjoint_warm": 0.0006451806693803519,
+          "hmat_forward_warm": 0.0006357776631678765
         },
         "sampled_columns": {
           "budget": {
@@ -7842,9 +7842,9 @@
       "selection_measurements": {
         "apply_cost_seconds": {
           "dense_adjoint_warm": 2.860998696026703e-06,
-          "dense_forward_warm": 5.041666251296799e-06,
-          "hmat_adjoint_warm": 0.0006542639991190905,
-          "hmat_forward_warm": 0.0006423609981235737
+          "dense_forward_warm": 5.083333235234022e-06,
+          "hmat_adjoint_warm": 0.0006467360023331518,
+          "hmat_forward_warm": 0.0006345693351856122
         },
         "sampled_columns": {
           "budget": {
@@ -8065,9 +8065,9 @@
       "selection_measurements": {
         "apply_cost_seconds": {
           "dense_adjoint_warm": 2.860998696026703e-06,
-          "dense_forward_warm": 5.041666251296799e-06,
-          "hmat_adjoint_warm": 0.0006542639991190905,
-          "hmat_forward_warm": 0.0006423609981235737
+          "dense_forward_warm": 5.083333235234022e-06,
+          "hmat_adjoint_warm": 0.0006467360023331518,
+          "hmat_forward_warm": 0.0006345693351856122
         },
         "sampled_columns": {
           "budget": {
@@ -8287,10 +8287,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.860998696026703e-06,
-          "dense_forward_warm": 5.069334292784333e-06,
-          "hmat_adjoint_warm": 0.0006701526678322504,
-          "hmat_forward_warm": 0.0006708890044440826
+          "dense_adjoint_warm": 2.5556655600667e-06,
+          "dense_forward_warm": 4.708330379799008e-06,
+          "hmat_adjoint_warm": 0.0006574166667026778,
+          "hmat_forward_warm": 0.0006370416667778045
         },
         "sampled_columns": {
           "budget": {
@@ -8510,10 +8510,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.860998696026703e-06,
-          "dense_forward_warm": 5.069334292784333e-06,
-          "hmat_adjoint_warm": 0.0006701526678322504,
-          "hmat_forward_warm": 0.0006708890044440826
+          "dense_adjoint_warm": 2.5556655600667e-06,
+          "dense_forward_warm": 4.708330379799008e-06,
+          "hmat_adjoint_warm": 0.0006574166667026778,
+          "hmat_forward_warm": 0.0006370416667778045
         },
         "sampled_columns": {
           "budget": {
@@ -8733,10 +8733,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.8333355051775775e-06,
-          "dense_forward_warm": 4.9860003249098854e-06,
-          "hmat_adjoint_warm": 0.0006389443345445519,
-          "hmat_forward_warm": 0.0006741806670712928
+          "dense_adjoint_warm": 2.527997518579165e-06,
+          "dense_forward_warm": 4.860999373098214e-06,
+          "hmat_adjoint_warm": 0.0006588609976461157,
+          "hmat_forward_warm": 0.0006645556665413702
         },
         "sampled_columns": {
           "budget": {
@@ -8956,10 +8956,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.8333355051775775e-06,
-          "dense_forward_warm": 4.9860003249098854e-06,
-          "hmat_adjoint_warm": 0.0006389443345445519,
-          "hmat_forward_warm": 0.0006741806670712928
+          "dense_adjoint_warm": 2.527997518579165e-06,
+          "dense_forward_warm": 4.860999373098214e-06,
+          "hmat_adjoint_warm": 0.0006588609976461157,
+          "hmat_forward_warm": 0.0006645556665413702
         },
         "sampled_columns": {
           "budget": {
@@ -9179,10 +9179,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.541666617617011e-06,
-          "dense_forward_warm": 4.694336287987729e-06,
-          "hmat_adjoint_warm": 0.0007012499991105869,
-          "hmat_forward_warm": 0.0006800416643576076
+          "dense_adjoint_warm": 2.8473344476272664e-06,
+          "dense_forward_warm": 4.833336182249089e-06,
+          "hmat_adjoint_warm": 0.0006665833304092909,
+          "hmat_forward_warm": 0.0006751666660420597
         },
         "sampled_columns": {
           "budget": {
@@ -9402,10 +9402,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.541666617617011e-06,
-          "dense_forward_warm": 4.694336287987729e-06,
-          "hmat_adjoint_warm": 0.0007012499991105869,
-          "hmat_forward_warm": 0.0006800416643576076
+          "dense_adjoint_warm": 2.8473344476272664e-06,
+          "dense_forward_warm": 4.833336182249089e-06,
+          "hmat_adjoint_warm": 0.0006665833304092909,
+          "hmat_forward_warm": 0.0006751666660420597
         },
         "sampled_columns": {
           "budget": {
@@ -9625,10 +9625,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.88900143156449e-06,
-          "dense_forward_warm": 5.069334292784333e-06,
-          "hmat_adjoint_warm": 0.0006450276656930024,
-          "hmat_forward_warm": 0.0006319859967334196
+          "dense_adjoint_warm": 2.5556704107051096e-06,
+          "dense_forward_warm": 4.83333133161068e-06,
+          "hmat_adjoint_warm": 0.000663249995947505,
+          "hmat_forward_warm": 0.0006703890006368359
         },
         "sampled_columns": {
           "budget": {
@@ -9848,10 +9848,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.88900143156449e-06,
-          "dense_forward_warm": 5.069334292784333e-06,
-          "hmat_adjoint_warm": 0.0006450276656930024,
-          "hmat_forward_warm": 0.0006319859967334196
+          "dense_adjoint_warm": 2.5556704107051096e-06,
+          "dense_forward_warm": 4.83333133161068e-06,
+          "hmat_adjoint_warm": 0.000663249995947505,
+          "hmat_forward_warm": 0.0006703890006368359
         },
         "sampled_columns": {
           "budget": {
@@ -10071,10 +10071,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.583333601554235e-06,
-          "dense_forward_warm": 4.666663395861785e-06,
-          "hmat_adjoint_warm": 0.0006808470013008142,
-          "hmat_forward_warm": 0.0006477636682878559
+          "dense_adjoint_warm": 2.569334659104546e-06,
+          "dense_forward_warm": 4.83333133161068e-06,
+          "hmat_adjoint_warm": 0.0006744863300506646,
+          "hmat_forward_warm": 0.0006911666666079933
         },
         "sampled_columns": {
           "budget": {
@@ -10294,10 +10294,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.583333601554235e-06,
-          "dense_forward_warm": 4.666663395861785e-06,
-          "hmat_adjoint_warm": 0.0006808470013008142,
-          "hmat_forward_warm": 0.0006477636682878559
+          "dense_adjoint_warm": 2.569334659104546e-06,
+          "dense_forward_warm": 4.83333133161068e-06,
+          "hmat_adjoint_warm": 0.0006744863300506646,
+          "hmat_forward_warm": 0.0006911666666079933
         },
         "sampled_columns": {
           "budget": {
@@ -10517,10 +10517,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.8333355051775775e-06,
-          "dense_forward_warm": 5.1249953685328364e-06,
-          "hmat_adjoint_warm": 0.0006315416637031982,
-          "hmat_forward_warm": 0.0006737083313055336
+          "dense_adjoint_warm": 2.555335716654857e-06,
+          "dense_forward_warm": 4.749997363736232e-06,
+          "hmat_adjoint_warm": 0.0006349443331904089,
+          "hmat_forward_warm": 0.0006272363340637336
         },
         "sampled_columns": {
           "budget": {
@@ -10740,10 +10740,10 @@
       },
       "selection_measurements": {
         "apply_cost_seconds": {
-          "dense_adjoint_warm": 2.8333355051775775e-06,
-          "dense_forward_warm": 5.1249953685328364e-06,
-          "hmat_adjoint_warm": 0.0006315416637031982,
-          "hmat_forward_warm": 0.0006737083313055336
+          "dense_adjoint_warm": 2.555335716654857e-06,
+          "dense_forward_warm": 4.749997363736232e-06,
+          "hmat_adjoint_warm": 0.0006349443331904089,
+          "hmat_forward_warm": 0.0006272363340637336
         },
         "sampled_columns": {
           "budget": {
