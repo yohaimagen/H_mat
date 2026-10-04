@@ -84,6 +84,27 @@ def test_unlocked_configuration_and_missing_data_record_are_honest(tmp_path: Pat
     assert "not evaluated" in result["acceptance"]
 
 
+def test_bp3_selected_block_criterion_rejects_zero_output() -> None:
+    report = json.loads(Path("benchmarks/results/bp3_c10_sweep.json").read_text(encoding="utf-8"))
+    config = json.loads(Path("benchmarks/configs/bp3_fixed.json").read_text(encoding="utf-8"))
+    primary = config["selection"]["primary"]
+    records = [
+        record
+        for record in report["records"]
+        if all(record["parameters"][name] == primary[name] for name in ("m", "k", "p"))
+    ]
+    threshold = config["acceptance"]["selected_block_output_error_max"]
+    selected = [
+        value
+        for record in records
+        for value in record["diagnostics"]["selected_block_output_errors"].values()
+    ]
+    assert max(value["relative_with_floor"] for value in selected) <= threshold
+    # With the frozen floor of one, zero output has error equal to this
+    # selected response norm; every sampled block must fail the criterion.
+    assert min(value["reference_norm"] for value in selected) > threshold
+
+
 def test_runner_consumes_injected_tracked_config_and_records_source_subset_identity(
     tmp_path: Path,
 ) -> None:

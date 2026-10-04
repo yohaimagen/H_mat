@@ -47,8 +47,9 @@ tree-order permutation, and a native-endian cache out of production unless
 real-data measurements justify them.
 
 `benchmarks/c10.py --dataset bp3` (or `bp7`) writes a blocked record if the
-real matrix is missing. It never turns an old subset report into an operating
-point. With the matrix present, add `--run` to opt into the bounded fixed
-sweep. The tracked `benchmarks/configs/*_fixed.json` files are deliberately
-unlocked: they specify independent seeds and required diagnostics but contain
-no invented primary configuration or acceptance threshold.
+real matrix is missing. With the matrix present, add `--run` to opt into the
+bounded fixed sweep; full runs remain opt-in. The tracked
+`benchmarks/configs/*_fixed.json` files now contain measured, frozen subset
+operating points and criteria. Completed reports evaluate every primary
+construction-seed/independent-validation-start record; they do not select a
+favorable seed or turn the old subset report into an operating point.

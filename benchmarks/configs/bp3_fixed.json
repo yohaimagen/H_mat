@@ -8,7 +8,7 @@
     "input_response_error_max": 1e-08,
     "leaves_only_improvement_min": 1000.0,
     "reason": "Frozen from all 3 construction seeds x 2 independent validation starts on the C.7 192-patch subset. Limits retain margin above the primary's observed worst cases; they are subset criteria, not full-baseline claims.",
-    "selected_block_output_error_max": 0.01
+    "selected_block_output_error_max": 1e-05
   },
   "construction_seeds": [11, 23, 37],
   "dataset": "bp3",
