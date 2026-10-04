@@ -350,7 +350,9 @@ def benchmark_operator(
         setattr(column_basis_module, "orth", original_column_orth)  # noqa: B010
         setattr(row_basis_module, "orth", original_row_orth)  # noqa: B010
         setattr(row_basis_module, "core_matrix_solve", original_core)  # noqa: B010
-    hmat = HMatrix(root=root, mesh=mesh, factors=factors, leaves=leaves)
+    # Match ``compress()``: peeling needs U B V* through leaf extraction, but
+    # benchmarked storage and application use finalized U_tilde V*.
+    hmat = HMatrix(root=root, mesh=mesh, factors=finalize_factors(factors), leaves=leaves)
     sampling_seconds = time.perf_counter() - setup_start
     construction_total_observed = operator.reset()
     leaves_observed = _subtract_counts(construction_total_observed, admissible_observed)

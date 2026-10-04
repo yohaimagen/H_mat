@@ -19,19 +19,19 @@ into the global row/col index ranges `{0, ..., n_rows-1}` /
 
 Factors representation
 -----------------------
-A single admissible block's stored factors are a `BlockFactor`: the row box
-`alpha`, the col box `beta`, and the dense low-rank factors `u` (`U_{alpha,
-beta}`, shape `(dof_row * |alpha|, k)`), `b` (`B_{alpha,beta}`, shape `(k,
-k)`), `v` (`V_{alpha,beta}`, shape `(dof_col * |beta|, k)`), such that
-
-    A(I_alpha, I_beta) ~= u @ b @ v.conj().T.
+A single admissible block is a `BlockFactor`: the row box `alpha`, the col
+box `beta`, and dense low-rank factors. During peeling it is the three-factor
+form `u @ b @ v.conj().T`, where `u` and `v` are bases and `b` is a square
+core. Finalization absorbs that core into `u`, sets `b` to `None`, and retains
+the algebraically identical two-factor form `u_tilde @ v.conj().T`.
 
 The full set of factors accumulated for levels `2, ..., l-1` is simply a flat
 list of `BlockFactor`s (`Factors = list[BlockFactor]`) -- one entry per
 admissible pair across all of those levels. Reconstruction
 (`apply_truncated`/`apply_truncated_T`) does not need to know which level a
-factor came from; it only needs each block's row/col index sets and its `U,
-B, V` factors. This is the minimal contract that Tasks 5.2-5.6 must populate:
+factor came from; it needs each block's row/col index sets and either its
+peeling `U, B, V` factors or finalized `U_tilde, V` factors. This is the
+minimal contract that Tasks 5.2-5.6 must populate:
 whatever per-level bookkeeping those tasks use internally, they hand
 `apply_truncated`/`apply_truncated_T` (via `peeled_matvec`/`peeled_rmatvec`) a
 flat `Factors` list covering exactly the admissible pairs of levels
@@ -80,16 +80,17 @@ class BlockFactor:
             indexes the global row space `{0, ..., n_rows - 1}`.
         beta: The col box. `beta.col_indices` (length `dof_col * |beta|`)
             indexes the global col space `{0, ..., n_cols - 1}`.
-        u: Column-space basis `U_{alpha,beta}`, shape
-            `(len(alpha.row_indices), k)`.
+        u: Column-space basis `U_{alpha,beta}` during peeling, or finalized
+            left factor `U_tilde = U @ B`, shape `(len(alpha.row_indices), k)`.
         b: Core matrix `B_{alpha,beta}`, shape `(k, k)`, while the factor is
             being peeled.  It is ``None`` after finalization, when its action
             has been absorbed into ``u``.
         v: Row-space basis `V_{alpha,beta}`, shape
             `(len(beta.col_indices), k)`.
 
-    The block's approximation is `A(I_alpha, I_beta) ~= u @ b @ v.conj().T`,
-    with `I_alpha = alpha.row_indices` and `I_beta = beta.col_indices`.
+    The block's approximation is `A(I_alpha, I_beta) ~= u @ b @ v.conj().T`
+    during peeling and `u @ v.conj().T` after finalization, with
+    `I_alpha = alpha.row_indices` and `I_beta = beta.col_indices`.
     """
 
     alpha: TreeNode
@@ -133,11 +134,6 @@ def factor_economy(factors: Factors) -> FactorEconomy:
         if k * (r + c) + core_entries >= r * c:
             uneconomical += 1
     return FactorEconomy(len(factors), uneconomical, before, finalized)
-
-
-def factor_rank(factor: BlockFactor) -> int:
-    """Return the retained rank in either the peeling or finalized form."""
-    return int(factor.u.shape[1])
 
 
 def finalize_factors(factors: Factors) -> Factors:
@@ -317,7 +313,6 @@ __all__ = [
     "apply_truncated",
     "apply_truncated_T",
     "factor_economy",
-    "factor_rank",
     "finalize_factors",
     "peeled_matvec",
     "peeled_rmatvec",

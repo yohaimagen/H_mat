@@ -95,6 +95,16 @@ def test_synthetic_schema_separates_nonzero_validation_and_timing_phases() -> No
     assert timing["total_setup"] >= timing["loading_conversion"] + timing["geometry"]
 
 
+def test_shared_benchmark_measures_finalized_production_factors() -> None:
+    mesh = _mesh()
+    report = benchmark_operator(
+        MockGF(mesh), mesh, dataset={"identity": "finalized"}, m=2, k=2, p=2, repeats=1
+    )
+    hmat = compress(MockGF(mesh), mesh, m=2, k=2, p=2, seed=0)
+    assert all(factor.b is None for factor in hmat.factors)
+    assert report["storage"]["factor_bytes"] == representation_storage(hmat).factor_bytes
+
+
 def test_exact_recovery_uses_less_than_validation_budget() -> None:
     mesh = _mesh()
     report = benchmark_operator(

@@ -9,12 +9,12 @@ patch-pair exactly once (`block_partition` below is the test hook for that
 invariant).
 
 `dot(x)`/`rdot(y)` apply the compressed operator through those factors only
--- never assembling a dense matrix. For an admissible block, the association
-is right-to-left, `U (B (V* x))`, so the widest object ever formed is a
-`(k, k)` core matrix times a `(k, w)` sketch, not the dense `(dof_row*|alpha|)
-x (dof_col*|beta|)` block itself
-(`gfcompress.peeling.apply_truncated`/`apply_truncated_T` already implement
-this; `HMatrix` adds only the dense-leaf contribution on top). Per
+-- never assembling a dense matrix. Peeling constructs each admissible block
+as `U (B (V* x))`, then finalization stores the identical `U_tilde (V* x)`
+form after absorbing `B` into `U`. The finished H-matrix therefore retains no
+square core and never materializes the dense `(dof_row*|alpha|) x
+(dof_col*|beta|)` far-field block (`gfcompress.peeling.apply_truncated`/
+`apply_truncated_T` implement this; `HMatrix` adds dense leaves only). Per
 CLAUDE.md, `dot: R^{dof_col*N} -> R^{dof_row*N}` and `rdot` goes the other
 way (`2N x N` in 2D, `3N x 2N` in 3D) -- the two are never interchangeable.
 """
@@ -65,8 +65,8 @@ class HMatrix(MatVecOperator):
 
         Returns:
             Array of shape `(n_rows,)` or `(n_rows, w)` matching `x`'s
-            trailing shape: the sum of every admissible block's `U(B(V* x))`
-            contribution (via `apply_truncated`) plus every dense leaf's
+            trailing shape: the sum of every admissible block's finalized
+            `U_tilde(V* x)` contribution (via `apply_truncated`) plus every dense leaf's
             `block @ x` contribution, scattered into their respective
             `alpha.row_indices`.
         """
@@ -86,8 +86,8 @@ class HMatrix(MatVecOperator):
 
         Returns:
             Array of shape `(n_cols,)` or `(n_cols, w)` matching `y`'s
-            trailing shape: the sum of every admissible block's
-            `V(B*(U* y))` contribution (via `apply_truncated_T`) plus every
+            trailing shape: the sum of every admissible block's finalized
+            `V(U_tilde* y)` contribution (via `apply_truncated_T`) plus every
             dense leaf's `block* @ y` contribution, scattered into their
             respective `beta.col_indices`.
         """
