@@ -72,15 +72,22 @@ def _acceptance_evaluation(config: dict[str, Any], records: list[dict[str, Any]]
     if not selected:
         return {"evaluated": False, "reason": "primary has no sweep records"}
     checks = config["acceptance"]
+    block_values = [
+        value["relative_to_response"]
+        for record in selected
+        for value in record["diagnostics"]["selected_block_output_errors"].values()
+    ]
+    if not block_values:
+        return {
+            "evaluated": False,
+            "all_pass": False,
+            "reason": "primary has no genuinely truncated selected blocks",
+        }
     observed = {
         "global_relative_error_max": max(
             record["diagnostics"]["global_relative_error"] for record in selected
         ),
-        "selected_block_output_error_max": max(
-            value["relative_with_floor"]
-            for record in selected
-            for value in record["diagnostics"]["selected_block_output_errors"].values()
-        ),
+        "selected_block_output_error_max": max(block_values),
         "component_response_error_max": max(
             value["relative_with_floor"]
             for record in selected

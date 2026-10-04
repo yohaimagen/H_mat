@@ -52,7 +52,10 @@ def test_seed_plan_rejects_favorable_selection_and_sweep_records_all_pairs() -> 
             "leaves_only" in value for value in diagnostics[direction]["input_errors"].values()
         )
         assert min(diagnostics[direction]["leaves_only_improvement_factor"].values()) > 1
-    assert diagnostics["selected_block_output_errors"]
+    assert all(
+        value["retained_rank"] < min(value["row_dimension"], value["col_dimension"])
+        for value in diagnostics["selected_block_output_errors"].values()
+    )
 
 
 def test_unlocked_configuration_and_missing_data_record_are_honest(tmp_path: Path) -> None:
@@ -99,10 +102,36 @@ def test_bp3_selected_block_criterion_rejects_zero_output() -> None:
         for record in records
         for value in record["diagnostics"]["selected_block_output_errors"].values()
     ]
-    assert max(value["relative_with_floor"] for value in selected) <= threshold
-    # With the frozen floor of one, zero output has error equal to this
-    # selected response norm; every sampled block must fail the criterion.
-    assert min(value["reference_norm"] for value in selected) > threshold
+    assert max(value["relative_to_response"] for value in selected) <= threshold
+    # Relative to its own nonzero unit-drive response, zero output is exactly
+    # one; every selected genuinely truncated block must fail the criterion.
+    assert threshold < 1.0
+
+
+def test_bp7_primary_selected_blocks_are_genuinely_truncated_at_every_level() -> None:
+    report = json.loads(Path("benchmarks/results/bp7_c10_sweep.json").read_text(encoding="utf-8"))
+    config = json.loads(Path("benchmarks/configs/bp7_fixed.json").read_text(encoding="utf-8"))
+    primary = config["selection"]["primary"]
+    records = [
+        record
+        for record in report["records"]
+        if all(record["parameters"][name] == primary[name] for name in ("m", "k", "p"))
+    ]
+    selected = [
+        (name, value)
+        for record in records
+        for name, value in record["diagnostics"]["selected_block_output_errors"].items()
+    ]
+    assert {name.split(":", 1)[0] for name, _ in selected} == {"L2", "L3", "L4"}
+    assert all(
+        value["retained_rank"] < min(value["row_dimension"], value["col_dimension"])
+        for _, value in selected
+    )
+    assert (
+        max(value["relative_to_response"] for _, value in selected)
+        <= config["acceptance"]["selected_block_output_error_max"]
+        < 1.0
+    )
 
 
 def test_runner_consumes_injected_tracked_config_and_records_source_subset_identity(
@@ -190,4 +219,5 @@ def test_runner_consumes_injected_tracked_config_and_records_source_subset_ident
     assert locked["status"] == "measured_locked"
     assert "frozen configuration was consumed" in locked["acceptance"]
     assert locked["config"]["selection"]["primary"] == {"m": 1, "k": 1, "p": 1}
-    assert locked["acceptance_evaluation"]["evaluated"]
+    assert not locked["acceptance_evaluation"]["evaluated"]
+    assert "genuinely truncated" in locked["acceptance_evaluation"]["reason"]

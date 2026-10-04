@@ -125,14 +125,27 @@ def _diagnostics(
 ) -> dict[str, Any]:
     forward = _direction_diagnostics(hmat, reference, mesh, validation_seed, floor, transpose=False)
     adjoint = _direction_diagnostics(hmat, reference, mesh, validation_seed, floor, transpose=True)
-    inputs = _inputs(mesh, validation_seed, mesh.dof_col)
-    selected: dict[str, dict[str, float]] = {}
-    for factor in hmat.factors[:3]:
+    selected: dict[str, dict[str, Any]] = {}
+    selected_factors = _truncated_factors_by_level(hmat)
+    for factor in selected_factors:
         x = np.zeros(mesh.n_cols)
-        x[factor.beta.col_indices] = inputs["random"][factor.beta.col_indices]
+        # A unit source-box drive is deterministic and avoids accidentally
+        # judging a block on a cancelling random response.  It is independent
+        # of compression/validation seeds and makes a zero block falsifiable.
+        x[factor.beta.col_indices] = 1.0
+        row_dimension, col_dimension = len(factor.alpha.row_indices), len(factor.beta.col_indices)
+        error = _response(hmat, reference, x, floor, factor.alpha.row_indices)
         selected[
             f"L{factor.alpha.level}:{factor.alpha.index_in_level},{factor.beta.index_in_level}"
-        ] = _response(hmat, reference, x, floor, factor.alpha.row_indices)
+        ] = {
+            **error,
+            "relative_to_response": error["absolute"]
+            / max(error["reference_norm"], np.finfo(float).tiny),
+            "row_dimension": row_dimension,
+            "col_dimension": col_dimension,
+            "retained_rank": factor.u.shape[1],
+            "probe": "unit source-box drive",
+        }
     return {
         "global_relative_error": relative_error(
             hmat, reference, n_iters=validation_iterations, seed=validation_seed
@@ -141,6 +154,34 @@ def _diagnostics(
         "forward": forward,
         "adjoint": adjoint,
     }
+
+
+def _truncated_factors_by_level(hmat: HMatrix) -> list[Any]:
+    """Pick one largest genuinely truncated admissible block per level.
+
+    C.10 must test the approximation rather than blocks whose retained rank is
+    already the full local dimension.  Geometry breaks ties deterministically.
+    """
+    selected: list[Any] = []
+    for level in sorted({factor.alpha.level for factor in hmat.factors}):
+        eligible = [
+            factor
+            for factor in hmat.factors
+            if factor.alpha.level == level
+            and factor.u.shape[1] < min(len(factor.alpha.row_indices), len(factor.beta.col_indices))
+        ]
+        if eligible:
+            selected.append(
+                sorted(
+                    eligible,
+                    key=lambda factor: (
+                        -min(len(factor.alpha.row_indices), len(factor.beta.col_indices)),
+                        factor.alpha.cell_coords,
+                        factor.beta.cell_coords,
+                    ),
+                )[0]
+            )
+    return selected
 
 
 def fixed_sweep(
