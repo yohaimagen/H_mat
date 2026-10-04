@@ -4,18 +4,44 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
 from gfcompress.benchmark import provenance, write_report
 from gfcompress.realgf import RealGF, representative_subset
-from gfcompress.study import configuration_schema, fixed_sweep
+from gfcompress.study import fixed_sweep
 
 
-def report(data_root: Path, dataset: str, run: bool) -> dict[str, Any]:
+def _load_config(dataset: str, config_path: Path | None) -> dict[str, Any]:
+    path = config_path or Path(f"benchmarks/configs/{dataset}_fixed.json")
+    config = json.loads(path.read_text(encoding="utf-8"))
+    if config.get("dataset") != dataset or config.get("sampling") != "fixed":
+        raise ValueError(f"{path}: expected fixed configuration for {dataset}")
+    return config
+
+
+def _file_identity(path: Path) -> dict[str, Any]:
+    stat = path.stat()
+    return {"path": str(path), "size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
+
+
+def _array_hash(array: Any) -> str:
+    return hashlib.sha256(array.tobytes()).hexdigest()
+
+
+def report(
+    data_root: Path,
+    dataset: str,
+    run: bool,
+    config_path: Path | None = None,
+    source_type: Any = RealGF,
+    subset_builder: Any = representative_subset,
+) -> dict[str, Any]:
     directory = data_root / f"gf_{dataset}"
     matrix, coordinates = directory / "gf_mat.bin", sorted(directory.glob("*_fbf_coords.csv"))
-    config = configuration_schema(dataset)
+    config = _load_config(dataset, config_path)
     common: dict[str, Any] = {"schema_version": 1, "provenance": provenance(), "config": config}
     if not matrix.is_file() or len(coordinates) != 1:
         return {
@@ -35,8 +61,8 @@ def report(data_root: Path, dataset: str, run: bool) -> dict[str, Any]:
             "reason": "bounded real sweep is opt-in; rerun with --run after checking resources",
             "acceptance": "not evaluated",
         }
-    source = RealGF(matrix, coordinates[0])
-    subset = representative_subset(source, max_patches=192, regions=4)
+    source = source_type(matrix, coordinates[0])
+    subset = subset_builder(source, max_patches=192, regions=4)
     sweep = config["sweep"]
     records = fixed_sweep(
         subset,
@@ -46,11 +72,21 @@ def report(data_root: Path, dataset: str, run: bool) -> dict[str, Any]:
         p_values=sweep["p"],
         construction_seeds=config["construction_seeds"],
         validation_seeds=config["validation_seeds"],
+        absolute_floor=config["validation"]["absolute_response_floor"],
+        validation_iterations=config["validation"]["power_iterations"],
     )
     return {
         **common,
         "status": "measured_unlocked",
-        "subset": {"patch_count": subset.mesh.n_patches, "regions": 4, "max_patches": 192},
+        "source": {"matrix": _file_identity(matrix), "coordinates": _file_identity(coordinates[0])},
+        "subset": {
+            "patch_count": subset.mesh.n_patches,
+            "regions": 4,
+            "max_patches": 192,
+            "patch_ids_hash": _array_hash(subset.patch_ids),
+            "row_map_hash": _array_hash(subset.row_map),
+            "col_map_hash": _array_hash(subset.col_map),
+        },
         "records": records,
         "acceptance": "selection/tolerance locking remains a human-reviewed measurement step",
     }

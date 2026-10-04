@@ -42,9 +42,15 @@ def test_seed_plan_rejects_favorable_selection_and_sweep_records_all_pairs() -> 
         (3, 11),
     }
     diagnostics = records[0]["diagnostics"]
-    assert {"random", "localized", "smooth"} == set(diagnostics["input_errors"])
+    for direction, dof in (("forward", mesh.dof_col), ("adjoint", mesh.dof_row)):
+        assert {"random", "localized", "smooth"} == set(diagnostics[direction]["input_errors"])
+        assert set(diagnostics[direction]["component_index_group_errors"]) == {
+            str(index) for index in range(dof)
+        }
+        assert all(
+            "leaves_only" in value for value in diagnostics[direction]["input_errors"].values()
+        )
     assert diagnostics["selected_block_output_errors"]
-    assert all("leaves_only" in value for value in diagnostics["input_errors"].values())
 
 
 def test_unlocked_configuration_and_missing_data_record_are_honest(tmp_path: Path) -> None:
@@ -61,3 +67,48 @@ def test_unlocked_configuration_and_missing_data_record_are_honest(tmp_path: Pat
     result = module.report(tmp_path, "bp3", run=False)
     assert result["status"] == "blocked"
     assert "not evaluated" in result["acceptance"]
+
+
+def test_runner_consumes_injected_tracked_config_and_records_source_subset_identity(
+    tmp_path: Path,
+) -> None:
+    spec = importlib.util.spec_from_file_location("c10", Path("benchmarks/c10.py"))
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    config = configuration_schema("bp3")
+    config["sweep"] = {"m": [1], "k": [1], "p": [1]}
+    config["validation"] = {
+        "power_iterations": 3,
+        "absolute_response_floor": 1e-9,
+        "status": "provisional",
+    }
+    config_path = tmp_path / "locked-later.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    directory = tmp_path / "gf_bp3"
+    directory.mkdir()
+    (directory / "gf_mat.bin").write_bytes(b"matrix")
+    (directory / "bp3_fbf_coords.csv").write_text("coordinates", encoding="utf-8")
+    mesh = _mesh()
+
+    class Subset(MockGF):
+        def __init__(self) -> None:
+            super().__init__(mesh)
+            self.patch_ids = np.arange(mesh.n_patches, dtype=np.intp)
+            self.row_map = np.arange(mesh.n_rows, dtype=np.intp)
+            self.col_map = np.arange(mesh.n_cols, dtype=np.intp)
+
+    result = module.report(
+        tmp_path,
+        "bp3",
+        run=True,
+        config_path=config_path,
+        source_type=lambda *_: object(),
+        subset_builder=lambda *_args, **_kwargs: Subset(),
+    )
+    assert result["config"] == config
+    assert result["source"]["matrix"]["size"] == len(b"matrix")
+    assert result["subset"]["patch_ids_hash"]
+    record = result["records"][0]
+    assert record["absolute_floor"] == 1e-9
+    assert record["diagnostics"]["global_relative_error"] >= 0

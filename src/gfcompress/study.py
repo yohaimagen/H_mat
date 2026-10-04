@@ -42,18 +42,18 @@ def response_error(
     }
 
 
-def _inputs(mesh: FaultMesh, seed: int) -> dict[str, np.ndarray]:
+def _inputs(mesh: FaultMesh, seed: int, dof: int) -> dict[str, np.ndarray]:
     rng = np.random.default_rng(seed)
     patch = int(np.argmin(np.sum((mesh.centroids - mesh.centroids.mean(0)) ** 2, axis=1)))
     distance = np.linalg.norm(mesh.centroids - mesh.centroids[patch], axis=1)
     width = max(float(np.max(distance)) / 4.0, 1.0)
-    localized = np.repeat(np.exp(-((distance / width) ** 2)), mesh.dof_col)
+    localized = np.repeat(np.exp(-((distance / width) ** 2)), dof)
     span = np.ptp(mesh.centroids, axis=0)
     scaled = (mesh.centroids - mesh.centroids.min(0)) / np.where(span == 0, 1.0, span)
     return {
-        "random": rng.standard_normal(mesh.n_cols),
+        "random": rng.standard_normal(mesh.n_patches * dof),
         "localized": localized,
-        "smooth": np.repeat(np.cos(np.pi * scaled.sum(axis=1)), mesh.dof_col),
+        "smooth": np.repeat(np.cos(np.pi * scaled.sum(axis=1)), dof),
     }
 
 
@@ -63,9 +63,11 @@ def _response(
     x: np.ndarray,
     floor: float,
     rows: np.ndarray | None = None,
+    transpose: bool = False,
 ) -> dict[str, float]:
-    actual = reference.matvec(x)
-    estimate = approximate.matvec(x)
+    product = "rmatvec" if transpose else "matvec"
+    actual = getattr(reference, product)(x)
+    estimate = getattr(approximate, product)(x)
     if rows is not None:
         actual, estimate = actual[rows], estimate[rows]
     absolute = float(np.linalg.norm(estimate - actual))
@@ -77,23 +79,53 @@ def _response(
     }
 
 
-def _diagnostics(
-    hmat: HMatrix, reference: MatVecOperator, mesh: FaultMesh, validation_seed: int, floor: float
+def _direction_diagnostics(
+    hmat: HMatrix,
+    reference: MatVecOperator,
+    mesh: FaultMesh,
+    validation_seed: int,
+    floor: float,
+    *,
+    transpose: bool,
 ) -> dict[str, Any]:
     leaves_only = HMatrix(root=hmat.root, mesh=mesh, leaves=hmat.leaves)
-    inputs = _inputs(mesh, validation_seed)
+    dof = mesh.dof_row if transpose else mesh.dof_col
+    inputs = _inputs(mesh, validation_seed, dof)
     input_errors = {
         name: {
-            "compressed": _response(hmat, reference, x, floor),
-            "leaves_only": _response(leaves_only, reference, x, floor),
+            "compressed": _response(hmat, reference, x, floor, transpose=transpose),
+            "leaves_only": _response(leaves_only, reference, x, floor, transpose=transpose),
         }
         for name, x in inputs.items()
     }
     groups: dict[str, dict[str, float]] = {}
-    for component in range(mesh.dof_col):
-        x = np.zeros(mesh.n_cols)
-        x[component :: mesh.dof_col] = inputs["random"][component :: mesh.dof_col]
-        groups[str(component)] = _response(hmat, reference, x, floor)
+    for component in range(dof):
+        x = np.zeros(mesh.n_patches * dof)
+        x[component::dof] = inputs["random"][component::dof]
+        groups[str(component)] = _response(hmat, reference, x, floor, transpose=transpose)
+    improvement = {
+        name: value["leaves_only"]["relative_with_floor"]
+        / max(value["compressed"]["relative_with_floor"], floor)
+        for name, value in input_errors.items()
+    }
+    return {
+        "component_index_group_errors": groups,
+        "input_errors": input_errors,
+        "leaves_only_improvement_factor": improvement,
+    }
+
+
+def _diagnostics(
+    hmat: HMatrix,
+    reference: MatVecOperator,
+    mesh: FaultMesh,
+    validation_seed: int,
+    floor: float,
+    validation_iterations: int,
+) -> dict[str, Any]:
+    forward = _direction_diagnostics(hmat, reference, mesh, validation_seed, floor, transpose=False)
+    adjoint = _direction_diagnostics(hmat, reference, mesh, validation_seed, floor, transpose=True)
+    inputs = _inputs(mesh, validation_seed, mesh.dof_col)
     selected: dict[str, dict[str, float]] = {}
     for factor in hmat.factors[:3]:
         x = np.zeros(mesh.n_cols)
@@ -101,17 +133,13 @@ def _diagnostics(
         selected[
             f"L{factor.alpha.level}:{factor.alpha.index_in_level},{factor.beta.index_in_level}"
         ] = _response(hmat, reference, x, floor, factor.alpha.row_indices)
-    improvement = {
-        name: value["leaves_only"]["relative_with_floor"]
-        / max(value["compressed"]["relative_with_floor"], floor)
-        for name, value in input_errors.items()
-    }
     return {
-        "global_relative_error": relative_error(hmat, reference, n_iters=4, seed=validation_seed),
+        "global_relative_error": relative_error(
+            hmat, reference, n_iters=validation_iterations, seed=validation_seed
+        ),
         "selected_block_output_errors": selected,
-        "component_index_group_errors": groups,
-        "input_errors": input_errors,
-        "leaves_only_improvement_factor": improvement,
+        "forward": forward,
+        "adjoint": adjoint,
     }
 
 
@@ -125,6 +153,7 @@ def fixed_sweep(
     construction_seeds: Sequence[int],
     validation_seeds: Sequence[int],
     absolute_floor: float = 1e-12,
+    validation_iterations: int = 4,
 ) -> list[dict[str, Any]]:
     """Run a bounded all-seed fixed sweep without outcome-dependent filtering."""
     validate_seed_plan(construction_seeds, validation_seeds)
@@ -141,7 +170,7 @@ def fixed_sweep(
             p=p,
             seed=construction_seed,
             validation_seed=validation_seeds[0],
-            validation_iters=4,
+            validation_iters=validation_iterations,
         )
         hmat = compress(reference, mesh, m=m, k=k, p=p, seed=construction_seed, sampling="fixed")
         for validation_seed in validation_seeds:
@@ -161,7 +190,12 @@ def fixed_sweep(
                         },
                     },
                     "diagnostics": _diagnostics(
-                        hmat, reference, mesh, validation_seed, absolute_floor
+                        hmat,
+                        reference,
+                        mesh,
+                        validation_seed,
+                        absolute_floor,
+                        validation_iterations,
                     ),
                 }
             )
@@ -177,6 +211,11 @@ def configuration_schema(dataset: str) -> dict[str, Any]:
         "full_runs": "opt-in",
         "construction_seeds": [11, 23, 37],
         "validation_seeds": [101, 103],
+        "validation": {
+            "power_iterations": 4,
+            "absolute_response_floor": 1e-12,
+            "status": "provisional: freeze only from measured BP3/BP7 behavior",
+        },
         "sweep": {"m": [8, 12], "k": [3, 4], "p": [1, 2]},
         "selection": {
             "primary": None,
