@@ -82,7 +82,9 @@ class BlockFactor:
             indexes the global col space `{0, ..., n_cols - 1}`.
         u: Column-space basis `U_{alpha,beta}`, shape
             `(len(alpha.row_indices), k)`.
-        b: Core matrix `B_{alpha,beta}`, shape `(k, k)`.
+        b: Core matrix `B_{alpha,beta}`, shape `(k, k)`, while the factor is
+            being peeled.  It is ``None`` after finalization, when its action
+            has been absorbed into ``u``.
         v: Row-space basis `V_{alpha,beta}`, shape
             `(len(beta.col_indices), k)`.
 
@@ -93,7 +95,7 @@ class BlockFactor:
     alpha: TreeNode
     beta: TreeNode
     u: NDArray[np.floating]
-    b: NDArray[np.floating]
+    b: NDArray[np.floating] | None
     v: NDArray[np.floating]
 
 
@@ -102,6 +104,65 @@ class BlockFactor:
 #: level-`l` truncation operator). Order is irrelevant; reconstruction sums
 #: over all entries.
 Factors = list[BlockFactor]
+
+
+@dataclass(frozen=True)
+class FactorEconomy:
+    """Entry counts used to decide whether a low-rank block is economical.
+
+    ``uneconomical_blocks`` is intentionally only a measurement.  C.9 does
+    not introduce dense far-field fallbacks, because those would alter the
+    project's storage and matrix-access contract.
+    """
+
+    blocks: int
+    uneconomical_blocks: int
+    before_entries: int
+    finalized_entries: int
+
+
+def factor_economy(factors: Factors) -> FactorEconomy:
+    """Measure low-rank storage before and after absorbing square cores."""
+    before = finalized = uneconomical = 0
+    for factor in factors:
+        r, k = factor.u.shape
+        c = factor.v.shape[0]
+        core_entries = 0 if factor.b is None else k * k
+        before += k * (r + c) + core_entries
+        finalized += k * (r + c)
+        if k * (r + c) + core_entries >= r * c:
+            uneconomical += 1
+    return FactorEconomy(len(factors), uneconomical, before, finalized)
+
+
+def factor_rank(factor: BlockFactor) -> int:
+    """Return the retained rank in either the peeling or finalized form."""
+    return int(factor.u.shape[1])
+
+
+def finalize_factors(factors: Factors) -> Factors:
+    """Absorb every retained core into ``u`` without changing the block.
+
+    Peeling still uses the three-factor form: it needs the original bases
+    while constructing finer levels.  Only the finished H-matrix uses this
+    representation, replacing ``u @ b @ v*`` by ``(u @ b) @ v*``.  No
+    truncation or tolerance is involved.
+    """
+    finalized: Factors = []
+    for factor in factors:
+        if factor.b is None:
+            finalized.append(factor)
+        else:
+            finalized.append(
+                BlockFactor(
+                    alpha=factor.alpha,
+                    beta=factor.beta,
+                    u=factor.u @ factor.b,
+                    b=None,
+                    v=factor.v,
+                )
+            )
+    return finalized
 
 
 def apply_truncated(
@@ -141,7 +202,8 @@ def apply_truncated(
 
     for factor in factors:
         omega_beta = omega[factor.beta.col_indices, ...]
-        contribution = factor.u @ (factor.b @ (factor.v.conj().T @ omega_beta))
+        middle = factor.v.conj().T @ omega_beta
+        contribution = factor.u @ middle if factor.b is None else factor.u @ (factor.b @ middle)
         result[factor.alpha.row_indices, ...] += contribution
 
     return result
@@ -183,7 +245,10 @@ def apply_truncated_T(
 
     for factor in factors:
         psi_alpha = psi[factor.alpha.row_indices, ...]
-        contribution = factor.v @ (factor.b.conj().T @ (factor.u.conj().T @ psi_alpha))
+        middle = factor.u.conj().T @ psi_alpha
+        contribution = (
+            factor.v @ middle if factor.b is None else factor.v @ (factor.b.conj().T @ middle)
+        )
         result[factor.beta.col_indices, ...] += contribution
 
     return result
@@ -247,9 +312,13 @@ def peeled_rmatvec(
 
 __all__ = [
     "BlockFactor",
+    "FactorEconomy",
     "Factors",
     "apply_truncated",
     "apply_truncated_T",
+    "factor_economy",
+    "factor_rank",
+    "finalize_factors",
     "peeled_matvec",
     "peeled_rmatvec",
 ]

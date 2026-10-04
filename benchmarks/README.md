@@ -38,3 +38,10 @@ hashes, region choice, source file size/mtime identity, and a native-endian
 dense reference constructed from that bounded subset only. It then runs the
 same construction, error-validation, storage, and apply-time accounting core
 as the synthetic report; it never fabricates BP3/BP7 metrics.
+
+`benchmarks/c9.py` records the C.9 before/after measurement for core
+absorption.  It also records the fraction of low-rank factors whose stored
+entry count is not less than their dense block's entry count.  That fraction
+is a diagnostic only: C.9 deliberately leaves dense far-field fallback,
+tree-order permutation, and a native-endian cache out of production unless
+real-data measurements justify them.

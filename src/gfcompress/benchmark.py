@@ -33,7 +33,7 @@ from gfcompress.hmatrix import HMatrix
 from gfcompress.interactions import build_lists
 from gfcompress.leaf import extract_leaves
 from gfcompress.operators import MatVecOperator
-from gfcompress.peeling import Factors
+from gfcompress.peeling import Factors, factor_economy, finalize_factors
 from gfcompress.tree import TreeNode
 
 
@@ -166,7 +166,12 @@ def representation_storage(
     dense_reference_bytes: int = 0,
 ) -> Storage:
     """Measure the retained H-matrix, explicitly excluding reference storage."""
-    factor_arrays = [array for factor in hmat.factors for array in (factor.u, factor.b, factor.v)]
+    factor_arrays = [
+        array
+        for factor in hmat.factors
+        for array in (factor.u, factor.b, factor.v)
+        if array is not None
+    ]
     leaf_arrays = [leaf.block for leaf in hmat.leaves]
     factor_bytes = _allocation_bytes(factor_arrays)
     leaf_bytes = _allocation_bytes(leaf_arrays)
@@ -436,6 +441,100 @@ def synthetic_report(
         repeats=repeats,
         loading_seconds=time.perf_counter() - start,
     )
+
+
+def c9_synthetic_report(
+    *, n_side: int = 8, m: int = 2, k: int = 2, p: int = 2, seed: int = 0, repeats: int = 20
+) -> dict[str, Any]:
+    """Measure C.9's final-factor representation on the compact MockGF case.
+
+    This deliberately compares identical factors before and after core
+    absorption.  It is not a compression-accuracy experiment and does not
+    claim that this tiny synthetic case predicts BP3/BP7 timing.
+    """
+    from gfcompress.mockgf import MockGF
+
+    axis = np.arange(n_side, dtype=float)
+    xx, yy = np.meshgrid(axis, axis, indexing="ij")
+    mesh = FaultMesh(np.column_stack((xx.ravel(), yy.ravel())), np.ones(n_side * n_side))
+    reference = MockGF(mesh)
+    root = build_tree(mesh, m)
+    lists = build_lists(root)
+    factors: Factors = []
+    for level in range(2, _deepest_level(root) + 1):
+        factors += compress_level(reference, root, lists, mesh, level, factors, k, p, seed)
+    leaves = extract_leaves(reference, root, lists, mesh, _deepest_level(root), factors)
+    before = HMatrix(root=root, mesh=mesh, factors=factors, leaves=leaves)
+    after = HMatrix(root=root, mesh=mesh, factors=finalize_factors(factors), leaves=leaves)
+    rng = np.random.default_rng(seed + 91)
+    x = rng.standard_normal(mesh.n_cols)
+    y = rng.standard_normal(mesh.n_rows)
+    forward_difference = float(np.linalg.norm(before.dot(x) - after.dot(x)))
+    adjoint_difference = float(np.linalg.norm(before.rdot(y) - after.rdot(y)))
+    economy = factor_economy(factors)
+    before_storage = representation_storage(before, dense_reference_bytes=reference.A.nbytes)
+    after_storage = representation_storage(after, dense_reference_bytes=reference.A.nbytes)
+    return {
+        "schema_version": 1,
+        "provenance": provenance(),
+        "dataset": {"identity": "MockGF regular-grid", "n_side": n_side, "patches": mesh.n_patches},
+        "parameters": {"m": m, "k": k, "p": p, "sampling": "fixed"},
+        "environment": environment(),
+        "measurements": {
+            "far_field": {
+                "blocks": economy.blocks,
+                "uneconomical_blocks": economy.uneconomical_blocks,
+                "uneconomical_fraction": (
+                    economy.uneconomical_blocks / economy.blocks if economy.blocks else 0.0
+                ),
+                "before_entries": economy.before_entries,
+                "after_core_absorption_entries": economy.finalized_entries,
+            },
+            "equivalence": {
+                "forward_absolute_difference": forward_difference,
+                "adjoint_absolute_difference": adjoint_difference,
+            },
+            "storage_bytes": {
+                "before": before_storage.factor_bytes,
+                "after": after_storage.factor_bytes,
+                "saved": before_storage.factor_bytes - after_storage.factor_bytes,
+            },
+            "warm_seconds": {
+                "repeats": repeats,
+                "before_forward": time_products(
+                    before, transpose=False, rhs_columns=1, repeats=repeats, seed=seed
+                ),
+                "after_forward": time_products(
+                    after, transpose=False, rhs_columns=1, repeats=repeats, seed=seed
+                ),
+                "before_adjoint": time_products(
+                    before, transpose=True, rhs_columns=1, repeats=repeats, seed=seed + 1
+                ),
+                "after_adjoint": time_products(
+                    after, transpose=True, rhs_columns=1, repeats=repeats, seed=seed + 1
+                ),
+            },
+        },
+        "decisions": {
+            "core_absorption": "adopted: exact algebraic rewrite removes each retained k-by-k core",
+            "dense_far_field_fallback": (
+                "deferred: uneconomical count is measured only; production far-field blocks remain "
+                "low-rank"
+            ),
+            "tree_order_permutation": (
+                "not adopted: C.8's compact case provides no demonstrated material gather/scatter "
+                "bottleneck; preserve external order and maps"
+            ),
+            "native_endian_cache": (
+                "not adopted: MockGF is in-memory and BP3/BP7 matrices are unavailable; no cache "
+                "is justified without real-data evidence"
+            ),
+        },
+        "limitations": [
+            "Timing is a compact synthetic measurement, not a BP3/BP7 performance claim.",
+            "No dense far-field block or permuted full operator is retained.",
+        ],
+    }
 
 
 def synthetic_dense_only(n_side: int = 8) -> None:

@@ -199,7 +199,8 @@ def test_large_target_rank_is_capped_per_small_block() -> None:
     hmat = compress(op, mesh, m=4, k=bound + 1, p=0, seed=0, sampling="fixed")
     for factor in hmat.factors:
         k_eff = min(bound + 1, len(factor.alpha.row_indices), len(factor.beta.col_indices))
-        assert factor.u.shape[1] == factor.v.shape[1] == factor.b.shape[0] == k_eff
+        assert factor.u.shape[1] == factor.v.shape[1] == k_eff
+        assert factor.b is None  # C.9 finalization retains no square core.
 
 
 # ---------------------------------------------------------------------------

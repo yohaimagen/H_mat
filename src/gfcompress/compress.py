@@ -38,7 +38,7 @@ from gfcompress.hmatrix import HMatrix
 from gfcompress.interactions import TreeLists, build_lists
 from gfcompress.leaf import extract_leaves
 from gfcompress.operators import MatVecOperator
-from gfcompress.peeling import BlockFactor, Factors
+from gfcompress.peeling import BlockFactor, Factors, finalize_factors
 from gfcompress.row_basis import core_matrices, row_bases
 from gfcompress.tree import TreeNode
 
@@ -157,7 +157,9 @@ def compress(
         factors = factors + level_factors
 
     leaves = extract_leaves(operator, root, lists, mesh, leaf_level, factors)
-    return HMatrix(root=root, mesh=mesh, factors=factors, leaves=leaves)
+    # Retain the cheaper two-factor representation only after all peeling is
+    # complete; finer levels need the original cores above.
+    return HMatrix(root=root, mesh=mesh, factors=finalize_factors(factors), leaves=leaves)
 
 
 def _validate_inputs(

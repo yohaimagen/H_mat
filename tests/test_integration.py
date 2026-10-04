@@ -128,7 +128,7 @@ def _log_metrics(
     setup_time: float,
 ) -> None:
     dense_bytes = mesh.n_rows * mesh.n_cols
-    compressed_bytes = sum(f.u.size + f.b.size + f.v.size for f in hmat.factors) + sum(
+    compressed_bytes = sum(f.u.size + f.v.size for f in hmat.factors) + sum(
         leaf.block.size for leaf in hmat.leaves
     )
     ratio = dense_bytes / compressed_bytes if compressed_bytes else float("inf")
@@ -146,9 +146,9 @@ def _assert_selected_block_accuracy(op: MockGF, hmat: HMatrix, levels: tuple[int
         factor = next(factor for factor in hmat.factors if factor.alpha.level == level)
         block = op.block(factor.alpha.patch_indices, factor.beta.patch_indices)
         singular_values = np.linalg.svd(block, compute_uv=False)
-        k_eff = factor.b.shape[0]
+        k_eff = factor.u.shape[1]
         best_error = float(np.linalg.norm(singular_values[k_eff:]))
-        reconstruction_error = float(np.linalg.norm(block - factor.u @ factor.b @ factor.v.T))
+        reconstruction_error = float(np.linalg.norm(block - factor.u @ factor.v.T))
         scale = max(float(np.linalg.norm(block)), 1e-12)
         # Randomized bases need not attain the optimum exactly.  The absolute
         # floor keeps nearly exact small-block cases meaningful.
