@@ -48,13 +48,18 @@
         2
       ]
     },
+    "validation": {
+      "absolute_response_floor": 1e-12,
+      "power_iterations": 4,
+      "status": "provisional: freeze only from measured BP3/BP7 behavior"
+    },
     "validation_seeds": [
       101,
       103
     ]
   },
   "provenance": {
-    "commit": "af1995519107353bce96135048142ad093f6769e",
+    "commit": "cad94588d56340ed930f66c6c7fb4d9ba1fc8525",
     "diff_hash": null,
     "dirty": false
   },
