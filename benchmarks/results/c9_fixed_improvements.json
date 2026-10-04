@@ -25,7 +25,8 @@
   "measurements": {
     "equivalence": {
       "adjoint_absolute_difference": 0.0,
-      "forward_absolute_difference": 3.488821756485609e-16
+      "forward_absolute_difference": 3.488821756485609e-16,
+      "power_relative_difference": 2.4338185890051048e-23
     },
     "far_field": {
       "after_core_absorption_entries": 7092,
@@ -40,10 +41,10 @@
       "saved": 13920
     },
     "warm_seconds": {
-      "after_adjoint": 0.004986185400048271,
-      "after_forward": 0.0046117978999973275,
-      "before_adjoint": 0.005756731249857694,
-      "before_forward": 0.0051897687502787445,
+      "after_adjoint": 0.0050618125002074525,
+      "after_forward": 0.004575099999783561,
+      "before_adjoint": 0.0058119687499129215,
+      "before_forward": 0.005366725000203587,
       "repeats": 20
     }
   },
@@ -54,9 +55,17 @@
     "sampling": "fixed"
   },
   "provenance": {
-    "commit": "c826c718e22a7262fc0805a6798b537cf8c55f8a",
+    "commit": "de5a911f132e8c2dbc8c367a87d9c703c865ed67",
     "diff_hash": null,
     "dirty": false
   },
-  "schema_version": 1
+  "schema_version": 1,
+  "seeds": {
+    "application_adjoint": 1,
+    "application_forward": 0,
+    "construction": 0,
+    "equivalence_adjoint": 92,
+    "equivalence_forward": 91,
+    "validation": 93
+  }
 }
