@@ -6,10 +6,12 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from benchmarks.diagnose import block_diagnostics
 from benchmarks.full import main, measure_seed, prepare
 
 from gfcompress.geometry import FaultMesh
 from gfcompress.mockgf import MockGF
+from gfcompress.randomized import orth
 
 
 def test_full_accounting_keeps_validation_separate_and_failed_gates_visible() -> None:
@@ -52,4 +54,41 @@ def test_cli_is_opt_in_and_requires_single_thread_caps(tmp_path, monkeypatch) ->
     monkeypatch.setattr("sys.argv", [*argv, "--run"])
     monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
     with pytest.raises(ValueError, match="OPENBLAS_NUM_THREADS=1"):
+        main()
+
+
+def test_block_diagnostics_distinguishes_sample_contamination() -> None:
+    mesh = FaultMesh(np.column_stack((np.arange(64), np.zeros(64))), np.ones(64))
+    a = MockGF(mesh).matvec(np.eye(mesh.n_cols))[:32, 48:64]
+    rng = np.random.default_rng(11)
+    ga, gb = rng.normal(size=(32, 7)), rng.normal(size=(16, 7))
+    y = a @ gb
+    u, v = orth(y, 3), orth(a.T @ ga, 3)
+    clean = block_diagnostics(a, u, v, y, ga, gb, 2)
+    assert clean["column_sample_contamination"] == 0
+    assert clean["errors"]["optimal_rank_k"]["all"] <= clean["errors"]["reconstructed"]["all"]
+    dirty = block_diagnostics(
+        a, u, v, y + 0.1 * np.linalg.norm(y) * rng.normal(size=y.shape), ga, gb, 2
+    )
+    assert dirty["column_sample_contamination"] > 0
+    assert dirty["errors"]["reconstructed"]["all"] > clean["errors"]["reconstructed"]["all"]
+    assert dirty["errors"]["exact_sample_same_bases"] == clean["errors"]["exact_sample_same_bases"]
+
+
+def test_cli_rejects_over_budget_before_preparing_operator(tmp_path, monkeypatch) -> None:
+    directory = tmp_path / "gf_bp3"
+    directory.mkdir()
+    (directory / "gf_mat.bin").touch()
+    (directory / "test_fbf_coords.csv").touch()
+    mesh = FaultMesh(np.array([[0.0, 0.0], [1.0, 0.0]]), np.ones(2))
+    monkeypatch.setattr(
+        "benchmarks.full.RealGF", lambda *args: SimpleNamespace(mesh=mesh, shape=(4, 2))
+    )
+    for name in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+        monkeypatch.setenv(name, "1")
+    monkeypatch.setattr(
+        "sys.argv",
+        ["full", "--dataset", "bp3", "--revision", "test", "--data-root", str(tmp_path), "--run"],
+    )
+    with pytest.raises(ValueError, match="strictly below n_cols"):
         main()

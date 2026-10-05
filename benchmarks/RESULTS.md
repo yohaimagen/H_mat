@@ -134,3 +134,94 @@ C.10/C.11 run initially passed 7 tests, and the final C.11 contracts passed 3
 tests before the revised full runs. The copied virtualenv's pytest/Black/mypy
 entrypoint shebangs were repaired locally after an initial collection failure
 pointed at the original checkout; those environment files are untracked.
+
+## Correction round 1: bounded block diagnosis
+
+The reviewer requested evidence separating rank loss, sampled-basis error,
+core amplification, and peeling contamination. The
+[diagnostic record](results/bp7_block_diagnostics.json) uses seed 11 and the
+incumbent `(512,47,10)` configuration. It chooses the largest scalar-area pair
+and the first interaction pair at each level, with a hard eight-million-entry
+block limit. The four actual blocks contain at most 1,177,110 entries. These
+are reference-only diagnostic blocks; no entry access was added to compression.
+
+The following errors are **Frobenius-relative block errors**, not the frozen
+operator power estimates. The two-sided projection uses the measured bases
+with the optimal projected core; reconstruction uses Eq. 4.3. The SVD column
+uses the best rank-`k_eff` approximation of the entire rectangular block.
+
+| Level / shape | Best-rank SVD error | Two-sided projection error | Reconstruction error | Relative column-sample contamination |
+|---|---:|---:|---:|---:|
+| 2 / 615×1914 | 0.005757 | 0.012942 | 0.029232 | 1.21e-15 |
+| 2 / 186×410 | 0.000670 | 0.002344 | 0.005014 | 3.71e-16 |
+| 3 / 840×550 | 0.003461 | 0.006967 | 0.013893 | 8.58e-16 |
+| 3 / 21×20 (effective rank 20) | 1.37e-15 | 8.39e-8 | 5.80e-7 | 8.10e-7 |
+
+For the three genuinely truncated representatives, sketch condition numbers
+are 16.2–19.9 and the core increases the projection error by about 2.0–2.3×.
+Replacing the measured column sketch by the exact block sketch, or rebuilding
+both bases from exact block sketches, gives essentially the same reconstruction.
+Thus their main limitation is real singular-value decay and sampled low-rank
+approximation, not contamination from earlier levels. At rank 48, their
+singular-value ratios to the leading singular value are 1.22e-3, 3.89e-4, and
+6.53e-4. The first two are level 2, with no preceding admissible level to peel.
+
+The weak component is poorly represented by the shared dominant subspace:
+on the 186×410 block, the globally optimal rank-47 approximation still has
+component-0 error 0.532, compared with 1.478 for reconstruction. Its own
+component-only rank-47 SVD tail is 0.0241. On the 840×550 block, even the
+component-only tail is 0.0932. These are local diagnostics, not lower bounds
+on the full operator acceptance metrics and not proof of infeasibility.
+
+The small full-rank level-3 representative isolates a different effect:
+production reconstruction error is 5.80e-7, exact column samples with the same
+measured bases reduce it to 1.20e-7, and clean two-sided sampling recovers the
+block to 1.73e-15. Earlier approximation error can therefore contaminate even
+an otherwise exact small block. No solver formula was changed to conceal this.
+
+Based on these observations, exactly two further full configurations were
+declared before their runs: more rank `(512,51,6)` and more oversampling
+`(512,37,20)`. Both keep sketch width 57 and predict 10,968 construction columns.
+The runner now enforces the strict predicted budget before native preparation
+or compression; both candidates' observed counts match the prediction.
+Every construction seed 11/23/37 and validation start 101/103 is retained.
+
+| Candidate | Worst global | Worst component | Worst input | Minimum leaves improvement | Numerical entries |
+|---|---:|---:|---:|---:|---:|
+| More rank, `(512,51,6)` | 1.6984e-5 | 0.52692 | 5.2539e-5 | 434.71 | 85,457,835 |
+| More oversampling, `(512,37,20)` | 3.8925e-5 | 0.38126 | 8.3102e-5 | 274.81 | 76,044,284 |
+
+Both fail component/input/improvement on every seed; the oversampling candidate
+also fails global error. Both pass selected-block, numerical storage, and
+construction-budget checks. The original BP7 final record is retained as the
+incumbent failed baseline, not relabelled as successful. The candidate
+[rank config](configs/bp7_full_rank51.json) / [report](results/bp7_fixed_rank51.json)
+and [oversampling config](configs/bp7_full_stable37.json) /
+[report](results/bp7_fixed_stable37.json) preserve this additional history.
+
+Correction runs used the same thread caps, serial execution, and
+orchestrator-supplied revision `eaba6dc` plus exact source/config hashes.
+The commands were:
+
+```sh
+.venv/bin/python -m benchmarks.diagnose --run
+.venv/bin/python -m benchmarks.full --dataset bp7 --config benchmarks/configs/bp7_full_rank51.json --output benchmarks/results/bp7_fixed_rank51.json --revision eaba6dc --run
+.venv/bin/python -m benchmarks.full --dataset bp7 --config benchmarks/configs/bp7_full_stable37.json --output benchmarks/results/bp7_fixed_stable37.json --revision eaba6dc --run
+```
+
+All commands used `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+VECLIB_MAXIMUM_THREADS=1`. Setup ranges were 23.35–27.79 s and 23.99–24.19 s;
+maximum RSS was 3.478 GB and 3.183 GB, respectively. Repeated memory checks
+again found zero throttled pages and unchanged swap-outs (2,810,527), with
+some page-out activity. No full runs exceeded the predicted sampling budget.
+The unresolved issue is now supported by local approximation diagnostics and
+two controlled rank/oversampling tradeoffs, but still does not establish that
+all fixed configurations fail. **C.11 remains unaccepted; coloring stays closed.**
+
+Correction-round validation: focused C.11 contracts passed 5 tests in 0.21 s;
+the serial full command `.venv/bin/pytest -q -o addopts=''` passed **404 tests
+in 99.22 s**. `.venv/bin/ruff check .` passed; `.venv/bin/black --check .`
+reported 56 files unchanged; `.venv/bin/mypy` found no issues in 21 source files.
+The three new reports' recorded source/config hashes, both full candidates'
+seed/start completeness, and predicted/observed counts were independently
+checked against the saved files.

@@ -83,3 +83,20 @@ failed initial full reports. Accuracy thresholds are unchanged. See
 [`RESULTS.md`](RESULTS.md) for outcomes and the gate to coloring. Monitor memory
 pressure externally while running; the runner checkpoints each seed but does
 not autonomously terminate on operating-system memory pressure.
+
+C.11 correction diagnostics are explicitly opt-in:
+
+```sh
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
+  .venv/bin/python -m benchmarks.diagnose --run
+```
+
+This serial BP7 diagnostic selects the largest and first interaction pair at
+each level for construction seed 11. It compares exact bounded reference blocks
+(at most eight million entries each) with the sampled bases and Eq. 4.3 core.
+SVD tails, projection/reconstruction errors, sketch condition numbers, and
+clean-versus-peeled sample errors are Frobenius-relative block diagnostics;
+they do not replace any frozen operator-wide check. No dense reference block
+is exposed to the compressor. The full runner now rejects a configuration
+whose predicted combined construction columns are not strictly below `n_cols`
+before preparing the native operator or constructing factors.

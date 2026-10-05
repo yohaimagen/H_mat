@@ -24,6 +24,7 @@ from gfcompress.benchmark import (
     time_products,
     write_report,
 )
+from gfcompress.build_tree import build_tree
 from gfcompress.compress import CountingOperator, ProductCounts, compress
 from gfcompress.geometry import FaultMesh
 from gfcompress.operators import MatVecOperator
@@ -191,6 +192,17 @@ def main() -> None:
         }
         start = time.perf_counter()
         source = RealGF(matrix, coordinates)
+        primary = config["selection"]["primary"]
+        budget = predict_fixed_products(
+            build_tree(source.mesh, primary["m"]),
+            source.mesh,
+            primary["k"],
+            primary["p"],
+            ProductCounts(0, 0, 0, 0),
+        ).total_budget
+        report["preflight_construction"] = asdict(budget)
+        if budget.matvec_columns + budget.rmatvec_columns >= source.shape[1]:
+            raise ValueError("predicted construction columns must be strictly below n_cols")
         prepare(source)
         preparation = time.perf_counter() - start
         report["shape"] = list(source.shape)
