@@ -1,0 +1,92 @@
+{
+  "acceptance": {
+    "absolute_response_floor": 1,
+    "comparison_relative_slack": 0.1,
+    "component_response_error_max": 0.08,
+    "frozen": true,
+    "global_relative_error_max": 0.00002,
+    "input_response_error_max": 0.000003,
+    "leaves_only_improvement_min": 1000,
+    "reason": "Frozen from all 3 construction seeds x 2 independent validation starts on the C.7 192-patch subset. One adjoint component has a near-zero response (~0.17), so its error uses the measured absolute floor 1.0. The selected-block limit is response-relative for deterministic unit drives, so zero output is 1.0 and cannot pass; these are subset criteria, not full-baseline claims.",
+    "selected_block_output_error_max": 0.4
+  },
+  "construction_seeds": [
+    11,
+    23,
+    37
+  ],
+  "dataset": "bp7",
+  "full_runs": "opt-in",
+  "sampling": "fixed",
+  "schema_version": 1,
+  "selection": {
+    "alternatives": [
+      {
+        "k": 4,
+        "m": 8,
+        "p": 2,
+        "reason": "lower storage/sample cost, but fails the genuinely truncated selected-block gate"
+      },
+      {
+        "k": 3,
+        "m": 8,
+        "p": 2,
+        "reason": "lower storage; weaker global and input margins"
+      }
+    ],
+    "locking_rule": "a primary requires a measured leaves-only improvement factor and all additional block/input checks",
+    "primary": {
+      "m": 512,
+      "k": 47,
+      "p": 10,
+      "reason": "C.11 second full-data revision: coarsen leaves to move finer interactions into dense storage and raise rank within the strict column budget (predicted 10968<11040); all frozen thresholds unchanged."
+    },
+    "required_measures": [
+      "global_error",
+      "selected_block_errors",
+      "component_index_group_errors",
+      "localized_smooth_errors",
+      "leaves_only_improvement",
+      "storage",
+      "sampled_columns",
+      "apply_cost"
+    ],
+    "rule": "retain every seed; never choose a favorable seed or subset"
+  },
+  "sweep": {
+    "k": [
+      3,
+      4,
+      6
+    ],
+    "m": [
+      8,
+      12
+    ],
+    "p": [
+      1,
+      2
+    ]
+  },
+  "validation": {
+    "absolute_response_floor": 1,
+    "power_iterations": 4,
+    "status": "unchanged C.10 frozen thresholds; C.11 full-data candidate"
+  },
+  "validation_seeds": [
+    101,
+    103
+  ],
+  "configuration_history": [
+    {
+      "configuration": "benchmarks/configs/bp7_fixed.json",
+      "report": "benchmarks/results/bp7_fixed_initial.json",
+      "outcome": "All three construction seeds passed storage/count gates but failed frozen full-data accuracy checks."
+    },
+    {
+      "configuration": "benchmarks/configs/bp7_full_fixed_attempt1.json",
+      "report": "benchmarks/results/bp7_fixed_attempt1.json",
+      "outcome": "m128 k40 p10 passed storage/count and selected-block checks but all three seeds failed other frozen accuracy checks."
+    }
+  ]
+}
