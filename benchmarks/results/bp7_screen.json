@@ -1,0 +1,5389 @@
+{
+  "environment": {
+    "numpy": "2.4.6",
+    "omp_num_threads": "1",
+    "openblas_num_threads": "1",
+    "platform": "macOS-26.7.1-arm64-arm-64bit",
+    "processor": "arm",
+    "python": "3.12.9"
+  },
+  "limitations": "Clean block-only sketches exclude peeling; screening is not full validation.",
+  "plan": {
+    "candidates": [
+      {
+        "k": 41,
+        "p": 16
+      },
+      {
+        "k": 44,
+        "p": 13
+      },
+      {
+        "k": 49,
+        "p": 8
+      },
+      {
+        "k": 53,
+        "p": 4
+      },
+      {
+        "k": 55,
+        "p": 2
+      },
+      {
+        "k": 57,
+        "p": 0
+      }
+    ],
+    "construction_seeds": [
+      11,
+      23,
+      37
+    ],
+    "incumbent": {
+      "k": 47,
+      "p": 10
+    },
+    "m": 512,
+    "promotion": {
+      "all_worst_ratio_max": 1.0,
+      "component_worst_ratio_max": 0.5,
+      "maximum_promotions": 2,
+      "reason": "Require a material (at least twofold) reduction of worst representative component error without worsening worst full-block error; rank candidates by component error. Incumbent full validation misses component by 5.1x and input by 16.3x. This is a screening rule, not an acceptance threshold or proof of infeasibility."
+    },
+    "screen": "clean block-only Gaussian sketches matching the fixed schedule, excluding peeling contamination; all three construction seeds",
+    "selection": "largest scalar-area and first interaction pair at each level, matching the prior diagnostic",
+    "width": 57
+  },
+  "promotions": [],
+  "provenance": {
+    "command": [
+      "/private/tmp/H_mat-c11/.venv/bin/python",
+      "/private/tmp/H_mat-c11/benchmarks/screen.py",
+      "--revision",
+      "fb9646b",
+      "--run"
+    ],
+    "revision_supplied_by_orchestrator": "fb9646b",
+    "source_sha256": {
+      "/private/tmp/H_mat-c11/benchmarks/diagnose.py": "bbbdf0cef3e58459ccd086f81ba374c3f9401a1cf0dacd7b88a5c2d431dd7935",
+      "/private/tmp/H_mat-c11/benchmarks/screen.py": "f6098d73b6301e954987f0629fe03a888d0be3864e6f7943e887a0c46deee229",
+      "benchmarks/c10.py": "0c085d6b9467a6d3ea5f156dcd6f7e2756aed4cf14f465516fce28647564a553",
+      "benchmarks/configs/bp7_screen.json": "268ee9a1deebb3f8bca69027f9f45839bf6946237d8190f4e58c212c294bd749",
+      "benchmarks/full.py": "c9a5618d825c38af7f22a04d5c3860e789152a75a3639a1b084d0dd979e5eca7",
+      "src/gfcompress/__init__.py": "d10e1160f66dbdcc9439dd9b2a2f359e638ca43d200931e1d99a12c9d68fbb15",
+      "src/gfcompress/benchmark.py": "fe21c9862bc7ce3a0ec82dc1d41bb73e6568a15099ae640669819687eb704d15",
+      "src/gfcompress/build_tree.py": "74f71df24cef87b7503913db7eeef2220e74f5047b7ee9c0b70cc76687e8c19c",
+      "src/gfcompress/column_basis.py": "358965b1a2af4ad411d15c60b7f168c1968abd74807ca4fc99c804ec29b5b5cb",
+      "src/gfcompress/compress.py": "1bc92e79a11c8cabdc5051f6c2ea44bef3e67a5880245c27fc41c4da652a7087",
+      "src/gfcompress/error.py": "38b446ee5b028e0c46bf0caac8c5b70575d34666797c742589c01ec5ee013aa0",
+      "src/gfcompress/fixed_pattern.py": "6b12d96c7d0a19479906169992c5210ef5e86988c86b52f57afff652d4cf2b0c",
+      "src/gfcompress/geometry.py": "ac23cca8ec154653e58d386e231691ae0cb319116844cae63fdf9dd529c8ba49",
+      "src/gfcompress/hmatrix.py": "13bbb58709d01ca12fc648b7c4c111050a54c9a0b711e5da138b8b084c6acb71",
+      "src/gfcompress/interactions.py": "e32e58fb11dc126c9f44f2ddd0d84fbfd2b056b89c92f50d52f5a429b17e125e",
+      "src/gfcompress/leaf.py": "3d2ad543be4151ea8c2896153f007abd85940fa9ebb81c16874c1612ea4beba2",
+      "src/gfcompress/mockgf.py": "a03ba13eed0f4611b12c86531254d0dfdb7f47fec739409910d8cbb123f3a8ed",
+      "src/gfcompress/neighbors.py": "12a8a9245b5358e236616fa5520bab242449cfe203d358cdfe7d0b0c5a55149f",
+      "src/gfcompress/operators.py": "83fb1cef8b838001e10e652b16da2054433abb4d48b91d03026e6ec677f1f7dc",
+      "src/gfcompress/peeling.py": "ef77fa3e681e972d14c535ae9d039b37ff8a6cc5d65621e9566a1ca1d1c818da",
+      "src/gfcompress/randomized.py": "1e3c4b4b48322f957ba52ef99b2e68d5396bfa898582474ad3b6db24552406ab",
+      "src/gfcompress/realgf.py": "2bfc5860172b1952ab30d47ca8b57b525fdec074642949f2fbeba7c9218bd882",
+      "src/gfcompress/row_basis.py": "1388444f94593a20fd87ea3c84a8ae2f0f26d4d99a330b5557bfcaf78c7d72e9",
+      "src/gfcompress/sampling.py": "def3091e7b4a97879163d11d9a9769635aad2035f2fae1b25e0ad38ab14457a2",
+      "src/gfcompress/study.py": "d21fde0158861e83bc91791154bf3ade05e3659a6635bd9242ed814168606c8d",
+      "src/gfcompress/tree.py": "438c355e44d03c2b51afb59af4b5e84a1a225a825c06c180efde6f7aa16fc4b4"
+    }
+  },
+  "results": [
+    {
+      "all_worst": 0.029231984038525255,
+      "component_worst": 1.609005497556032,
+      "parameters": {
+        "k": 47,
+        "p": 10
+      },
+      "predicted_full_construction": {
+        "matvec_calls": 61,
+        "matvec_columns": 8004,
+        "rmatvec_calls": 52,
+        "rmatvec_columns": 2964
+      },
+      "records": [
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.031585826291266994,
+          "core_vs_projection_error_ratio": 2.2587769442570735,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.029231984038525255,
+              "component0": 0.28215119584246634
+            },
+            "column_projection": {
+              "all": 0.010160825518315719,
+              "component0": 0.10390826027168283
+            },
+            "exact_sample_same_bases": {
+              "all": 0.029231984038525255,
+              "component0": 0.28215119584246634
+            },
+            "optimal_rank_k": {
+              "all": 0.0057572958587840325,
+              "component0": 0.057799379183852084
+            },
+            "reconstructed": {
+              "all": 0.029231984038525255,
+              "component0": 0.28215119584246634
+            },
+            "row_projection": {
+              "all": 0.010096600521284915,
+              "component0": 0.09956087813308592
+            },
+            "two_sided_projection": {
+              "all": 0.012941509834712716,
+              "component0": 0.13025370843206568
+            }
+          },
+          "left_sketch_condition": 18.61385244788172,
+          "level": 2,
+          "rank": 47,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 16.22442950938263,
+          "seed": 11,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "47": 0.0012772598245984297,
+            "48": 0.0012235164876797141,
+            "95": 0.0004882605132237371
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02406911334616403,
+          "core_vs_projection_error_ratio": 2.1386527196860534,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.00501361117805182,
+              "component0": 1.478194249232926
+            },
+            "column_projection": {
+              "all": 0.001665552117061772,
+              "component0": 1.1447775258185975
+            },
+            "exact_sample_same_bases": {
+              "all": 0.00501361117805182,
+              "component0": 1.478194249232926
+            },
+            "optimal_rank_k": {
+              "all": 0.0006700766375177052,
+              "component0": 0.5320174735316233
+            },
+            "reconstructed": {
+              "all": 0.00501361117805182,
+              "component0": 1.478194249232926
+            },
+            "row_projection": {
+              "all": 0.0017869587763203938,
+              "component0": 0.5040252010396205
+            },
+            "two_sided_projection": {
+              "all": 0.0023442848536848002,
+              "component0": 1.157084994213699
+            }
+          },
+          "left_sketch_condition": 19.86402772813062,
+          "level": 2,
+          "rank": 47,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 16.309342630589224,
+          "seed": 11,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "47": 0.0004176108132869703,
+            "48": 0.00038934946830098674,
+            "95": 3.422419119054192e-05
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.09323250618822479,
+          "core_vs_projection_error_ratio": 1.9940492679960695,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.013892525511238736,
+              "component0": 0.511608221352958
+            },
+            "column_projection": {
+              "all": 0.005558799914841027,
+              "component0": 0.2109611279041269
+            },
+            "exact_sample_same_bases": {
+              "all": 0.013892525511238736,
+              "component0": 0.511608221352958
+            },
+            "optimal_rank_k": {
+              "all": 0.003461302570669768,
+              "component0": 0.1276404038800098
+            },
+            "reconstructed": {
+              "all": 0.013892525511238736,
+              "component0": 0.511608221352958
+            },
+            "row_projection": {
+              "all": 0.005572880802567102,
+              "component0": 0.20473597563914256
+            },
+            "two_sided_projection": {
+              "all": 0.0069669921070707064,
+              "component0": 0.26033783061467514
+            }
+          },
+          "left_sketch_condition": 17.6960249768466,
+          "level": 3,
+          "rank": 47,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 16.297122415256663,
+          "seed": 11,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "47": 0.0006791973585443059,
+            "48": 0.0006528463255466196,
+            "95": 0.0003051153753763067
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 1.586251321253681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "column_projection": {
+              "all": 7.863525584620147e-16,
+              "component0": 1.2794478779136903e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "row_projection": {
+              "all": 4.922533611150259e-16,
+              "component0": 3.924921175174141e-16
+            },
+            "two_sided_projection": {
+              "all": 1.0883489901983863e-15,
+              "component0": 1.2794447679405913e-11
+            }
+          },
+          "left_sketch_condition": 3.370707449697146,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.112639745139096,
+          "seed": 11,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.031585826291266994,
+          "core_vs_projection_error_ratio": 1.8781240372426438,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.023939294064856547,
+              "component0": 0.23819397454625346
+            },
+            "column_projection": {
+              "all": 0.010056250198927119,
+              "component0": 0.10023851222763672
+            },
+            "exact_sample_same_bases": {
+              "all": 0.023939294064856547,
+              "component0": 0.23819397454625346
+            },
+            "optimal_rank_k": {
+              "all": 0.0057572958587840325,
+              "component0": 0.057799379183852084
+            },
+            "reconstructed": {
+              "all": 0.023939294064856547,
+              "component0": 0.23819397454625346
+            },
+            "row_projection": {
+              "all": 0.009968929137494522,
+              "component0": 0.09679611313397624
+            },
+            "two_sided_projection": {
+              "all": 0.012746386069368919,
+              "component0": 0.125107817650358
+            }
+          },
+          "left_sketch_condition": 17.951468859498238,
+          "level": 2,
+          "rank": 47,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 11.488639079508411,
+          "seed": 23,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "47": 0.0012772598245984297,
+            "48": 0.0012235164876797141,
+            "95": 0.0004882605132237371
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02406911334616403,
+          "core_vs_projection_error_ratio": 1.8676889706949238,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.003749593138973914,
+              "component0": 1.5611089009252825
+            },
+            "column_projection": {
+              "all": 0.0014972371238337874,
+              "component0": 1.1164068300385999
+            },
+            "exact_sample_same_bases": {
+              "all": 0.003749593138973914,
+              "component0": 1.5611089009252825
+            },
+            "optimal_rank_k": {
+              "all": 0.0006700766375177052,
+              "component0": 0.5320174735316233
+            },
+            "reconstructed": {
+              "all": 0.003749593138973914,
+              "component0": 1.5611089009252825
+            },
+            "row_projection": {
+              "all": 0.0014932062075965285,
+              "component0": 0.5761171527585042
+            },
+            "two_sided_projection": {
+              "all": 0.002007611116094334,
+              "component0": 1.1508214671614214
+            }
+          },
+          "left_sketch_condition": 16.56723181741335,
+          "level": 2,
+          "rank": 47,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 16.058346861910447,
+          "seed": 23,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "47": 0.0004176108132869703,
+            "48": 0.00038934946830098674,
+            "95": 3.422419119054192e-05
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.09323250618822479,
+          "core_vs_projection_error_ratio": 2.177328108441762,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.015259379227563787,
+              "component0": 0.5613678457621484
+            },
+            "column_projection": {
+              "all": 0.005596637139959214,
+              "component0": 0.2122111931941882
+            },
+            "exact_sample_same_bases": {
+              "all": 0.015259379227563787,
+              "component0": 0.5613678457621484
+            },
+            "optimal_rank_k": {
+              "all": 0.003461302570669768,
+              "component0": 0.1276404038800098
+            },
+            "reconstructed": {
+              "all": 0.015259379227563787,
+              "component0": 0.5613678457621484
+            },
+            "row_projection": {
+              "all": 0.005576841477997374,
+              "component0": 0.20446557850090913
+            },
+            "two_sided_projection": {
+              "all": 0.007008304889098407,
+              "component0": 0.26086268181552186
+            }
+          },
+          "left_sketch_condition": 14.276567948086107,
+          "level": 3,
+          "rank": 47,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 15.182357610560729,
+          "seed": 23,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "47": 0.0006791973585443059,
+            "48": 0.0006528463255466196,
+            "95": 0.0003051153753763067
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 4.116325986273681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "column_projection": {
+              "all": 3.531570747050404e-16,
+              "component0": 6.705484743290043e-12
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "row_projection": {
+              "all": 3.254659651685282e-16,
+              "component0": 4.904973763563319e-16
+            },
+            "two_sided_projection": {
+              "all": 4.309733989808161e-16,
+              "component0": 6.705505724905222e-12
+            }
+          },
+          "left_sketch_condition": 3.326213597107864,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.820470011266452,
+          "seed": 23,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.031585826291266994,
+          "core_vs_projection_error_ratio": 2.117457561394347,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.027740413086390282,
+              "component0": 0.27826550803915046
+            },
+            "column_projection": {
+              "all": 0.010179824368902855,
+              "component0": 0.1030714003992059
+            },
+            "exact_sample_same_bases": {
+              "all": 0.027740413086390282,
+              "component0": 0.27826550803915046
+            },
+            "optimal_rank_k": {
+              "all": 0.0057572958587840325,
+              "component0": 0.057799379183852084
+            },
+            "reconstructed": {
+              "all": 0.027740413086390282,
+              "component0": 0.27826550803915046
+            },
+            "row_projection": {
+              "all": 0.010316224773920048,
+              "component0": 0.10465387039442496
+            },
+            "two_sided_projection": {
+              "all": 0.013100811837817049,
+              "component0": 0.13280911288754993
+            }
+          },
+          "left_sketch_condition": 12.12273888692116,
+          "level": 2,
+          "rank": 47,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 20.518019800868828,
+          "seed": 37,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "47": 0.0012772598245984297,
+            "48": 0.0012235164876797141,
+            "95": 0.0004882605132237371
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02406911334616403,
+          "core_vs_projection_error_ratio": 1.975106974622373,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.004164019608507105,
+              "component0": 1.609005497556032
+            },
+            "column_projection": {
+              "all": 0.0015740376970246296,
+              "component0": 1.108506004218885
+            },
+            "exact_sample_same_bases": {
+              "all": 0.004164019608507105,
+              "component0": 1.609005497556032
+            },
+            "optimal_rank_k": {
+              "all": 0.0006700766375177052,
+              "component0": 0.5320174735316233
+            },
+            "reconstructed": {
+              "all": 0.004164019608507105,
+              "component0": 1.609005497556032
+            },
+            "row_projection": {
+              "all": 0.0015573422172929258,
+              "component0": 0.5743449975606644
+            },
+            "two_sided_projection": {
+              "all": 0.002108250166704635,
+              "component0": 1.1465065755460386
+            }
+          },
+          "left_sketch_condition": 19.572172194392177,
+          "level": 2,
+          "rank": 47,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 16.517176650966288,
+          "seed": 37,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "47": 0.0004176108132869703,
+            "48": 0.00038934946830098674,
+            "95": 3.422419119054192e-05
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.09323250618822479,
+          "core_vs_projection_error_ratio": 2.4130541409681614,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.01702014549435061,
+              "component0": 0.6388637917849033
+            },
+            "column_projection": {
+              "all": 0.005570006944123553,
+              "component0": 0.2110408733500463
+            },
+            "exact_sample_same_bases": {
+              "all": 0.01702014549435061,
+              "component0": 0.6388637917849033
+            },
+            "optimal_rank_k": {
+              "all": 0.003461302570669768,
+              "component0": 0.1276404038800098
+            },
+            "reconstructed": {
+              "all": 0.01702014549435061,
+              "component0": 0.6388637917849033
+            },
+            "row_projection": {
+              "all": 0.005658697411832175,
+              "component0": 0.20757931006843405
+            },
+            "two_sided_projection": {
+              "all": 0.007053362461035299,
+              "component0": 0.26292924882870783
+            }
+          },
+          "left_sketch_condition": 17.96934069128943,
+          "level": 3,
+          "rank": 47,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 21.37606190017646,
+          "seed": 37,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "47": 0.0006791973585443059,
+            "48": 0.0006528463255466196,
+            "95": 0.0003051153753763067
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 2.537814026313845,
+          "errors": {
+            "clean_two_sample": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "column_projection": {
+              "all": 6.77794939138466e-16,
+              "component0": 1.933880776140279e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "row_projection": {
+              "all": 5.152308153225408e-16,
+              "component0": 4.906188390481397e-16
+            },
+            "two_sided_projection": {
+              "all": 8.968061737379771e-16,
+              "component0": 1.933888561241412e-11
+            }
+          },
+          "left_sketch_condition": 3.225648807512846,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.2199741625513796,
+          "seed": 37,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        }
+      ]
+    },
+    {
+      "all_worst": 0.025302791965723593,
+      "component_worst": 1.959433755283474,
+      "parameters": {
+        "k": 41,
+        "p": 16
+      },
+      "predicted_full_construction": {
+        "matvec_calls": 61,
+        "matvec_columns": 8004,
+        "rmatvec_calls": 52,
+        "rmatvec_columns": 2964
+      },
+      "records": [
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.036141575110718145,
+          "core_vs_projection_error_ratio": 1.7471566549757387,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.025302791965723593,
+              "component0": 0.2444288073107312
+            },
+            "column_projection": {
+              "all": 0.011276935938223454,
+              "component0": 0.11477078826056052
+            },
+            "exact_sample_same_bases": {
+              "all": 0.025302791965723593,
+              "component0": 0.2444288073107312
+            },
+            "optimal_rank_k": {
+              "all": 0.006537725478853793,
+              "component0": 0.06512923054712344
+            },
+            "reconstructed": {
+              "all": 0.025302791965723593,
+              "component0": 0.2444288073107312
+            },
+            "row_projection": {
+              "all": 0.011441598655465778,
+              "component0": 0.11349730690772906
+            },
+            "two_sided_projection": {
+              "all": 0.014482268601194751,
+              "component0": 0.14561981090705067
+            }
+          },
+          "left_sketch_condition": 8.70416315733804,
+          "level": 2,
+          "rank": 41,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 12.853283339113592,
+          "seed": 11,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "41": 0.0015956752947470336,
+            "42": 0.0015436572106529503,
+            "83": 0.0005912260540700812
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.035713109195188046,
+          "core_vs_projection_error_ratio": 1.8204231210215986,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.00578357015308481,
+              "component0": 1.8420441465813193
+            },
+            "column_projection": {
+              "all": 0.0023121923616297585,
+              "component0": 1.4337423908993647
+            },
+            "exact_sample_same_bases": {
+              "all": 0.00578357015308481,
+              "component0": 1.8420441465813193
+            },
+            "optimal_rank_k": {
+              "all": 0.0010180977235263089,
+              "component0": 0.6719676236051424
+            },
+            "reconstructed": {
+              "all": 0.00578357015308481,
+              "component0": 1.8420441465813193
+            },
+            "row_projection": {
+              "all": 0.0023970852063980312,
+              "component0": 0.6171531397160702
+            },
+            "two_sided_projection": {
+              "all": 0.0031770471855131913,
+              "component0": 1.451975148945374
+            }
+          },
+          "left_sketch_condition": 11.569980575391508,
+          "level": 2,
+          "rank": 41,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 10.525696998801335,
+          "seed": 11,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "41": 0.0006522898298252568,
+            "42": 0.0006084849150536331,
+            "83": 5.147920556821326e-05
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.10526185346771004,
+          "core_vs_projection_error_ratio": 1.7536860449376517,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.013057082529393827,
+              "component0": 0.47123109489959036
+            },
+            "column_projection": {
+              "all": 0.006000742187256848,
+              "component0": 0.22891521335704526
+            },
+            "exact_sample_same_bases": {
+              "all": 0.013057082529393827,
+              "component0": 0.47123109489959036
+            },
+            "optimal_rank_k": {
+              "all": 0.0038170279658657777,
+              "component0": 0.1426037378078982
+            },
+            "reconstructed": {
+              "all": 0.013057082529393827,
+              "component0": 0.47123109489959036
+            },
+            "row_projection": {
+              "all": 0.0059651883883211606,
+              "component0": 0.2192819017820292
+            },
+            "two_sided_projection": {
+              "all": 0.007445507459608052,
+              "component0": 0.27860795262197935
+            }
+          },
+          "left_sketch_condition": 11.270620624032246,
+          "level": 3,
+          "rank": 41,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 10.226157349526044,
+          "seed": 11,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "41": 0.0007906135847962184,
+            "42": 0.0007543043366876724,
+            "83": 0.00035282857380127734
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 1.586251321253681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "column_projection": {
+              "all": 7.863525584620147e-16,
+              "component0": 1.2794478779136903e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "row_projection": {
+              "all": 4.922533611150259e-16,
+              "component0": 3.924921175174141e-16
+            },
+            "two_sided_projection": {
+              "all": 1.0883489901983863e-15,
+              "component0": 1.2794447679405913e-11
+            }
+          },
+          "left_sketch_condition": 3.370707449697146,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.112639745139096,
+          "seed": 11,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.036141575110718145,
+          "core_vs_projection_error_ratio": 1.527207525144531,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.0217484476715208,
+              "component0": 0.2147718721964511
+            },
+            "column_projection": {
+              "all": 0.01134086194003832,
+              "component0": 0.11197417728102083
+            },
+            "exact_sample_same_bases": {
+              "all": 0.0217484476715208,
+              "component0": 0.2147718721964511
+            },
+            "optimal_rank_k": {
+              "all": 0.006537725478853793,
+              "component0": 0.06512923054712344
+            },
+            "reconstructed": {
+              "all": 0.0217484476715208,
+              "component0": 0.2147718721964511
+            },
+            "row_projection": {
+              "all": 0.011113787902999833,
+              "component0": 0.10589113893064919
+            },
+            "two_sided_projection": {
+              "all": 0.014240662983547429,
+              "component0": 0.13737404246147625
+            }
+          },
+          "left_sketch_condition": 8.33927207958621,
+          "level": 2,
+          "rank": 41,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 8.144147487878502,
+          "seed": 23,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "41": 0.0015956752947470336,
+            "42": 0.0015436572106529503,
+            "83": 0.0005912260540700812
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.035713109195188046,
+          "core_vs_projection_error_ratio": 1.6661166969778627,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.0049133334511517,
+              "component0": 1.6376426043206669
+            },
+            "column_projection": {
+              "all": 0.002179509059833151,
+              "component0": 1.341647279303618
+            },
+            "exact_sample_same_bases": {
+              "all": 0.0049133334511517,
+              "component0": 1.6376426043206669
+            },
+            "optimal_rank_k": {
+              "all": 0.0010180977235263089,
+              "component0": 0.6719676236051424
+            },
+            "reconstructed": {
+              "all": 0.0049133334511517,
+              "component0": 1.6376426043206669
+            },
+            "row_projection": {
+              "all": 0.0022173241291045913,
+              "component0": 0.7065937039498895
+            },
+            "two_sided_projection": {
+              "all": 0.002948973178207686,
+              "component0": 1.3595426816799092
+            }
+          },
+          "left_sketch_condition": 7.641871313768399,
+          "level": 2,
+          "rank": 41,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 7.952892599548135,
+          "seed": 23,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "41": 0.0006522898298252568,
+            "42": 0.0006084849150536331,
+            "83": 5.147920556821326e-05
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.10526185346771004,
+          "core_vs_projection_error_ratio": 1.7306695845032956,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.013019797394475006,
+              "component0": 0.4825877196687412
+            },
+            "column_projection": {
+              "all": 0.006035874442351024,
+              "component0": 0.23093577765457698
+            },
+            "exact_sample_same_bases": {
+              "all": 0.013019797394475006,
+              "component0": 0.4825877196687412
+            },
+            "optimal_rank_k": {
+              "all": 0.0038170279658657777,
+              "component0": 0.1426037378078982
+            },
+            "reconstructed": {
+              "all": 0.013019797394475006,
+              "component0": 0.4825877196687412
+            },
+            "row_projection": {
+              "all": 0.006007917779522472,
+              "component0": 0.22070948596386303
+            },
+            "two_sided_projection": {
+              "all": 0.0075229827293762175,
+              "component0": 0.2812205000551772
+            }
+          },
+          "left_sketch_condition": 8.814972819164623,
+          "level": 3,
+          "rank": 41,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 13.740422613261291,
+          "seed": 23,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "41": 0.0007906135847962184,
+            "42": 0.0007543043366876724,
+            "83": 0.00035282857380127734
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 4.116325986273681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "column_projection": {
+              "all": 3.531570747050404e-16,
+              "component0": 6.705484743290043e-12
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "row_projection": {
+              "all": 3.254659651685282e-16,
+              "component0": 4.904973763563319e-16
+            },
+            "two_sided_projection": {
+              "all": 4.309733989808161e-16,
+              "component0": 6.705505724905222e-12
+            }
+          },
+          "left_sketch_condition": 3.326213597107864,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.820470011266452,
+          "seed": 23,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.036141575110718145,
+          "core_vs_projection_error_ratio": 1.672072775624709,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.02426173855278503,
+              "component0": 0.24300130432472866
+            },
+            "column_projection": {
+              "all": 0.011414573741782471,
+              "component0": 0.11578979747100038
+            },
+            "exact_sample_same_bases": {
+              "all": 0.02426173855278503,
+              "component0": 0.24300130432472866
+            },
+            "optimal_rank_k": {
+              "all": 0.006537725478853793,
+              "component0": 0.06512923054712344
+            },
+            "reconstructed": {
+              "all": 0.02426173855278503,
+              "component0": 0.24300130432472866
+            },
+            "row_projection": {
+              "all": 0.011340020538592295,
+              "component0": 0.11494439439446354
+            },
+            "two_sided_projection": {
+              "all": 0.014509977619676583,
+              "component0": 0.14701967653214687
+            }
+          },
+          "left_sketch_condition": 8.76120676174733,
+          "level": 2,
+          "rank": 41,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 7.960212923930386,
+          "seed": 37,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "41": 0.0015956752947470336,
+            "42": 0.0015436572106529503,
+            "83": 0.0005912260540700812
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.035713109195188046,
+          "core_vs_projection_error_ratio": 1.7149992447574596,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.005255721493332963,
+              "component0": 1.959433755283474
+            },
+            "column_projection": {
+              "all": 0.00243246138172,
+              "component0": 1.4176711077466162
+            },
+            "exact_sample_same_bases": {
+              "all": 0.005255721493332963,
+              "component0": 1.959433755283474
+            },
+            "optimal_rank_k": {
+              "all": 0.0010180977235263089,
+              "component0": 0.6719676236051424
+            },
+            "reconstructed": {
+              "all": 0.005255721493332963,
+              "component0": 1.959433755283474
+            },
+            "row_projection": {
+              "all": 0.0021356026771345692,
+              "component0": 0.6386353089568019
+            },
+            "two_sided_projection": {
+              "all": 0.003064561987067372,
+              "component0": 1.4203718754293932
+            }
+          },
+          "left_sketch_condition": 9.620021062052206,
+          "level": 2,
+          "rank": 41,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 8.113855626705412,
+          "seed": 37,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "41": 0.0006522898298252568,
+            "42": 0.0006084849150536331,
+            "83": 5.147920556821326e-05
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.10526185346771004,
+          "core_vs_projection_error_ratio": 1.8174858532417777,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.013804540030700103,
+              "component0": 0.5123688371782079
+            },
+            "column_projection": {
+              "all": 0.006118692834766151,
+              "component0": 0.2379988530070259
+            },
+            "exact_sample_same_bases": {
+              "all": 0.013804540030700103,
+              "component0": 0.5123688371782079
+            },
+            "optimal_rank_k": {
+              "all": 0.0038170279658657777,
+              "component0": 0.1426037378078982
+            },
+            "reconstructed": {
+              "all": 0.013804540030700103,
+              "component0": 0.5123688371782079
+            },
+            "row_projection": {
+              "all": 0.006029940478871168,
+              "component0": 0.2225273510942206
+            },
+            "two_sided_projection": {
+              "all": 0.007595404391224004,
+              "component0": 0.2880165909969657
+            }
+          },
+          "left_sketch_condition": 8.020118993729051,
+          "level": 3,
+          "rank": 41,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 11.187080527283076,
+          "seed": 37,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "41": 0.0007906135847962184,
+            "42": 0.0007543043366876724,
+            "83": 0.00035282857380127734
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 2.537814026313845,
+          "errors": {
+            "clean_two_sample": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "column_projection": {
+              "all": 6.77794939138466e-16,
+              "component0": 1.933880776140279e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "row_projection": {
+              "all": 5.152308153225408e-16,
+              "component0": 4.906188390481397e-16
+            },
+            "two_sided_projection": {
+              "all": 8.968061737379771e-16,
+              "component0": 1.933888561241412e-11
+            }
+          },
+          "left_sketch_condition": 3.225648807512846,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.2199741625513796,
+          "seed": 37,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        }
+      ]
+    },
+    {
+      "all_worst": 0.026350017520660296,
+      "component_worst": 1.9441875586945168,
+      "parameters": {
+        "k": 44,
+        "p": 13
+      },
+      "predicted_full_construction": {
+        "matvec_calls": 61,
+        "matvec_columns": 8004,
+        "rmatvec_calls": 52,
+        "rmatvec_columns": 2964
+      },
+      "records": [
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.033734749791274526,
+          "core_vs_projection_error_ratio": 1.9310792479651298,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.026350017520660296,
+              "component0": 0.2507743935247724
+            },
+            "column_projection": {
+              "all": 0.01068186432182018,
+              "component0": 0.10992319198928585
+            },
+            "exact_sample_same_bases": {
+              "all": 0.026350017520660296,
+              "component0": 0.2507743935247724
+            },
+            "optimal_rank_k": {
+              "all": 0.006113086323647748,
+              "component0": 0.06096411183036752
+            },
+            "reconstructed": {
+              "all": 0.026350017520660296,
+              "component0": 0.2507743935247724
+            },
+            "row_projection": {
+              "all": 0.010696256056570937,
+              "component0": 0.105837323843904
+            },
+            "two_sided_projection": {
+              "all": 0.013645228464044945,
+              "component0": 0.1377986381094838
+            }
+          },
+          "left_sketch_condition": 13.947903581584168,
+          "level": 2,
+          "rank": 44,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 14.026362411766705,
+          "seed": 11,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "44": 0.001445455020407868,
+            "45": 0.0013537959622610082,
+            "89": 0.0005248976859053969
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02946988550264826,
+          "core_vs_projection_error_ratio": 1.9678565661029024,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.005174381172365884,
+              "component0": 1.5528421410667075
+            },
+            "column_projection": {
+              "all": 0.0019479008616115176,
+              "component0": 1.26789415480667
+            },
+            "exact_sample_same_bases": {
+              "all": 0.005174381172365884,
+              "component0": 1.5528421410667075
+            },
+            "optimal_rank_k": {
+              "all": 0.0008232483950913394,
+              "component0": 0.6075886144154239
+            },
+            "reconstructed": {
+              "all": 0.005174381172365884,
+              "component0": 1.5528421410667075
+            },
+            "row_projection": {
+              "all": 0.0019557747951554944,
+              "component0": 0.5460741334444172
+            },
+            "two_sided_projection": {
+              "all": 0.0026294503682314147,
+              "component0": 1.2851170853379803
+            }
+          },
+          "left_sketch_condition": 13.2173036708483,
+          "level": 2,
+          "rank": 44,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 11.341169141585949,
+          "seed": 11,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "44": 0.0005310820066973019,
+            "45": 0.0004963532509250908,
+            "89": 4.1773884485097e-05
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.09906696606558646,
+          "core_vs_projection_error_ratio": 1.9539232675739007,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.01407366183863541,
+              "component0": 0.5108758480096728
+            },
+            "column_projection": {
+              "all": 0.005765859952775505,
+              "component0": 0.22001158315815353
+            },
+            "exact_sample_same_bases": {
+              "all": 0.01407366183863541,
+              "component0": 0.5108758480096728
+            },
+            "optimal_rank_k": {
+              "all": 0.003630500573914849,
+              "component0": 0.13453385675526502
+            },
+            "reconstructed": {
+              "all": 0.01407366183863541,
+              "component0": 0.5108758480096728
+            },
+            "row_projection": {
+              "all": 0.005772685632450259,
+              "component0": 0.2116064916745257
+            },
+            "two_sided_projection": {
+              "all": 0.007202770995255125,
+              "component0": 0.2692555607774993
+            }
+          },
+          "left_sketch_condition": 15.400914626073504,
+          "level": 3,
+          "rank": 44,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 12.380932741311698,
+          "seed": 11,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "44": 0.0007229346941996643,
+            "45": 0.0006990415922970656,
+            "89": 0.00032720568895917363
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 1.586251321253681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "column_projection": {
+              "all": 7.863525584620147e-16,
+              "component0": 1.2794478779136903e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "row_projection": {
+              "all": 4.922533611150259e-16,
+              "component0": 3.924921175174141e-16
+            },
+            "two_sided_projection": {
+              "all": 1.0883489901983863e-15,
+              "component0": 1.2794447679405913e-11
+            }
+          },
+          "left_sketch_condition": 3.370707449697146,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.112639745139096,
+          "seed": 11,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.033734749791274526,
+          "core_vs_projection_error_ratio": 1.7102017193078187,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.022968861424575812,
+              "component0": 0.22840777836716725
+            },
+            "column_projection": {
+              "all": 0.01068534521123629,
+              "component0": 0.1059339066970241
+            },
+            "exact_sample_same_bases": {
+              "all": 0.022968861424575812,
+              "component0": 0.22840777836716725
+            },
+            "optimal_rank_k": {
+              "all": 0.006113086323647748,
+              "component0": 0.06096411183036752
+            },
+            "reconstructed": {
+              "all": 0.022968861424575812,
+              "component0": 0.22840777836716725
+            },
+            "row_projection": {
+              "all": 0.010433971388402746,
+              "component0": 0.10092946020209691
+            },
+            "two_sided_projection": {
+              "all": 0.0134304983823032,
+              "component0": 0.13112153742820806
+            }
+          },
+          "left_sketch_condition": 10.15041572589011,
+          "level": 2,
+          "rank": 44,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 10.614150169146695,
+          "seed": 23,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "44": 0.001445455020407868,
+            "45": 0.0013537959622610082,
+            "89": 0.0005248976859053969
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02946988550264826,
+          "core_vs_projection_error_ratio": 1.673339994426963,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.004118092320641739,
+              "component0": 1.550996966253362
+            },
+            "column_projection": {
+              "all": 0.001762143044335255,
+              "component0": 1.2668727715669075
+            },
+            "exact_sample_same_bases": {
+              "all": 0.004118092320641739,
+              "component0": 1.550996966253362
+            },
+            "optimal_rank_k": {
+              "all": 0.0008232483950913394,
+              "component0": 0.6075886144154239
+            },
+            "reconstructed": {
+              "all": 0.004118092320641739,
+              "component0": 1.550996966253362
+            },
+            "row_projection": {
+              "all": 0.0019032481262250516,
+              "component0": 0.6156259596824469
+            },
+            "two_sided_projection": {
+              "all": 0.002461001550406368,
+              "component0": 1.2886029495048008
+            }
+          },
+          "left_sketch_condition": 10.610412005245514,
+          "level": 2,
+          "rank": 44,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 10.187197497191425,
+          "seed": 23,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "44": 0.0005310820066973019,
+            "45": 0.0004963532509250908,
+            "89": 4.1773884485097e-05
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.09906696606558646,
+          "core_vs_projection_error_ratio": 1.950506046718102,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.014110358384041214,
+              "component0": 0.5270191783559044
+            },
+            "column_projection": {
+              "all": 0.005806155556290503,
+              "component0": 0.2197291837557009
+            },
+            "exact_sample_same_bases": {
+              "all": 0.014110358384041214,
+              "component0": 0.5270191783559044
+            },
+            "optimal_rank_k": {
+              "all": 0.003630500573914849,
+              "component0": 0.13453385675526502
+            },
+            "reconstructed": {
+              "all": 0.014110358384041214,
+              "component0": 0.5270191783559044
+            },
+            "row_projection": {
+              "all": 0.005758432591744034,
+              "component0": 0.2116734521082802
+            },
+            "two_sided_projection": {
+              "all": 0.007234203866111122,
+              "component0": 0.2691535675405416
+            }
+          },
+          "left_sketch_condition": 12.76618738386105,
+          "level": 3,
+          "rank": 44,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 14.819900743945723,
+          "seed": 23,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "44": 0.0007229346941996643,
+            "45": 0.0006990415922970656,
+            "89": 0.00032720568895917363
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 4.116325986273681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "column_projection": {
+              "all": 3.531570747050404e-16,
+              "component0": 6.705484743290043e-12
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "row_projection": {
+              "all": 3.254659651685282e-16,
+              "component0": 4.904973763563319e-16
+            },
+            "two_sided_projection": {
+              "all": 4.309733989808161e-16,
+              "component0": 6.705505724905222e-12
+            }
+          },
+          "left_sketch_condition": 3.326213597107864,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.820470011266452,
+          "seed": 23,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.033734749791274526,
+          "core_vs_projection_error_ratio": 1.866183803407847,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.025445351167485454,
+              "component0": 0.2560742657561948
+            },
+            "column_projection": {
+              "all": 0.010622731657623737,
+              "component0": 0.10763397248894063
+            },
+            "exact_sample_same_bases": {
+              "all": 0.025445351167485454,
+              "component0": 0.2560742657561948
+            },
+            "optimal_rank_k": {
+              "all": 0.006113086323647748,
+              "component0": 0.06096411183036752
+            },
+            "reconstructed": {
+              "all": 0.025445351167485454,
+              "component0": 0.2560742657561948
+            },
+            "row_projection": {
+              "all": 0.010749389350575237,
+              "component0": 0.10823416011660017
+            },
+            "two_sided_projection": {
+              "all": 0.013634965173858855,
+              "component0": 0.13749652524729133
+            }
+          },
+          "left_sketch_condition": 9.183211830436521,
+          "level": 2,
+          "rank": 44,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 15.810944552240912,
+          "seed": 37,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "44": 0.001445455020407868,
+            "45": 0.0013537959622610082,
+            "89": 0.0005248976859053969
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02946988550264826,
+          "core_vs_projection_error_ratio": 1.9259196192545964,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.004779925563173075,
+              "component0": 1.9441875586945168
+            },
+            "column_projection": {
+              "all": 0.0018930987657495184,
+              "component0": 1.2033325883593051
+            },
+            "exact_sample_same_bases": {
+              "all": 0.004779925563173075,
+              "component0": 1.9441875586945168
+            },
+            "optimal_rank_k": {
+              "all": 0.0008232483950913394,
+              "component0": 0.6075886144154239
+            },
+            "reconstructed": {
+              "all": 0.004779925563173075,
+              "component0": 1.9441875586945168
+            },
+            "row_projection": {
+              "all": 0.0018039963927201962,
+              "component0": 0.6038929643695675
+            },
+            "two_sided_projection": {
+              "all": 0.0024818925542817237,
+              "component0": 1.2317724828635928
+            }
+          },
+          "left_sketch_condition": 12.26855844258708,
+          "level": 2,
+          "rank": 44,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 12.520700425763822,
+          "seed": 37,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "44": 0.0005310820066973019,
+            "45": 0.0004963532509250908,
+            "89": 4.1773884485097e-05
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.09906696606558646,
+          "core_vs_projection_error_ratio": 2.1600938202807423,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.015768448778531872,
+              "component0": 0.5915424433249238
+            },
+            "column_projection": {
+              "all": 0.005800838374670274,
+              "component0": 0.22196227613912237
+            },
+            "exact_sample_same_bases": {
+              "all": 0.015768448778531872,
+              "component0": 0.5915424433249238
+            },
+            "optimal_rank_k": {
+              "all": 0.003630500573914849,
+              "component0": 0.13453385675526502
+            },
+            "reconstructed": {
+              "all": 0.015768448778531872,
+              "component0": 0.5915424433249238
+            },
+            "row_projection": {
+              "all": 0.005842915073024087,
+              "component0": 0.21513900689373308
+            },
+            "two_sided_projection": {
+              "all": 0.007299890694785879,
+              "component0": 0.2739303071349203
+            }
+          },
+          "left_sketch_condition": 12.823606585703443,
+          "level": 3,
+          "rank": 44,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 14.514444241646352,
+          "seed": 37,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "44": 0.0007229346941996643,
+            "45": 0.0006990415922970656,
+            "89": 0.00032720568895917363
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 2.537814026313845,
+          "errors": {
+            "clean_two_sample": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "column_projection": {
+              "all": 6.77794939138466e-16,
+              "component0": 1.933880776140279e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "row_projection": {
+              "all": 5.152308153225408e-16,
+              "component0": 4.906188390481397e-16
+            },
+            "two_sided_projection": {
+              "all": 8.968061737379771e-16,
+              "component0": 1.933888561241412e-11
+            }
+          },
+          "left_sketch_condition": 3.225648807512846,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.2199741625513796,
+          "seed": 37,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        }
+      ]
+    },
+    {
+      "all_worst": 0.03888077897862177,
+      "component_worst": 2.0890948010399737,
+      "parameters": {
+        "k": 49,
+        "p": 8
+      },
+      "predicted_full_construction": {
+        "matvec_calls": 61,
+        "matvec_columns": 8004,
+        "rmatvec_calls": 52,
+        "rmatvec_columns": 2964
+      },
+      "records": [
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.03024643706354908,
+          "core_vs_projection_error_ratio": 2.393333108967255,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.030104480229154157,
+              "component0": 0.30109433532489105
+            },
+            "column_projection": {
+              "all": 0.009797870419249554,
+              "component0": 0.10030373666588308
+            },
+            "exact_sample_same_bases": {
+              "all": 0.030104480229154157,
+              "component0": 0.30109433532489105
+            },
+            "optimal_rank_k": {
+              "all": 0.005548173500579596,
+              "component0": 0.055439241175003644
+            },
+            "reconstructed": {
+              "all": 0.030104480229154157,
+              "component0": 0.30109433532489105
+            },
+            "row_projection": {
+              "all": 0.009848205121499391,
+              "component0": 0.09720762367006608
+            },
+            "two_sided_projection": {
+              "all": 0.012578474812536444,
+              "component0": 0.1268472254464911
+            }
+          },
+          "left_sketch_condition": 20.30958896675422,
+          "level": 2,
+          "rank": 49,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 21.64890176172366,
+          "seed": 11,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "49": 0.0011954432339163754,
+            "50": 0.0011718194158098804,
+            "99": 0.0004561194985993051
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02068873926668383,
+          "core_vs_projection_error_ratio": 2.326794817605301,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.005062485028720136,
+              "component0": 1.6476443899092506
+            },
+            "column_projection": {
+              "all": 0.0015467726971668194,
+              "component0": 1.0981235687962039
+            },
+            "exact_sample_same_bases": {
+              "all": 0.005062485028720136,
+              "component0": 1.6476443899092506
+            },
+            "optimal_rank_k": {
+              "all": 0.0005833757715333221,
+              "component0": 0.4785516544165483
+            },
+            "reconstructed": {
+              "all": 0.005062485028720136,
+              "component0": 1.6476443899092506
+            },
+            "row_projection": {
+              "all": 0.001651824347708202,
+              "component0": 0.49062219640383037
+            },
+            "two_sided_projection": {
+              "all": 0.0021757333265553526,
+              "component0": 1.1178551918476967
+            }
+          },
+          "left_sketch_condition": 22.327823841062884,
+          "level": 2,
+          "rank": 49,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 17.304386463863793,
+          "seed": 11,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "49": 0.0003675097535228393,
+            "50": 0.0003391788980967754,
+            "99": 2.839113600004121e-05
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.08947513144824774,
+          "core_vs_projection_error_ratio": 2.1322424618863507,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.014618068655294114,
+              "component0": 0.5428087521769249
+            },
+            "column_projection": {
+              "all": 0.005466039427455314,
+              "component0": 0.2078680414919336
+            },
+            "exact_sample_same_bases": {
+              "all": 0.014618068655294114,
+              "component0": 0.5428087521769249
+            },
+            "optimal_rank_k": {
+              "all": 0.003358617555874975,
+              "component0": 0.1235631778248406
+            },
+            "reconstructed": {
+              "all": 0.014618068655294114,
+              "component0": 0.5428087521769249
+            },
+            "row_projection": {
+              "all": 0.005456852933605453,
+              "component0": 0.2001169866794409
+            },
+            "two_sided_projection": {
+              "all": 0.006855725329830366,
+              "component0": 0.2562933690946808
+            }
+          },
+          "left_sketch_condition": 18.457866163192325,
+          "level": 3,
+          "rank": 49,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 17.022708185555082,
+          "seed": 11,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "49": 0.0006338702576932879,
+            "50": 0.0006227530822232439,
+            "99": 0.0002845163077649393
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 1.586251321253681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "column_projection": {
+              "all": 7.863525584620147e-16,
+              "component0": 1.2794478779136903e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "row_projection": {
+              "all": 4.922533611150259e-16,
+              "component0": 3.924921175174141e-16
+            },
+            "two_sided_projection": {
+              "all": 1.0883489901983863e-15,
+              "component0": 1.2794447679405913e-11
+            }
+          },
+          "left_sketch_condition": 3.370707449697146,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.112639745139096,
+          "seed": 11,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.03024643706354908,
+          "core_vs_projection_error_ratio": 2.20242397144738,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.027400826619296357,
+              "component0": 0.27740467374652733
+            },
+            "column_projection": {
+              "all": 0.009794795993462037,
+              "component0": 0.09774917822322395
+            },
+            "exact_sample_same_bases": {
+              "all": 0.027400826619296357,
+              "component0": 0.27740467374652733
+            },
+            "optimal_rank_k": {
+              "all": 0.005548173500579596,
+              "component0": 0.055439241175003644
+            },
+            "reconstructed": {
+              "all": 0.027400826619296357,
+              "component0": 0.27740467374652733
+            },
+            "row_projection": {
+              "all": 0.00970231061350583,
+              "component0": 0.09441715258647213
+            },
+            "two_sided_projection": {
+              "all": 0.012441213396932469,
+              "component0": 0.12228927459547734
+            }
+          },
+          "left_sketch_condition": 21.60337730865036,
+          "level": 2,
+          "rank": 49,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 16.640324577532443,
+          "seed": 23,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "49": 0.0011954432339163754,
+            "50": 0.0011718194158098804,
+            "99": 0.0004561194985993051
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02068873926668383,
+          "core_vs_projection_error_ratio": 2.5267203559040086,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.004562248471101256,
+              "component0": 2.0890948010399737
+            },
+            "column_projection": {
+              "all": 0.0013363210104205506,
+              "component0": 1.021425851709747
+            },
+            "exact_sample_same_bases": {
+              "all": 0.004562248471101256,
+              "component0": 2.0890948010399737
+            },
+            "optimal_rank_k": {
+              "all": 0.0005833757715333221,
+              "component0": 0.4785516544165483
+            },
+            "reconstructed": {
+              "all": 0.004562248471101256,
+              "component0": 2.0890948010399737
+            },
+            "row_projection": {
+              "all": 0.0013449754548521078,
+              "component0": 0.547438806359989
+            },
+            "two_sided_projection": {
+              "all": 0.0018056008693011763,
+              "component0": 1.0680218761663343
+            }
+          },
+          "left_sketch_condition": 17.017428486303046,
+          "level": 2,
+          "rank": 49,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 23.65464898036766,
+          "seed": 23,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "49": 0.0003675097535228393,
+            "50": 0.0003391788980967754,
+            "99": 2.839113600004121e-05
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.08947513144824774,
+          "core_vs_projection_error_ratio": 2.261178984474996,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.015444278453067886,
+              "component0": 0.5783939485537863
+            },
+            "column_projection": {
+              "all": 0.00544508331784149,
+              "component0": 0.2060307048699484
+            },
+            "exact_sample_same_bases": {
+              "all": 0.015444278453067886,
+              "component0": 0.5783939485537863
+            },
+            "optimal_rank_k": {
+              "all": 0.003358617555874975,
+              "component0": 0.1235631778248406
+            },
+            "reconstructed": {
+              "all": 0.015444278453067886,
+              "component0": 0.5783939485537863
+            },
+            "row_projection": {
+              "all": 0.005427057476743404,
+              "component0": 0.1995961461713366
+            },
+            "two_sided_projection": {
+              "all": 0.0068301883924742745,
+              "component0": 0.2545670363206628
+            }
+          },
+          "left_sketch_condition": 16.69891652632823,
+          "level": 3,
+          "rank": 49,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 15.632748969444416,
+          "seed": 23,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "49": 0.0006338702576932879,
+            "50": 0.0006227530822232439,
+            "99": 0.0002845163077649393
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 4.116325986273681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "column_projection": {
+              "all": 3.531570747050404e-16,
+              "component0": 6.705484743290043e-12
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "row_projection": {
+              "all": 3.254659651685282e-16,
+              "component0": 4.904973763563319e-16
+            },
+            "two_sided_projection": {
+              "all": 4.309733989808161e-16,
+              "component0": 6.705505724905222e-12
+            }
+          },
+          "left_sketch_condition": 3.326213597107864,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.820470011266452,
+          "seed": 23,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.03024643706354908,
+          "core_vs_projection_error_ratio": 3.037087052882402,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.03888077897862177,
+              "component0": 0.39105623877557655
+            },
+            "column_projection": {
+              "all": 0.009921728410125652,
+              "component0": 0.10080118546639488
+            },
+            "exact_sample_same_bases": {
+              "all": 0.03888077897862177,
+              "component0": 0.39105623877557655
+            },
+            "optimal_rank_k": {
+              "all": 0.005548173500579596,
+              "component0": 0.055439241175003644
+            },
+            "reconstructed": {
+              "all": 0.03888077897862177,
+              "component0": 0.39105623877557655
+            },
+            "row_projection": {
+              "all": 0.010065610879714084,
+              "component0": 0.10233014385968918
+            },
+            "two_sided_projection": {
+              "all": 0.012801996881097389,
+              "component0": 0.1301630993965209
+            }
+          },
+          "left_sketch_condition": 21.080712724384743,
+          "level": 2,
+          "rank": 49,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 53.78189329918328,
+          "seed": 37,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "49": 0.0011954432339163754,
+            "50": 0.0011718194158098804,
+            "99": 0.0004561194985993051
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02068873926668383,
+          "core_vs_projection_error_ratio": 2.2075234738230876,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.0042736943177463195,
+              "component0": 1.73519894271381
+            },
+            "column_projection": {
+              "all": 0.0014195097180670537,
+              "component0": 1.0093620846621674
+            },
+            "exact_sample_same_bases": {
+              "all": 0.0042736943177463195,
+              "component0": 1.73519894271381
+            },
+            "optimal_rank_k": {
+              "all": 0.0005833757715333221,
+              "component0": 0.4785516544165483
+            },
+            "reconstructed": {
+              "all": 0.0042736943177463195,
+              "component0": 1.73519894271381
+            },
+            "row_projection": {
+              "all": 0.0014466639046173736,
+              "component0": 0.5417586354617089
+            },
+            "two_sided_projection": {
+              "all": 0.0019359677794705144,
+              "component0": 1.0608694353697987
+            }
+          },
+          "left_sketch_condition": 23.08910727758963,
+          "level": 2,
+          "rank": 49,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 24.07567464846359,
+          "seed": 37,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "49": 0.0003675097535228393,
+            "50": 0.0003391788980967754,
+            "99": 2.839113600004121e-05
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.08947513144824774,
+          "core_vs_projection_error_ratio": 2.8418885674608267,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.019625379606691487,
+              "component0": 0.7365665020657153
+            },
+            "column_projection": {
+              "all": 0.005434679104354159,
+              "component0": 0.20488884114296665
+            },
+            "exact_sample_same_bases": {
+              "all": 0.019625379606691487,
+              "component0": 0.7365665020657153
+            },
+            "optimal_rank_k": {
+              "all": 0.003358617555874975,
+              "component0": 0.1235631778248406
+            },
+            "reconstructed": {
+              "all": 0.019625379606691487,
+              "component0": 0.7365665020657153
+            },
+            "row_projection": {
+              "all": 0.005540734693569786,
+              "component0": 0.20323943066873462
+            },
+            "two_sided_projection": {
+              "all": 0.0069057526855201045,
+              "component0": 0.2568545211232559
+            }
+          },
+          "left_sketch_condition": 31.177231329743883,
+          "level": 3,
+          "rank": 49,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 28.511188161900424,
+          "seed": 37,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "49": 0.0006338702576932879,
+            "50": 0.0006227530822232439,
+            "99": 0.0002845163077649393
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 2.537814026313845,
+          "errors": {
+            "clean_two_sample": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "column_projection": {
+              "all": 6.77794939138466e-16,
+              "component0": 1.933880776140279e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "row_projection": {
+              "all": 5.152308153225408e-16,
+              "component0": 4.906188390481397e-16
+            },
+            "two_sided_projection": {
+              "all": 8.968061737379771e-16,
+              "component0": 1.933888561241412e-11
+            }
+          },
+          "left_sketch_condition": 3.225648807512846,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.2199741625513796,
+          "seed": 37,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        }
+      ]
+    },
+    {
+      "all_worst": 0.06416091870773616,
+      "component_worst": 2.4429571754358,
+      "parameters": {
+        "k": 53,
+        "p": 4
+      },
+      "predicted_full_construction": {
+        "matvec_calls": 61,
+        "matvec_columns": 8004,
+        "rmatvec_calls": 52,
+        "rmatvec_columns": 2964
+      },
+      "records": [
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02788041449482403,
+          "core_vs_projection_error_ratio": 2.924657016866716,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.03479144905680788,
+              "component0": 0.34052039795367134
+            },
+            "column_projection": {
+              "all": 0.009268913575791609,
+              "component0": 0.09516706774011736
+            },
+            "exact_sample_same_bases": {
+              "all": 0.03479144905680788,
+              "component0": 0.34052039795367134
+            },
+            "optimal_rank_k": {
+              "all": 0.005158962349730944,
+              "component0": 0.051449194662080006
+            },
+            "reconstructed": {
+              "all": 0.03479144905680788,
+              "component0": 0.34052039795367134
+            },
+            "row_projection": {
+              "all": 0.009294883428553788,
+              "component0": 0.0914734545102369
+            },
+            "two_sided_projection": {
+              "all": 0.011895907402530617,
+              "component0": 0.11997470069821532
+            }
+          },
+          "left_sketch_condition": 30.30792095779575,
+          "level": 2,
+          "rank": 53,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 30.361540555840936,
+          "seed": 11,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "107": 0.0004160069992036646,
+            "53": 0.0010973465042469455,
+            "54": 0.001044343760206462
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.014730305399396711,
+          "core_vs_projection_error_ratio": 3.654309156733964,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.0066268966503115565,
+              "component0": 2.2571924489914266
+            },
+            "column_projection": {
+              "all": 0.0012403167225935915,
+              "component0": 0.9643640835914685
+            },
+            "exact_sample_same_bases": {
+              "all": 0.0066268966503115565,
+              "component0": 2.2571924489914266
+            },
+            "optimal_rank_k": {
+              "all": 0.0004499013375470757,
+              "component0": 0.3861880320144911
+            },
+            "reconstructed": {
+              "all": 0.0066268966503115565,
+              "component0": 2.2571924489914266
+            },
+            "row_projection": {
+              "all": 0.0014101958924893703,
+              "component0": 0.4411715903558338
+            },
+            "two_sided_projection": {
+              "all": 0.0018134471841551414,
+              "component0": 0.9906338160109623
+            }
+          },
+          "left_sketch_condition": 31.037019879097937,
+          "level": 2,
+          "rank": 53,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 44.803151691516106,
+          "seed": 11,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "107": 2.3404570601926845e-05,
+            "53": 0.00027175061462525246,
+            "54": 0.0002533162983183683
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.08278788626134048,
+          "core_vs_projection_error_ratio": 3.4997144525101174,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.023031473528773688,
+              "component0": 0.8426528571416048
+            },
+            "column_projection": {
+              "all": 0.005239733082955122,
+              "component0": 0.19740472206357107
+            },
+            "exact_sample_same_bases": {
+              "all": 0.023031473528773688,
+              "component0": 0.8426528571416048
+            },
+            "optimal_rank_k": {
+              "all": 0.00316791901027172,
+              "component0": 0.11588213172388465
+            },
+            "reconstructed": {
+              "all": 0.023031473528773688,
+              "component0": 0.8426528571416048
+            },
+            "row_projection": {
+              "all": 0.005215311580390695,
+              "component0": 0.19155501742144687
+            },
+            "two_sided_projection": {
+              "all": 0.006580957915653579,
+              "component0": 0.24491497158237324
+            }
+          },
+          "left_sketch_condition": 42.52170959775884,
+          "level": 3,
+          "rank": 53,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 32.572284697096165,
+          "seed": 11,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "107": 0.0002548830731780543,
+            "53": 0.0005929138641794826,
+            "54": 0.0005733831478012929
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 1.586251321253681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "column_projection": {
+              "all": 7.863525584620147e-16,
+              "component0": 1.2794478779136903e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "row_projection": {
+              "all": 4.922533611150259e-16,
+              "component0": 3.924921175174141e-16
+            },
+            "two_sided_projection": {
+              "all": 1.0883489901983863e-15,
+              "component0": 1.2794447679405913e-11
+            }
+          },
+          "left_sketch_condition": 3.370707449697146,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.112639745139096,
+          "seed": 11,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02788041449482403,
+          "core_vs_projection_error_ratio": 5.405399801961665,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.06324064005285837,
+              "component0": 0.6590833064787919
+            },
+            "column_projection": {
+              "all": 0.009197754442830108,
+              "component0": 0.09125661845292656
+            },
+            "exact_sample_same_bases": {
+              "all": 0.06324064005285837,
+              "component0": 0.6590833064787919
+            },
+            "optimal_rank_k": {
+              "all": 0.005158962349730944,
+              "component0": 0.051449194662080006
+            },
+            "reconstructed": {
+              "all": 0.06324064005285837,
+              "component0": 0.6590833064787919
+            },
+            "row_projection": {
+              "all": 0.009096846212086129,
+              "component0": 0.08892848164122294
+            },
+            "two_sided_projection": {
+              "all": 0.011699530537946113,
+              "component0": 0.11500957985426823
+            }
+          },
+          "left_sketch_condition": 47.19965280829857,
+          "level": 2,
+          "rank": 53,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 33.14665983630229,
+          "seed": 23,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "107": 0.0004160069992036646,
+            "53": 0.0010973465042469455,
+            "54": 0.001044343760206462
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.014730305399396711,
+          "core_vs_projection_error_ratio": 3.181811090843876,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.00484161808365402,
+              "component0": 2.4429571754358
+            },
+            "column_projection": {
+              "all": 0.001119568873169076,
+              "component0": 0.9794627415146047
+            },
+            "exact_sample_same_bases": {
+              "all": 0.00484161808365402,
+              "component0": 2.4429571754358
+            },
+            "optimal_rank_k": {
+              "all": 0.0004499013375470757,
+              "component0": 0.3861880320144911
+            },
+            "reconstructed": {
+              "all": 0.00484161808365402,
+              "component0": 2.4429571754358
+            },
+            "row_projection": {
+              "all": 0.001127478250294078,
+              "component0": 0.5085505718444963
+            },
+            "two_sided_projection": {
+              "all": 0.0015216547888674094,
+              "component0": 1.0293646463780406
+            }
+          },
+          "left_sketch_condition": 50.95501037941064,
+          "level": 2,
+          "rank": 53,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 46.41615623996324,
+          "seed": 23,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "107": 2.3404570601926845e-05,
+            "53": 0.00027175061462525246,
+            "54": 0.0002533162983183683
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.08278788626134048,
+          "core_vs_projection_error_ratio": 3.3921333008842103,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.022129438354956052,
+              "component0": 0.8018999679969288
+            },
+            "column_projection": {
+              "all": 0.005180314736815882,
+              "component0": 0.195544464923053
+            },
+            "exact_sample_same_bases": {
+              "all": 0.022129438354956052,
+              "component0": 0.8018999679969288
+            },
+            "optimal_rank_k": {
+              "all": 0.00316791901027172,
+              "component0": 0.11588213172388465
+            },
+            "reconstructed": {
+              "all": 0.022129438354956052,
+              "component0": 0.8018999679969288
+            },
+            "row_projection": {
+              "all": 0.005174338456580104,
+              "component0": 0.18980661558887857
+            },
+            "two_sided_projection": {
+              "all": 0.00652375257457827,
+              "component0": 0.24257192888657308
+            }
+          },
+          "left_sketch_condition": 44.03564152823198,
+          "level": 3,
+          "rank": 53,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 24.312830842431044,
+          "seed": 23,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "107": 0.0002548830731780543,
+            "53": 0.0005929138641794826,
+            "54": 0.0005733831478012929
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 4.116325986273681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "column_projection": {
+              "all": 3.531570747050404e-16,
+              "component0": 6.705484743290043e-12
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "row_projection": {
+              "all": 3.254659651685282e-16,
+              "component0": 4.904973763563319e-16
+            },
+            "two_sided_projection": {
+              "all": 4.309733989808161e-16,
+              "component0": 6.705505724905222e-12
+            }
+          },
+          "left_sketch_condition": 3.326213597107864,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.820470011266452,
+          "seed": 23,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02788041449482403,
+          "core_vs_projection_error_ratio": 5.266726862456061,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.06416091870773616,
+              "component0": 0.6812209048031763
+            },
+            "column_projection": {
+              "all": 0.009376811348591257,
+              "component0": 0.09515922364550392
+            },
+            "exact_sample_same_bases": {
+              "all": 0.06416091870773616,
+              "component0": 0.6812209048031763
+            },
+            "optimal_rank_k": {
+              "all": 0.005158962349730944,
+              "component0": 0.051449194662080006
+            },
+            "reconstructed": {
+              "all": 0.06416091870773616,
+              "component0": 0.6812209048031763
+            },
+            "row_projection": {
+              "all": 0.009572653397583515,
+              "component0": 0.09702567492638194
+            },
+            "two_sided_projection": {
+              "all": 0.01218231368045839,
+              "component0": 0.1236061527018714
+            }
+          },
+          "left_sketch_condition": 58.308322832495584,
+          "level": 2,
+          "rank": 53,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 84.83143283063994,
+          "seed": 37,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "107": 0.0004160069992036646,
+            "53": 0.0010973465042469455,
+            "54": 0.001044343760206462
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.014730305399396711,
+          "core_vs_projection_error_ratio": 3.0408912613182655,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.004879189668566941,
+              "component0": 1.896337462107658
+            },
+            "column_projection": {
+              "all": 0.0011817818159161044,
+              "component0": 0.9421685262055339
+            },
+            "exact_sample_same_bases": {
+              "all": 0.004879189668566941,
+              "component0": 1.896337462107658
+            },
+            "optimal_rank_k": {
+              "all": 0.0004499013375470757,
+              "component0": 0.3861880320144911
+            },
+            "reconstructed": {
+              "all": 0.004879189668566941,
+              "component0": 1.896337462107658
+            },
+            "row_projection": {
+              "all": 0.001184973592272746,
+              "component0": 0.44892014810608144
+            },
+            "two_sided_projection": {
+              "all": 0.001604526189618418,
+              "component0": 0.9794059113563189
+            }
+          },
+          "left_sketch_condition": 31.7018893414009,
+          "level": 2,
+          "rank": 53,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 29.968205255187645,
+          "seed": 37,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "107": 2.3404570601926845e-05,
+            "53": 0.00027175061462525246,
+            "54": 0.0002533162983183683
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.08278788626134048,
+          "core_vs_projection_error_ratio": 4.593337617085614,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.03026357896500009,
+              "component0": 1.1306840377894989
+            },
+            "column_projection": {
+              "all": 0.005204295038047351,
+              "component0": 0.19446378090716795
+            },
+            "exact_sample_same_bases": {
+              "all": 0.03026357896500009,
+              "component0": 1.1306840377894989
+            },
+            "optimal_rank_k": {
+              "all": 0.00316791901027172,
+              "component0": 0.11588213172388465
+            },
+            "reconstructed": {
+              "all": 0.03026357896500009,
+              "component0": 1.1306840377894989
+            },
+            "row_projection": {
+              "all": 0.005250771027179856,
+              "component0": 0.1923644061060779
+            },
+            "two_sided_projection": {
+              "all": 0.006588581438566617,
+              "component0": 0.2439702476984652
+            }
+          },
+          "left_sketch_condition": 34.6833316721518,
+          "level": 3,
+          "rank": 53,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 58.852093068155256,
+          "seed": 37,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "107": 0.0002548830731780543,
+            "53": 0.0005929138641794826,
+            "54": 0.0005733831478012929
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 2.537814026313845,
+          "errors": {
+            "clean_two_sample": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "column_projection": {
+              "all": 6.77794939138466e-16,
+              "component0": 1.933880776140279e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "row_projection": {
+              "all": 5.152308153225408e-16,
+              "component0": 4.906188390481397e-16
+            },
+            "two_sided_projection": {
+              "all": 8.968061737379771e-16,
+              "component0": 1.933888561241412e-11
+            }
+          },
+          "left_sketch_condition": 3.225648807512846,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.2199741625513796,
+          "seed": 37,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        }
+      ]
+    },
+    {
+      "all_worst": 0.12452117190084103,
+      "component_worst": 4.316748138714244,
+      "parameters": {
+        "k": 55,
+        "p": 2
+      },
+      "predicted_full_construction": {
+        "matvec_calls": 61,
+        "matvec_columns": 8004,
+        "rmatvec_calls": 52,
+        "rmatvec_columns": 2964
+      },
+      "records": [
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02675879550257847,
+          "core_vs_projection_error_ratio": 3.9760720588149874,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.04631868442249576,
+              "component0": 0.45961664680468317
+            },
+            "column_projection": {
+              "all": 0.00902259399689545,
+              "component0": 0.092656325077542
+            },
+            "exact_sample_same_bases": {
+              "all": 0.04631868442249576,
+              "component0": 0.45961664680468317
+            },
+            "optimal_rank_k": {
+              "all": 0.004993409501668432,
+              "component0": 0.049336067287082716
+            },
+            "reconstructed": {
+              "all": 0.04631868442249576,
+              "component0": 0.45961664680468317
+            },
+            "row_projection": {
+              "all": 0.009130302102030884,
+              "component0": 0.08955714934397255
+            },
+            "two_sided_projection": {
+              "all": 0.011649357390243172,
+              "component0": 0.11722159389043789
+            }
+          },
+          "left_sketch_condition": 41.75212049622284,
+          "level": 2,
+          "rank": 55,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 41.121805207335356,
+          "seed": 11,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "111": 0.0003904138719947876,
+            "55": 0.0009947491732400372,
+            "56": 0.0009897363726153875
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.01205258152445028,
+          "core_vs_projection_error_ratio": 3.921826630700442,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.006476569375530202,
+              "component0": 2.2120186120332077
+            },
+            "column_projection": {
+              "all": 0.0010979498465577002,
+              "component0": 0.8743711693532454
+            },
+            "exact_sample_same_bases": {
+              "all": 0.006476569375530202,
+              "component0": 2.2120186120332077
+            },
+            "optimal_rank_k": {
+              "all": 0.00039540647746238533,
+              "component0": 0.3487358405707703
+            },
+            "reconstructed": {
+              "all": 0.006476569375530202,
+              "component0": 2.2120186120332077
+            },
+            "row_projection": {
+              "all": 0.0013053832633740286,
+              "component0": 0.42292073435202965
+            },
+            "two_sided_projection": {
+              "all": 0.0016514165426974728,
+              "component0": 0.9085685220024471
+            }
+          },
+          "left_sketch_condition": 33.94824074293233,
+          "level": 2,
+          "rank": 55,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 94.10898657374635,
+          "seed": 11,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "111": 2.0256321203926477e-05,
+            "55": 0.00023945296127647048,
+            "56": 0.00021067875740641035
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.07974311531183291,
+          "core_vs_projection_error_ratio": 4.959070211761279,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.031894037510847274,
+              "component0": 1.231798161966971
+            },
+            "column_projection": {
+              "all": 0.005125287268912339,
+              "component0": 0.1927696275363819
+            },
+            "exact_sample_same_bases": {
+              "all": 0.031894037510847274,
+              "component0": 1.231798161966971
+            },
+            "optimal_rank_k": {
+              "all": 0.0030808280420510474,
+              "component0": 0.11295408656493622
+            },
+            "reconstructed": {
+              "all": 0.031894037510847274,
+              "component0": 1.231798161966971
+            },
+            "row_projection": {
+              "all": 0.005090524046417284,
+              "component0": 0.18685190015843145
+            },
+            "two_sided_projection": {
+              "all": 0.006431455121406657,
+              "component0": 0.23915600301316842
+            }
+          },
+          "left_sketch_condition": 69.78808449379352,
+          "level": 3,
+          "rank": 55,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 59.532574810915655,
+          "seed": 11,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "111": 0.00024431341541757606,
+            "55": 0.0005609586219061753,
+            "56": 0.0005547567038119008
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 1.586251321253681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "column_projection": {
+              "all": 7.863525584620147e-16,
+              "component0": 1.2794478779136903e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "row_projection": {
+              "all": 4.922533611150259e-16,
+              "component0": 3.924921175174141e-16
+            },
+            "two_sided_projection": {
+              "all": 1.0883489901983863e-15,
+              "component0": 1.2794447679405913e-11
+            }
+          },
+          "left_sketch_condition": 3.370707449697146,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.112639745139096,
+          "seed": 11,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02675879550257847,
+          "core_vs_projection_error_ratio": 7.018045576386257,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.08029898741508992,
+              "component0": 0.8201504923752293
+            },
+            "column_projection": {
+              "all": 0.008972937504768857,
+              "component0": 0.08934919231367745
+            },
+            "exact_sample_same_bases": {
+              "all": 0.08029898741508992,
+              "component0": 0.8201504923752293
+            },
+            "optimal_rank_k": {
+              "all": 0.004993409501668432,
+              "component0": 0.049336067287082716
+            },
+            "reconstructed": {
+              "all": 0.08029898741508992,
+              "component0": 0.8201504923752293
+            },
+            "row_projection": {
+              "all": 0.008884325334655165,
+              "component0": 0.08706381991361514
+            },
+            "two_sided_projection": {
+              "all": 0.011441787680215894,
+              "component0": 0.11290542298139408
+            }
+          },
+          "left_sketch_condition": 74.21757896340513,
+          "level": 2,
+          "rank": 55,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 61.4694142391711,
+          "seed": 23,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "111": 0.0003904138719947876,
+            "55": 0.0009947491732400372,
+            "56": 0.0009897363726153875
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.01205258152445028,
+          "core_vs_projection_error_ratio": 5.867268763638797,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.008377168867085347,
+              "component0": 4.316748138714244
+            },
+            "column_projection": {
+              "all": 0.0010636122008201407,
+              "component0": 0.9529593324124909
+            },
+            "exact_sample_same_bases": {
+              "all": 0.008377168867085347,
+              "component0": 4.316748138714244
+            },
+            "optimal_rank_k": {
+              "all": 0.00039540647746238533,
+              "component0": 0.3487358405707703
+            },
+            "reconstructed": {
+              "all": 0.008377168867085347,
+              "component0": 4.316748138714244
+            },
+            "row_projection": {
+              "all": 0.0010399004748163185,
+              "component0": 0.47598685148108844
+            },
+            "two_sided_projection": {
+              "all": 0.001427779978139257,
+              "component0": 0.9988564769221769
+            }
+          },
+          "left_sketch_condition": 60.476032441792725,
+          "level": 2,
+          "rank": 55,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 69.07127187748605,
+          "seed": 23,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "111": 2.0256321203926477e-05,
+            "55": 0.00023945296127647048,
+            "56": 0.00021067875740641035
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.07974311531183291,
+          "core_vs_projection_error_ratio": 6.717652779813132,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.04290109629962495,
+              "component0": 1.6522881540350285
+            },
+            "column_projection": {
+              "all": 0.0050693468479825685,
+              "component0": 0.19057468883622883
+            },
+            "exact_sample_same_bases": {
+              "all": 0.04290109629962495,
+              "component0": 1.6522881540350285
+            },
+            "optimal_rank_k": {
+              "all": 0.0030808280420510474,
+              "component0": 0.11295408656493622
+            },
+            "reconstructed": {
+              "all": 0.04290109629962495,
+              "component0": 1.6522881540350285
+            },
+            "row_projection": {
+              "all": 0.005056672429158873,
+              "component0": 0.18553629561250815
+            },
+            "two_sided_projection": {
+              "all": 0.006386322381612935,
+              "component0": 0.23710557967262264
+            }
+          },
+          "left_sketch_condition": 44.38426668130294,
+          "level": 3,
+          "rank": 55,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 160.56221265821713,
+          "seed": 23,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "111": 0.00024431341541757606,
+            "55": 0.0005609586219061753,
+            "56": 0.0005547567038119008
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 4.116325986273681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "column_projection": {
+              "all": 3.531570747050404e-16,
+              "component0": 6.705484743290043e-12
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "row_projection": {
+              "all": 3.254659651685282e-16,
+              "component0": 4.904973763563319e-16
+            },
+            "two_sided_projection": {
+              "all": 4.309733989808161e-16,
+              "component0": 6.705505724905222e-12
+            }
+          },
+          "left_sketch_condition": 3.326213597107864,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.820470011266452,
+          "seed": 23,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.02675879550257847,
+          "core_vs_projection_error_ratio": 10.52616332478109,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.12452117190084103,
+              "component0": 1.2287225732310316
+            },
+            "column_projection": {
+              "all": 0.009077078570920865,
+              "component0": 0.0914270081522435
+            },
+            "exact_sample_same_bases": {
+              "all": 0.12452117190084103,
+              "component0": 1.2287225732310316
+            },
+            "optimal_rank_k": {
+              "all": 0.004993409501668432,
+              "component0": 0.049336067287082716
+            },
+            "reconstructed": {
+              "all": 0.12452117190084103,
+              "component0": 1.2287225732310316
+            },
+            "row_projection": {
+              "all": 0.009313599220443307,
+              "component0": 0.09395821450543934
+            },
+            "two_sided_projection": {
+              "all": 0.011829682673428465,
+              "component0": 0.11924586268470476
+            }
+          },
+          "left_sketch_condition": 81.01874259854851,
+          "level": 2,
+          "rank": 55,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 91.30369326826182,
+          "seed": 37,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "111": 0.0003904138719947876,
+            "55": 0.0009947491732400372,
+            "56": 0.0009897363726153875
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.01205258152445028,
+          "core_vs_projection_error_ratio": 3.600093055304487,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.005393121102127711,
+              "component0": 2.111007928818582
+            },
+            "column_projection": {
+              "all": 0.0011127075523144978,
+              "component0": 0.9061851228519531
+            },
+            "exact_sample_same_bases": {
+              "all": 0.005393121102127711,
+              "component0": 2.111007928818582
+            },
+            "optimal_rank_k": {
+              "all": 0.00039540647746238533,
+              "component0": 0.3487358405707703
+            },
+            "reconstructed": {
+              "all": 0.005393121102127711,
+              "component0": 2.111007928818582
+            },
+            "row_projection": {
+              "all": 0.0010890964782557942,
+              "component0": 0.42821576866625444
+            },
+            "two_sided_projection": {
+              "all": 0.001498050472384685,
+              "component0": 0.9433513745390648
+            }
+          },
+          "left_sketch_condition": 41.35706734817865,
+          "level": 2,
+          "rank": 55,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 34.71877636658539,
+          "seed": 37,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "111": 2.0256321203926477e-05,
+            "55": 0.00023945296127647048,
+            "56": 0.00021067875740641035
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.07974311531183291,
+          "core_vs_projection_error_ratio": 6.683248757337025,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.043122799459062916,
+              "component0": 1.5537756410139545
+            },
+            "column_projection": {
+              "all": 0.005083050856829039,
+              "component0": 0.18834309395257717
+            },
+            "exact_sample_same_bases": {
+              "all": 0.043122799459062916,
+              "component0": 1.5537756410139545
+            },
+            "optimal_rank_k": {
+              "all": 0.0030808280420510474,
+              "component0": 0.11295408656493622
+            },
+            "reconstructed": {
+              "all": 0.043122799459062916,
+              "component0": 1.5537756410139545
+            },
+            "row_projection": {
+              "all": 0.005135720333508175,
+              "component0": 0.18822609620988234
+            },
+            "two_sided_projection": {
+              "all": 0.006452370849090678,
+              "component0": 0.2380596636021177
+            }
+          },
+          "left_sketch_condition": 74.96452803656962,
+          "level": 3,
+          "rank": 55,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 77.48960123578378,
+          "seed": 37,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "111": 0.00024431341541757606,
+            "55": 0.0005609586219061753,
+            "56": 0.0005547567038119008
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 2.537814026313845,
+          "errors": {
+            "clean_two_sample": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "column_projection": {
+              "all": 6.77794939138466e-16,
+              "component0": 1.933880776140279e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "row_projection": {
+              "all": 5.152308153225408e-16,
+              "component0": 4.906188390481397e-16
+            },
+            "two_sided_projection": {
+              "all": 8.968061737379771e-16,
+              "component0": 1.933888561241412e-11
+            }
+          },
+          "left_sketch_condition": 3.225648807512846,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.2199741625513796,
+          "seed": 37,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        }
+      ]
+    },
+    {
+      "all_worst": 0.29016492068163585,
+      "component_worst": 13.587587657355256,
+      "parameters": {
+        "k": 57,
+        "p": 0
+      },
+      "predicted_full_construction": {
+        "matvec_calls": 61,
+        "matvec_columns": 8004,
+        "rmatvec_calls": 52,
+        "rmatvec_columns": 2964
+      },
+      "records": [
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0256556928913952,
+          "core_vs_projection_error_ratio": 5.662903826193858,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.06446641990348892,
+              "component0": 0.6363844895180604
+            },
+            "column_projection": {
+              "all": 0.008751586859965842,
+              "component0": 0.08977101527114059
+            },
+            "exact_sample_same_bases": {
+              "all": 0.06446641990348892,
+              "component0": 0.6363844895180604
+            },
+            "optimal_rank_k": {
+              "all": 0.004834283462998276,
+              "component0": 0.047784898611956374
+            },
+            "reconstructed": {
+              "all": 0.06446641990348892,
+              "component0": 0.6363844895180604
+            },
+            "row_projection": {
+              "all": 0.008974269891037384,
+              "component0": 0.08811307915058683
+            },
+            "two_sided_projection": {
+              "all": 0.011383986357899703,
+              "component0": 0.11445511639309287
+            }
+          },
+          "left_sketch_condition": 86.07989081029469,
+          "level": 2,
+          "rank": 57,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 89.40700504589331,
+          "seed": 11,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "115": 0.0003727025454726146,
+            "57": 0.0009777042941142493,
+            "58": 0.0009507849466000996
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.00914041853153516,
+          "core_vs_projection_error_ratio": 4.556699548977535,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.0069854773477645935,
+              "component0": 2.6973465285363067
+            },
+            "column_projection": {
+              "all": 0.0010159500395173294,
+              "component0": 0.8529301119068802
+            },
+            "exact_sample_same_bases": {
+              "all": 0.0069854773477645935,
+              "component0": 2.6973465285363067
+            },
+            "optimal_rank_k": {
+              "all": 0.0003525847837730811,
+              "component0": 0.3059047786943591
+            },
+            "reconstructed": {
+              "all": 0.0069854773477645935,
+              "component0": 2.6973465285363067
+            },
+            "row_projection": {
+              "all": 0.0012116929806618142,
+              "component0": 0.3859568986349469
+            },
+            "two_sided_projection": {
+              "all": 0.0015330124957069083,
+              "component0": 0.8802157032013593
+            }
+          },
+          "left_sketch_condition": 94.94799615085616,
+          "level": 2,
+          "rank": 57,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 119.26188569725306,
+          "seed": 11,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "115": 1.702948284855907e-05,
+            "57": 0.00020025391712939628,
+            "58": 0.00018333679417106925
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.07682190604080917,
+          "core_vs_projection_error_ratio": 6.055979303878459,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.03830889786490848,
+              "component0": 1.4388269332007326
+            },
+            "column_projection": {
+              "all": 0.005021116446013432,
+              "component0": 0.18920597052858712
+            },
+            "exact_sample_same_bases": {
+              "all": 0.03830889786490848,
+              "component0": 1.4388269332007326
+            },
+            "optimal_rank_k": {
+              "all": 0.0029965529977862703,
+              "component0": 0.1100384442849494
+            },
+            "reconstructed": {
+              "all": 0.03830889786490848,
+              "component0": 1.4388269332007326
+            },
+            "row_projection": {
+              "all": 0.00500462182612401,
+              "component0": 0.1835522271785687
+            },
+            "two_sided_projection": {
+              "all": 0.006325797355412713,
+              "component0": 0.23534452906704806
+            }
+          },
+          "left_sketch_condition": 84.73889039332325,
+          "level": 3,
+          "rank": 57,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 84.65775204394828,
+          "seed": 11,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "115": 0.00023505301451460302,
+            "57": 0.0005457178914104441,
+            "58": 0.0005389406944962432
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 1.586251321253681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "column_projection": {
+              "all": 7.863525584620147e-16,
+              "component0": 1.2794478779136903e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7263950236872999e-15,
+              "component0": 3.619349071512982e-11
+            },
+            "row_projection": {
+              "all": 4.922533611150259e-16,
+              "component0": 3.924921175174141e-16
+            },
+            "two_sided_projection": {
+              "all": 1.0883489901983863e-15,
+              "component0": 1.2794447679405913e-11
+            }
+          },
+          "left_sketch_condition": 3.370707449697146,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.112639745139096,
+          "seed": 11,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0256556928913952,
+          "core_vs_projection_error_ratio": 10.174871966206998,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.1135619765224028,
+              "component0": 1.145561691907741
+            },
+            "column_projection": {
+              "all": 0.008755680541036995,
+              "component0": 0.08748790349301824
+            },
+            "exact_sample_same_bases": {
+              "all": 0.1135619765224028,
+              "component0": 1.145561691907741
+            },
+            "optimal_rank_k": {
+              "all": 0.004834283462998276,
+              "component0": 0.047784898611956374
+            },
+            "reconstructed": {
+              "all": 0.1135619765224028,
+              "component0": 1.145561691907741
+            },
+            "row_projection": {
+              "all": 0.008653664643366137,
+              "component0": 0.08485877102920196
+            },
+            "two_sided_projection": {
+              "all": 0.011161022654591355,
+              "component0": 0.11034599188081944
+            }
+          },
+          "left_sketch_condition": 169.16835924659028,
+          "level": 2,
+          "rank": 57,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 166.28482726799825,
+          "seed": 23,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "115": 0.0003727025454726146,
+            "57": 0.0009777042941142493,
+            "58": 0.0009507849466000996
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.00914041853153516,
+          "core_vs_projection_error_ratio": 13.308155482249523,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.01778479014006024,
+              "component0": 8.95763631167225
+            },
+            "column_projection": {
+              "all": 0.0009902099375947335,
+              "component0": 0.9119857651289798
+            },
+            "exact_sample_same_bases": {
+              "all": 0.01778479014006024,
+              "component0": 8.95763631167225
+            },
+            "optimal_rank_k": {
+              "all": 0.0003525847837730811,
+              "component0": 0.3059047786943591
+            },
+            "reconstructed": {
+              "all": 0.01778479014006024,
+              "component0": 8.95763631167225
+            },
+            "row_projection": {
+              "all": 0.0009750900421022788,
+              "component0": 0.45599972592857557
+            },
+            "two_sided_projection": {
+              "all": 0.0013363828040468622,
+              "component0": 0.9602387036630824
+            }
+          },
+          "left_sketch_condition": 330.07510387395104,
+          "level": 2,
+          "rank": 57,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 284.60977511629847,
+          "seed": 23,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "115": 1.702948284855907e-05,
+            "57": 0.00020025391712939628,
+            "58": 0.00018333679417106925
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.07682190604080917,
+          "core_vs_projection_error_ratio": 31.296639561824062,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.1959760481754288,
+              "component0": 7.271859598839733
+            },
+            "column_projection": {
+              "all": 0.0049720157245902175,
+              "component0": 0.18685924171895196
+            },
+            "exact_sample_same_bases": {
+              "all": 0.1959760481754288,
+              "component0": 7.271859598839733
+            },
+            "optimal_rank_k": {
+              "all": 0.0029965529977862703,
+              "component0": 0.1100384442849494
+            },
+            "reconstructed": {
+              "all": 0.1959760481754288,
+              "component0": 7.271859598839733
+            },
+            "row_projection": {
+              "all": 0.004946326704444251,
+              "component0": 0.18262146001766616
+            },
+            "two_sided_projection": {
+              "all": 0.006261887886982034,
+              "component0": 0.23325360444207896
+            }
+          },
+          "left_sketch_condition": 508.22180899300287,
+          "level": 3,
+          "rank": 57,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 434.7500910916109,
+          "seed": 23,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "115": 0.00023505301451460302,
+            "57": 0.0005457178914104441,
+            "58": 0.0005389406944962432
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 4.116325986273681,
+          "errors": {
+            "clean_two_sample": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "column_projection": {
+              "all": 3.531570747050404e-16,
+              "component0": 6.705484743290043e-12
+            },
+            "exact_sample_same_bases": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 1.7740270016174284e-15,
+              "component0": 3.719815014540633e-11
+            },
+            "row_projection": {
+              "all": 3.254659651685282e-16,
+              "component0": 4.904973763563319e-16
+            },
+            "two_sided_projection": {
+              "all": 4.309733989808161e-16,
+              "component0": 6.705505724905222e-12
+            }
+          },
+          "left_sketch_condition": 3.326213597107864,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.820470011266452,
+          "seed": 23,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        },
+        {
+          "alpha": [
+            0,
+            2
+          ],
+          "beta": [
+            2,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0256556928913952,
+          "core_vs_projection_error_ratio": 24.953600773460384,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.29016492068163585,
+              "component0": 2.822558574287021
+            },
+            "column_projection": {
+              "all": 0.008935155644828514,
+              "component0": 0.08957438755924875
+            },
+            "exact_sample_same_bases": {
+              "all": 0.29016492068163585,
+              "component0": 2.822558574287021
+            },
+            "optimal_rank_k": {
+              "all": 0.004834283462998276,
+              "component0": 0.047784898611956374
+            },
+            "reconstructed": {
+              "all": 0.29016492068163585,
+              "component0": 2.822558574287021
+            },
+            "row_projection": {
+              "all": 0.009121792026524245,
+              "component0": 0.09180833442385515
+            },
+            "two_sided_projection": {
+              "all": 0.01162817836655635,
+              "component0": 0.11676775436432597
+            }
+          },
+          "left_sketch_condition": 428.26653338146633,
+          "level": 2,
+          "rank": 57,
+          "reference_frobenius": {
+            "all": 4.029432968135936,
+            "component0": 0.26593278410785476
+          },
+          "right_sketch_condition": 559.391512041361,
+          "seed": 37,
+          "shape": [
+            615,
+            1914
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "115": 0.0003727025454726146,
+            "57": 0.0009777042941142493,
+            "58": 0.0009507849466000996
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.00914041853153516,
+          "core_vs_projection_error_ratio": 26.60766275950662,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.03739496549017191,
+              "component0": 13.587587657355256
+            },
+            "column_projection": {
+              "all": 0.0010513841388365753,
+              "component0": 0.8589852653345853
+            },
+            "exact_sample_same_bases": {
+              "all": 0.03739496549017191,
+              "component0": 13.587587657355256
+            },
+            "optimal_rank_k": {
+              "all": 0.0003525847837730811,
+              "component0": 0.3059047786943591
+            },
+            "reconstructed": {
+              "all": 0.03739496549017191,
+              "component0": 13.587587657355256
+            },
+            "row_projection": {
+              "all": 0.0010050958793804525,
+              "component0": 0.4076708733225699
+            },
+            "two_sided_projection": {
+              "all": 0.0014054209055551529,
+              "component0": 0.8989828684910889
+            }
+          },
+          "left_sketch_condition": 548.9314804277914,
+          "level": 2,
+          "rank": 57,
+          "reference_frobenius": {
+            "all": 31.046897493492196,
+            "component0": 0.020041219573003567
+          },
+          "right_sketch_condition": 460.9860114161043,
+          "seed": 37,
+          "shape": [
+            186,
+            410
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "115": 1.702948284855907e-05,
+            "57": 0.00020025391712939628,
+            "58": 0.00018333679417106925
+          }
+        },
+        {
+          "alpha": [
+            2,
+            4
+          ],
+          "beta": [
+            5,
+            4
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.07682190604080917,
+          "core_vs_projection_error_ratio": 34.91676907738344,
+          "errors": {
+            "clean_two_sample": {
+              "all": 0.2211483497613122,
+              "component0": 7.594116305242606
+            },
+            "column_projection": {
+              "all": 0.004972715620057547,
+              "component0": 0.18371722365972942
+            },
+            "exact_sample_same_bases": {
+              "all": 0.2211483497613122,
+              "component0": 7.594116305242606
+            },
+            "optimal_rank_k": {
+              "all": 0.0029965529977862703,
+              "component0": 0.1100384442849494
+            },
+            "reconstructed": {
+              "all": 0.2211483497613122,
+              "component0": 7.594116305242606
+            },
+            "row_projection": {
+              "all": 0.005049859807880756,
+              "component0": 0.1852406098147612
+            },
+            "two_sided_projection": {
+              "all": 0.006333585712675693,
+              "component0": 0.2336163479345435
+            }
+          },
+          "left_sketch_condition": 661.084678375217,
+          "level": 3,
+          "rank": 57,
+          "reference_frobenius": {
+            "all": 3.124069999775832,
+            "component0": 0.058652579814746614
+          },
+          "right_sketch_condition": 781.2735445620672,
+          "seed": 37,
+          "shape": [
+            840,
+            550
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "115": 0.00023505301451460302,
+            "57": 0.0005457178914104441,
+            "58": 0.0005389406944962432
+          }
+        },
+        {
+          "alpha": [
+            0,
+            0
+          ],
+          "beta": [
+            0,
+            2
+          ],
+          "column_sample_contamination": 0.0,
+          "component0_singular_tail": 0.0,
+          "core_vs_projection_error_ratio": 2.537814026313845,
+          "errors": {
+            "clean_two_sample": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "column_projection": {
+              "all": 6.77794939138466e-16,
+              "component0": 1.933880776140279e-11
+            },
+            "exact_sample_same_bases": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "optimal_rank_k": {
+              "all": 1.3672228375507715e-15,
+              "component0": 8.820726936796289e-12
+            },
+            "reconstructed": {
+              "all": 2.275927286597089e-15,
+              "component0": 5.7878671359252295e-11
+            },
+            "row_projection": {
+              "all": 5.152308153225408e-16,
+              "component0": 4.906188390481397e-16
+            },
+            "two_sided_projection": {
+              "all": 8.968061737379771e-16,
+              "component0": 1.933888561241412e-11
+            }
+          },
+          "left_sketch_condition": 3.225648807512846,
+          "level": 3,
+          "rank": 20,
+          "reference_frobenius": {
+            "all": 895.6324468510103,
+            "component0": 0.010817379626250815
+          },
+          "right_sketch_condition": 3.2199741625513796,
+          "seed": 37,
+          "shape": [
+            21,
+            20
+          ],
+          "singular_value_ratios": {
+            "1": 1.0,
+            "20": 2.3037052835193567e-08
+          }
+        }
+      ]
+    }
+  ],
+  "source": {
+    "coordinates": {
+      "mtime_ns": 1782151856000000000,
+      "path": "real_gfs/gf_bp7/bp7_fbf_coords.csv",
+      "size": 790115
+    },
+    "matrix": {
+      "mtime_ns": 1781936014000000000,
+      "path": "real_gfs/gf_bp7/gf_mat.bin",
+      "size": 2193935064
+    }
+  }
+}

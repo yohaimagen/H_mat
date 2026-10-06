@@ -6,8 +6,9 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from benchmarks.diagnose import block_diagnostics
+from benchmarks.diagnose import block_diagnostics, diagnostic_provenance
 from benchmarks.full import main, measure_seed, prepare
+from benchmarks.screen import select_promotions
 
 from gfcompress.geometry import FaultMesh
 from gfcompress.mockgf import MockGF
@@ -92,3 +93,40 @@ def test_cli_rejects_over_budget_before_preparing_operator(tmp_path, monkeypatch
     )
     with pytest.raises(ValueError, match="strictly below n_cols"):
         main()
+
+
+def test_diagnostic_provenance_tracks_revision_coordinates_and_helpers(tmp_path, monkeypatch):
+    import hashlib
+
+    from benchmarks.diagnose import main as diagnose_main
+
+    coordinate = tmp_path / "coords.csv"
+    coordinate.write_text("coordinate fixture")
+    config = Path("benchmarks/configs/bp7_full_fixed.json")
+    result = diagnostic_provenance("explicit-revision", config, coordinate, coordinate)
+    assert result["provenance"]["revision_supplied_by_orchestrator"] == "explicit-revision"
+    assert result["source"]["coordinates"]["size"] == coordinate.stat().st_size
+    for helper in ["benchmarks/c10.py", "benchmarks/full.py"]:
+        assert (
+            result["provenance"]["source_sha256"][helper]
+            == hashlib.sha256(Path(helper).read_bytes()).hexdigest()
+        )
+    monkeypatch.setattr("sys.argv", ["diagnose", "--run"])
+    with pytest.raises(SystemExit):
+        diagnose_main()
+
+
+def test_screen_promotion_rule_is_bounded_and_requires_both_metrics():
+    policy = {"component_worst_ratio_max": 0.5, "all_worst_ratio_max": 1.0, "maximum_promotions": 2}
+    results = [
+        {"parameters": {"k": k}, "component_worst": comp, "all_worst": whole}
+        for k, comp, whole in [
+            (47, 2.0, 1.0),
+            (41, 0.9, 0.9),
+            (44, 0.8, 1.1),
+            (49, 1.1, 0.8),
+            (53, 0.7, 1.0),
+            (55, 0.95, 0.8),
+        ]
+    ]
+    assert select_promotions(results, policy) == [{"k": 53}, {"k": 41}]

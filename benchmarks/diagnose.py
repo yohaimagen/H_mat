@@ -80,14 +80,38 @@ def block_diagnostics(a, u, v, y, ga, gb, dof: int) -> dict[str, Any]:
     }
 
 
+def diagnostic_provenance(
+    revision: str, config: Path, matrix: Path, coordinates: Path
+) -> dict[str, Any]:
+    """Identify the supplied revision, measured inputs, and executed helpers."""
+    return {
+        "provenance": {
+            "revision_supplied_by_orchestrator": revision,
+            "command": [sys.executable, *sys.argv],
+            "source_sha256": {
+                str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in [
+                    Path(__file__),
+                    Path("benchmarks/c10.py"),
+                    Path("benchmarks/full.py"),
+                    config,
+                    *sorted(Path("src/gfcompress").glob("*.py")),
+                ]
+            },
+        },
+        "source": {"matrix": _file_identity(matrix), "coordinates": _file_identity(coordinates)},
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", action="store_true")
+    parser.add_argument("--revision", required=True, help="orchestrator-supplied source revision")
     parser.add_argument(
         "--config", type=Path, default=Path("benchmarks/configs/bp7_full_fixed.json")
     )
     parser.add_argument(
-        "--output", type=Path, default=Path("benchmarks/results/bp7_block_diagnostics.json")
+        "--output", type=Path, default=Path("benchmarks/results/bp7_block_diagnostics_v2.json")
     )
     args = parser.parse_args()
     if not args.run:
@@ -97,17 +121,18 @@ def main() -> None:
             raise ValueError(f"{name}=1 is required")
     config = _load_config("bp7", args.config)
     parameters = config["selection"]["primary"]
-    source = RealGF(
-        "real_gfs/gf_bp7/gf_mat.bin", next(Path("real_gfs/gf_bp7").glob("*_fbf_coords.csv"))
-    )
+    matrix = Path("real_gfs/gf_bp7/gf_mat.bin")
+    coordinates = next(Path("real_gfs/gf_bp7").glob("*_fbf_coords.csv"))
+    source = RealGF(matrix, coordinates)
     root = build_tree(source.mesh, parameters["m"])
     lists = build_lists(root)
     k, p = parameters["k"], parameters["p"]
     predicted = predict_fixed_products(root, source.mesh, k, p, ProductCounts(0, 0, 0, 0))
-    assert (
+    if (
         predicted.total_budget.matvec_columns + predicted.total_budget.rmatvec_columns
-        < source.shape[1]
-    )
+        >= source.shape[1]
+    ):
+        raise ValueError("predicted construction columns must be strictly below n_cols")
     prepare(source)
     records, factors = [], []
     for level in range(2, len(list(root.iter_levels()))):
@@ -143,20 +168,8 @@ def main() -> None:
     write_report(
         args.output,
         {
-            "provenance": {
-                "revision_supplied_by_orchestrator": "eaba6dc",
-                "command": [sys.executable, *sys.argv],
-                "source_sha256": {
-                    str(path): hashlib.sha256(path.read_bytes()).hexdigest()
-                    for path in [
-                        Path(__file__),
-                        args.config,
-                        *sorted(Path("src/gfcompress").glob("*.py")),
-                    ]
-                },
-            },
+            **diagnostic_provenance(args.revision, args.config, matrix, coordinates),
             "environment": environment(),
-            "source": _file_identity(Path("real_gfs/gf_bp7/gf_mat.bin")),
             "config": config,
             "construction_seed": 11,
             "selection": "largest scalar-area and first interaction pair per level",

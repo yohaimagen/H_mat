@@ -225,3 +225,75 @@ reported 56 files unchanged; `.venv/bin/mypy` found no issues in 21 source files
 The three new reports' recorded source/config hashes, both full candidates'
 seed/start completeness, and predicted/observed counts were independently
 checked against the saved files.
+
+## Correction round 2: provenance repair and finite screening
+
+The original `bp7_block_diagnostics.json` is preserved unchanged. Its hard-coded
+revision label, absent coordinate identity, and missing benchmark-helper hashes
+limit its provenance. A fresh rerun is saved separately as
+[bp7_block_diagnostics_v2.json](results/bp7_block_diagnostics_v2.json). It requires
+an explicit `--revision fb9646b`, records both matrix and coordinate file
+identities, and hashes the executed diagnostic, `benchmarks/c10.py`,
+`benchmarks/full.py`, production sources, and exact configuration. The numerical
+block records reproduce the historical diagnostic; metadata was not silently
+patched into the old measurement.
+
+Before screening, [bp7_screen.json](configs/bp7_screen.json) declared six remaining
+splits at `m=512`, `k+p=57`: `(41,16)`, `(44,13)`, `(49,8)`, `(53,4)`, `(55,2)`,
+and `(57,0)`, with incumbent `(47,10)` as comparator. Each uses construction
+seeds 11/23/37 and the same four deterministic representative blocks. The screen
+uses clean block-only Gaussian sketches matching the production fixed schedules;
+it excludes peeling contamination and is not full validation. It evaluates 84
+block/seed/configuration combinations without preparing a full native dense
+operator. Every configuration's predicted full construction cost is 10,968
+columns, below 11,040.
+
+The predeclared promotion rule required at least a twofold reduction in worst
+representative component-0 reconstruction error, with no worsening of worst
+whole-block reconstruction error; at most two candidates could be promoted.
+This was a decision rule for allocating full runs, not a new accuracy tolerance:
+the incumbent still misses full component and input thresholds by factors of
+about 5.1 and 16.3. The raw worst errors across all three seeds and four blocks
+are shown below; they are Frobenius-relative block errors.
+
+| `(k,p)` | Worst component-0 error | Worst whole-block error |
+|---|---:|---:|
+| `(47,10)`, incumbent | 1.609005 | 0.029232 |
+| `(41,16)` | 1.959434 | 0.025303 |
+| `(44,13)` | 1.944188 | 0.026350 |
+| `(49,8)` | 2.089095 | 0.038881 |
+| `(53,4)` | 2.442957 | 0.064161 |
+| `(55,2)` | 4.316748 | 0.124521 |
+| `(57,0)` | 13.587588 | 0.290165 |
+
+No candidate improves the worst component error at all, so none meets the
+promotion rule. More oversampling improves the worst whole-block error slightly
+but sacrifices component quality; reducing oversampling progressively amplifies
+both errors. The complete [screen report](results/bp7_screen.json) includes
+singular tails, projections, reconstructions, sketch conditioning, exact source
+hashes, and all seeds. No new full runs were promoted, no frozen threshold was
+changed, and no previously failing baseline was relabelled. The evidence applies
+to this finite set and these representatives, not every possible fixed
+configuration. **The BP7 accuracy gate remains unresolved.**
+
+With `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1`, commands
+ran serially:
+
+```sh
+.venv/bin/python -m benchmarks.diagnose --revision fb9646b --run
+.venv/bin/python -m benchmarks.screen --revision fb9646b --run
+```
+
+The screen report hashes its own runner in addition to the shared provenance
+sources. Memory checks again recorded zero throttled pages and unchanged
+swap-outs (2,810,527). The screening run did not increase the observed cumulative
+page-out counter (301,606). Historical records retain their original provenance;
+the new records identify the corrected execution explicitly.
+
+Correction-round validation: focused C.11 contracts passed 7 tests in 0.37 s.
+The serial `.venv/bin/pytest -q -o addopts=''` run passed **406 tests in
+101.68 s**; `.venv/bin/ruff check .` passed; `.venv/bin/black --check .`
+reported 57 files unchanged; `.venv/bin/mypy` found no issues in 21 source
+files. Both new reports' hashes and coordinate provenance were verified,
+all 84 screen combinations and their budgets were checked, and the v2
+diagnostic's numerical records match the historical record exactly.

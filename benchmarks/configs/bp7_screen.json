@@ -1,0 +1,22 @@
+{
+  "m": 512,
+  "width": 57,
+  "construction_seeds": [11, 23, 37],
+  "incumbent": {"k": 47, "p": 10},
+  "candidates": [
+    {"k": 41, "p": 16},
+    {"k": 44, "p": 13},
+    {"k": 49, "p": 8},
+    {"k": 53, "p": 4},
+    {"k": 55, "p": 2},
+    {"k": 57, "p": 0}
+  ],
+  "selection": "largest scalar-area and first interaction pair at each level, matching the prior diagnostic",
+  "screen": "clean block-only Gaussian sketches matching the fixed schedule, excluding peeling contamination; all three construction seeds",
+  "promotion": {
+    "component_worst_ratio_max": 0.5,
+    "all_worst_ratio_max": 1.0,
+    "maximum_promotions": 2,
+    "reason": "Require a material (at least twofold) reduction of worst representative component error without worsening worst full-block error; rank candidates by component error. Incumbent full validation misses component by 5.1x and input by 16.3x. This is a screening rule, not an acceptance threshold or proof of infeasibility."
+  }
+}

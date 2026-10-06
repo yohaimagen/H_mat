@@ -88,7 +88,7 @@ C.11 correction diagnostics are explicitly opt-in:
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
-  .venv/bin/python -m benchmarks.diagnose --run
+  .venv/bin/python -m benchmarks.diagnose --revision <source-revision> --run
 ```
 
 This serial BP7 diagnostic selects the largest and first interaction pair at
@@ -100,3 +100,21 @@ they do not replace any frozen operator-wide check. No dense reference block
 is exposed to the compressor. The full runner now rejects a configuration
 whose predicted combined construction columns are not strictly below `n_cols`
 before preparing the native operator or constructing factors.
+
+The corrected diagnostic requires an explicit revision and records matrix and
+coordinate identities plus hashes for its imported benchmark helpers. Its
+default output is `bp7_block_diagnostics_v2.json`; the original diagnostic
+record is retained with its historical, incomplete provenance.
+
+The finite correction-round screen is declared in `configs/bp7_screen.json`:
+
+```sh
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
+  .venv/bin/python -m benchmarks.screen --revision <source-revision> --run
+```
+
+It compares the same four bounded blocks across all three construction seeds,
+using clean block-only sketches from the fixed schedules. It excludes peeling
+and full validation; its predeclared promotion rule is a screening decision,
+not a replacement for any frozen threshold. It reads bounded reference blocks
+without preparing a native copy of the entire dense operator.
