@@ -297,3 +297,49 @@ reported 57 files unchanged; `.venv/bin/mypy` found no issues in 21 source
 files. Both new reports' hashes and coordinate provenance were verified,
 all 84 screen combinations and their budgets were checked, and the v2
 diagnostic's numerical records match the historical record exactly.
+
+## Correction round 3: alternative leaf-size screen
+
+This final bounded action keeps the frozen accuracy thresholds and equations
+unchanged. Before measurement, the screen declared three alternative leaf
+sizes and required each one to use the largest sketch width whose predicted
+combined forward-plus-transpose construction count is strictly below BP7's
+11,040 input columns. Based on the previous full runs, which gave better weak-
+component error to the oversampling-heavy `(37,20)` split than to `(51,6)`, and
+on the `m=512` screen, which worsened below `p=10`, the declared splits retain
+about 30% of their smaller widths for oversampling: `(m,k,p)=(8,17,6)`,
+`(16,23,10)`, and `(128,37,16)`. This rationale was stored in the configuration
+before the run.
+
+The same deterministic largest-area and first interaction pair per level was
+selected independently for each candidate tree, subject to the existing
+eight-million-entry block limit, and each was screened with seeds 11, 23, and
+37. The clean block-only screen remains a local Frobenius diagnostic, not a
+replacement for frozen full-operator validation. The incumbent remains
+`(512,47,10)`.
+
+| `(m,k,p)` | Width | Combined predicted construction columns | Representative records | Worst component-0 error | Worst whole-block error |
+|---|---:|---:|---:|---:|---:|
+| `(512,47,10)`, incumbent | 57 | 10,968 | 12 | 1.609005 | 0.029232 |
+| `(8,17,6)` | 23 | 10,816 | 42 | 2.840119 | 0.220433 |
+| `(16,23,10)` | 33 | 10,830 | 30 | 2.518317 | 0.091848 |
+| `(128,37,16)` | 53 | 11,020 | 18 | 1.684613 | 0.028393 |
+
+All candidates meet the strict construction-count bound and are verified to be
+at their maximum feasible widths: raising the width by one reaches or exceeds
+11,040. None reduces the incumbent's worst component-0 error, much less by the
+required factor of two. The `m=128` candidate modestly improves whole-block
+error but has worse component error; the two smaller leaf sizes worsen both.
+The promotion list is therefore empty. No full BP7 run was authorized, no
+threshold changed, and no coloring/C.12 work was started. This is a precise
+blocker for these three declared candidates and representatives, not an
+infeasibility claim about every fixed configuration.
+
+The run used `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+VECLIB_MAXIMUM_THREADS=1` and was serial. A post-run `vm_stat` check reported
+zero throttled pages; the bounded reference blocks avoid full native-reference
+preparation. Focused C.11 tests passed 9 tests, and the serialized full suite
+passed 408 tests in 108.16 s; `ruff`, Black check, and mypy also passed. The
+complete machine-readable evidence is in
+[bp7_screen.json](results/bp7_screen.json), including exact source/config
+hashes and every representative record.

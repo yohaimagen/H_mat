@@ -35,6 +35,21 @@ def select_promotions(results, policy):
     ]
 
 
+def construction_budget(root, mesh, width: int):
+    """Return the combined fixed construction count at one sketch width."""
+    budget = predict_fixed_products(root, mesh, width, 0, ProductCounts(0, 0, 0, 0))
+    return budget, budget.total_budget.matvec_columns + budget.total_budget.rmatvec_columns
+
+
+def assert_maximum_feasible_width(root, mesh, width: int, n_cols: int):
+    """Require the declared width to be the last one under the strict budget."""
+    budget, columns = construction_budget(root, mesh, width)
+    _, next_columns = construction_budget(root, mesh, width + 1)
+    if columns >= n_cols or next_columns < n_cols:
+        raise ValueError("screen width must be the maximum strictly feasible construction width")
+    return budget
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", action="store_true")
@@ -51,26 +66,37 @@ def main():
     matrix = Path("real_gfs/gf_bp7/gf_mat.bin")
     coordinates = next(Path("real_gfs/gf_bp7").glob("*_fbf_coords.csv"))
     source = RealGF(matrix, coordinates)
-    root = build_tree(source.mesh, plan["m"])
-    lists = build_lists(root)
-    blocks = []
-    for level in range(2, len(list(root.iter_levels()))):
-        pairs = [(a, b) for a in root.nodes_at_level(level) for b in lists.interaction[a]]
-        selected = sorted(
-            pairs, key=lambda pair: -len(pair[0].row_indices) * len(pair[1].col_indices)
-        )[:1]
-        if pairs and pairs[0] != selected[0]:
-            selected.append(pairs[0])
-        for a, b in selected:
-            if len(a.row_indices) * len(b.col_indices) > 8_000_000:
-                raise ValueError("diagnostic block exceeds eight-million-entry bound")
-            block = np.array(
-                source.mat[
-                    np.ix_(source.row_pm_to_raw[a.row_indices], source.col_pm_to_raw[b.col_indices])
-                ],
-                dtype=float,
-            )
-            blocks.append((level, a, b, block))
+
+    def selected_blocks(root, lists):
+        blocks = []
+        for level in range(2, len(list(root.iter_levels()))):
+            pairs = [(a, b) for a in root.nodes_at_level(level) for b in lists.interaction[a]]
+            selected = sorted(
+                pairs, key=lambda pair: -len(pair[0].row_indices) * len(pair[1].col_indices)
+            )[:1]
+            if pairs and pairs[0] != selected[0]:
+                selected.append(pairs[0])
+            for a, b in selected:
+                if len(a.row_indices) * len(b.col_indices) > 8_000_000:
+                    raise ValueError("diagnostic block exceeds eight-million-entry bound")
+                blocks.append(
+                    (
+                        level,
+                        a,
+                        b,
+                        np.array(
+                            source.mat[
+                                np.ix_(
+                                    source.row_pm_to_raw[a.row_indices],
+                                    source.col_pm_to_raw[b.col_indices],
+                                )
+                            ],
+                            dtype=float,
+                        ),
+                    )
+                )
+        return blocks
+
     report = {
         **diagnostic_provenance(args.revision, args.plan, matrix, coordinates),
         "environment": environment(),
@@ -85,13 +111,13 @@ def main():
     ).hexdigest()
     for parameters in [plan["incumbent"], *plan["candidates"]]:
         k, p = parameters["k"], parameters["p"]
-        if k + p != plan["width"]:
-            raise ValueError("all candidates must use the predeclared width")
-        budget = predict_fixed_products(
-            root, source.mesh, k, p, ProductCounts(0, 0, 0, 0)
-        ).total_budget
-        if budget.matvec_columns + budget.rmatvec_columns >= source.shape[1]:
-            raise ValueError("predicted construction columns must be strictly below n_cols")
+        width = parameters["width"]
+        if k + p != width:
+            raise ValueError("candidate rank and oversampling must equal its declared width")
+        root = build_tree(source.mesh, parameters["m"])
+        lists = build_lists(root)
+        budget = assert_maximum_feasible_width(root, source.mesh, width, source.shape[1])
+        blocks = selected_blocks(root, lists)
         records = []
         for seed in plan["construction_seeds"]:
             for level, a, b, block in blocks:
@@ -115,7 +141,7 @@ def main():
                 )
         result = {
             "parameters": parameters,
-            "predicted_full_construction": asdict(budget),
+            "predicted_full_construction": asdict(budget.total_budget),
             "records": records,
             "component_worst": max(r["errors"]["reconstructed"]["component0"] for r in records),
             "all_worst": max(r["errors"]["reconstructed"]["all"] for r in records),

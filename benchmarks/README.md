@@ -113,8 +113,11 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
   .venv/bin/python -m benchmarks.screen --revision <source-revision> --run
 ```
 
-It compares the same four bounded blocks across all three construction seeds,
-using clean block-only sketches from the fixed schedules. It excludes peeling
-and full validation; its predeclared promotion rule is a screening decision,
-not a replacement for any frozen threshold. It reads bounded reference blocks
-without preparing a native copy of the entire dense operator.
+It compares deterministic largest/first bounded blocks at every level of each
+declared tree across all three construction seeds, using clean block-only
+sketches from the fixed schedules. Each declared width must be the largest whose
+predicted combined construction columns remain strictly below `n_cols`; it
+rejects a nonmaximum width before sampling. It excludes peeling and full
+validation; its predeclared promotion rule is a screening decision, not a
+replacement for any frozen threshold. It reads bounded reference blocks without
+preparing a native copy of the entire dense operator.

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import benchmarks.screen as screen
 import numpy as np
 import pytest
 from benchmarks.diagnose import block_diagnostics, diagnostic_provenance
@@ -117,7 +118,7 @@ def test_diagnostic_provenance_tracks_revision_coordinates_and_helpers(tmp_path,
 
 
 def test_screen_promotion_rule_is_bounded_and_requires_both_metrics():
-    policy = {"component_worst_ratio_max": 0.5, "all_worst_ratio_max": 1.0, "maximum_promotions": 2}
+    policy = {"component_worst_ratio_max": 0.5, "all_worst_ratio_max": 1.0, "maximum_promotions": 1}
     results = [
         {"parameters": {"k": k}, "component_worst": comp, "all_worst": whole}
         for k, comp, whole in [
@@ -129,4 +130,25 @@ def test_screen_promotion_rule_is_bounded_and_requires_both_metrics():
             (55, 0.95, 0.8),
         ]
     ]
-    assert select_promotions(results, policy) == [{"k": 53}, {"k": 41}]
+    assert select_promotions(results, policy) == [{"k": 53}]
+
+
+def test_screen_plan_declares_three_maximum_width_alternative_m_values():
+    plan = json.loads(Path("benchmarks/configs/bp7_screen.json").read_text())
+    assert len(plan["candidates"]) == 3
+    assert all(candidate["m"] != plan["incumbent"]["m"] for candidate in plan["candidates"])
+    assert all(
+        candidate["k"] + candidate["p"] == candidate["width"] for candidate in plan["candidates"]
+    )
+    assert plan["promotion"]["maximum_promotions"] == 1
+
+
+def test_screen_rejects_a_nonmaximum_declared_width(monkeypatch):
+    monkeypatch.setattr(
+        screen,
+        "construction_budget",
+        lambda _root, _mesh, width: (width, {6: 9, 7: 10, 8: 11}[width]),
+    )
+    assert screen.assert_maximum_feasible_width(None, None, 7, 11) == 7
+    with pytest.raises(ValueError, match="maximum strictly feasible"):
+        screen.assert_maximum_feasible_width(None, None, 6, 11)
