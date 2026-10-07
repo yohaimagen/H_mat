@@ -9,7 +9,13 @@ import numpy as np
 import pytest
 from benchmarks.diagnose import block_diagnostics, diagnostic_provenance
 from benchmarks.full import main, measure_seed, prepare
-from benchmarks.remediate import ComponentScaledOperator, inverse_scaled, screen_block
+from benchmarks.remediate import (
+    ComponentScaledOperator,
+    component_scales_from_blocks,
+    compose_raw_maps,
+    inverse_scaled,
+    screen_block,
+)
 from benchmarks.screen import select_promotions
 
 from gfcompress.geometry import FaultMesh
@@ -175,17 +181,41 @@ def test_remediation_screen_reports_all_rectangular_component_errors():
     result = screen_block(
         block,
         rank=3,
-        width=5,
+        width=9,
         seed=11,
         dr=np.ones(12),
         dc=np.ones(8),
         dof_row=3,
         dof_col=2,
     )
+    assert result["rank"] == 3
+    assert result["width"] == 9
     for error in (result["projection_errors"], result["reconstruction_errors"]):
         assert set(error["output"]) == {"0", "1", "2"}
         assert set(error["input"]) == {"0", "1"}
         assert error["worst_component"] >= error["all"]
+
+
+def test_subset_maps_compose_patch_major_indices_with_source_raw_permutations():
+    source = SimpleNamespace(
+        row_pm_to_raw=np.array([4, 0, 5, 1, 6, 2]),
+        col_pm_to_raw=np.array([3, 0, 4, 1]),
+    )
+    rows, cols = compose_raw_maps(source, np.array([5, 0, 2]), np.array([3, 0]))
+    np.testing.assert_array_equal(rows, [2, 4, 5])
+    np.testing.assert_array_equal(cols, [1, 3])
+
+
+def test_oracle_input_scale_uses_output_scaled_blocks():
+    block = np.array([[1.0, 8.0], [2.0, 4.0], [3.0, 2.0], [4.0, 1.0]])
+    dr, dc = component_scales_from_blocks([block], dof_row=2, dof_col=2)
+    row_energy = np.array([np.linalg.norm(block[0::2]) ** 2, np.linalg.norm(block[1::2]) ** 2])
+    expected_dr = np.exp(np.mean(np.log(np.sqrt(row_energy)))) / np.sqrt(row_energy)
+    scaled = np.tile(expected_dr, 2)[:, None] * block
+    col_energy = np.array([np.linalg.norm(scaled[:, 0]) ** 2, np.linalg.norm(scaled[:, 1]) ** 2])
+    expected_dc = np.sqrt(col_energy) / np.exp(np.mean(np.log(np.sqrt(col_energy))))
+    np.testing.assert_allclose(dr, expected_dr)
+    np.testing.assert_allclose(dc, expected_dc)
 
 
 def test_remediation_plan_predeclares_bounded_strata_calibration_and_gate():

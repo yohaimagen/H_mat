@@ -344,7 +344,13 @@ complete machine-readable evidence is in
 [bp7_screen.json](results/bp7_screen.json), including exact source/config
 hashes and every representative record.
 
-## Correction round 4: component-scaled and per-level-rank remediation screen
+## Correction round 4: component-scaled and per-level-rank remediation screen (superseded)
+
+**Superseded by correction round 5 below.** The preserved
+`bp7_remediation.json` record used subset patch-major indices directly against
+the raw matrix and incorrectly clamped requested sketch widths on small blocks.
+It is retained as an invalidated failed measurement, not evidence for any
+conclusion.
 
 This bounded study asks whether BP7's weak component can be recovered by
 changing coordinates rather than by relaxing the frozen accuracy target. It
@@ -391,3 +397,44 @@ conditions. **No full BP7 run was authorized or performed; no thresholds,
 production equations, or coloring work changed.** The compact structured
 record is [bp7_remediation.json](results/bp7_remediation.json), with
 [the declared plan](configs/bp7_remediation.json).
+
+## Correction round 5: repaired component-remediation screen
+
+The bounded study was rerun from the same declared strata, seeds, policies,
+and 11,040-column gate after three accounting repairs. Subset indices now pass
+through the source patch-major-to-raw permutations before touching the
+reference matrix. Small blocks retain the production sketch width `k+p`, while
+only their effective rank is clamped. Finally, the oracle input scale is
+measured after applying the oracle output scale, exactly as the black-box probe
+calibration does. The original JSON remains available only as an explicitly
+invalidated failed record; this [v2 record](results/bp7_remediation_v2.json)
+contains the repaired data and exact hashes.
+
+The full-tree component conclusions are unchanged. Four scalar-area quantiles
+at each of levels 2 and 3 give eight bounded reference blocks; the repaired
+subset selection now reconstructs to numerical precision because every sampled
+block's effective rank is capped by its small dimension. That makes the subset
+non-discriminating here, rather than evidence that a full BP7 hierarchy would
+pass. This screen still separates an operator-compatible black-box scale from
+the stratified entry-based oracle scale, and it does not alter production code.
+
+| Full-tree policy / scale | Worst component reconstruction error | Worst whole-block reconstruction error | Complete predicted columns |
+|---|---:|---:|---:|
+| Incumbent `(47,10)` on both levels / identity | 1.91766 | 0.012356 | 10,972 |
+| Incumbent / black-box RMS component scale | 2.96386 | 2.83925 | 10,972 |
+| Incumbent / output-then-input oracle RMS scale | 1.56733 | 0.36020 | 10,972 |
+| Coarse-priority: L2 `(60,10)`, L3 `(42,10)` / black-box scale | 6.36758 | 5.20957 | 11,028 |
+| Fine-priority: L2 `(35,10)`, L3 `(53,10)` / black-box scale | 2.61994 | 2.48777 | 11,020 |
+
+All totals uniformly include 5,040 leaf-forward columns plus the same four
+calibration columns (two forward and two transpose), even for oracle rows, so
+the table is an apples-to-apples construction budget. The predeclared
+fine-priority black-box promotion still requires component error at most 0.08,
+whole-block proxy at most 0.029231984, and fewer than 11,040 columns. It fails
+both accuracy conditions. **No full BP7 run was authorized or performed.**
+
+The rerun used `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+VECLIB_MAXIMUM_THREADS=1` serially; `vm_stat` showed zero throttled pages both
+before and after. The focused C.11 tests passed 14 tests, and the full
+non-opt-in suite passed 413 tests in 101.02 seconds; ruff, Black, and mypy
+also passed.

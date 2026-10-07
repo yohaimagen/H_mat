@@ -86,9 +86,11 @@ def component_scales_from_blocks(
     for block in blocks:
         for component in range(dof_row):
             row_energy[component] += np.linalg.norm(block[component::dof_row]) ** 2
-        for component in range(dof_col):
-            col_energy[component] += np.linalg.norm(block[:, component::dof_col]) ** 2
     dr_component = np.exp(np.mean(np.log(np.sqrt(row_energy)))) / np.sqrt(row_energy)
+    for block in blocks:
+        scaled = _expanded(dr_component, block.shape[0])[:, None] * block
+        for component in range(dof_col):
+            col_energy[component] += np.linalg.norm(scaled[:, component::dof_col]) ** 2
     dc_component = np.sqrt(col_energy) / np.exp(np.mean(np.log(np.sqrt(col_energy))))
     return dr_component, dc_component
 
@@ -170,7 +172,6 @@ def screen_block(
 ) -> dict[str, Any]:
     """Use clean two-sided sketches, reporting errors after inverse scaling."""
     rank = min(rank, *a.shape)
-    width = min(width, *a.shape)
     scaled = dr[:, None] * a / dc[None, :]
     rng = np.random.default_rng(seed)
     gb = rng.standard_normal((a.shape[1], width))
@@ -272,6 +273,13 @@ def _block_array(
     )
 
 
+def compose_raw_maps(
+    source: RealGF, row_map: np.ndarray, col_map: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Map a subset's patch-major indices through the source's raw ordering."""
+    return source.row_pm_to_raw[row_map], source.col_pm_to_raw[col_map]
+
+
 def _screen_records(
     blocks: list[dict[str, Any]],
     policies: list[dict[str, Any]],
@@ -360,7 +368,7 @@ def main() -> None:
         "--plan", type=Path, default=Path("benchmarks/configs/bp7_remediation.json")
     )
     parser.add_argument(
-        "--output", type=Path, default=Path("benchmarks/results/bp7_remediation.json")
+        "--output", type=Path, default=Path("benchmarks/results/bp7_remediation_v2.json")
     )
     args = parser.parse_args()
     if not args.run:
@@ -418,7 +426,8 @@ def main() -> None:
         plan["strata"]["maximum_entries"],
     )
     for record in subset_strata:
-        record["array"] = _block_array(source, subset.row_map, subset.col_map, record)
+        row_map, col_map = compose_raw_maps(source, subset.row_map, subset.col_map)
+        record["array"] = _block_array(source, row_map, col_map, record)
     subset_scales = {"black_box_rms": scales["black_box_rms"]}
     subset_records = _screen_records(
         subset_strata,
