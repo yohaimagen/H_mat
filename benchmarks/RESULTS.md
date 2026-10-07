@@ -343,3 +343,51 @@ passed 408 tests in 108.16 s; `ruff`, Black check, and mypy also passed. The
 complete machine-readable evidence is in
 [bp7_screen.json](results/bp7_screen.json), including exact source/config
 hashes and every representative record.
+
+## Correction round 4: component-scaled and per-level-rank remediation screen
+
+This bounded study asks whether BP7's weak component can be recovered by
+changing coordinates rather than by relaxing the frozen accuracy target. It
+uses a diagonal component-scaled black-box operator, \(B=D_r A D_c^{-1}\), so
+any factorization of \(B\) can be mapped back to the physical ordering by
+\(A\approx D_r^{-1}\hat B D_c\). The operator wrapper itself only calls
+forward and transpose products. The block arrays, SVDs, and a scale fit from
+those arrays are explicitly diagnostic oracles, not compressor changes.
+
+Before measurement, the study fixed four deterministic scalar-area strata
+(5%, 35%, 65%, and 95%) at every BP7 admissible level, with a two-million-entry
+limit per block. This selected eight real blocks across levels 2 and 3, from
+21x52 through 2739x410; it is deliberately not the previous first/largest
+selection. Each record includes compact whole/output-component/input-component
+singular spectra plus projection and reconstruction errors for every three
+output and two input components. The standard 192-patch BP7 subset was also
+screened, but its selected blocks are essentially full rank at these widths
+(worst component error 1.52e-6), so it offers no discriminating evidence for
+the full hierarchy.
+
+| Full-tree policy / scale | Worst component reconstruction error | Worst whole-block reconstruction error | Complete predicted columns |
+|---|---:|---:|---:|
+| Incumbent `(47,10)` on both levels / identity | 1.91766 | 0.012356 | 10,972 |
+| Incumbent / black-box RMS component scale | 2.96386 | 2.83925 | 10,972 |
+| Incumbent / stratified-block oracle RMS scale | 1.65216 | 0.32464 | 10,968 |
+| Coarse-priority: L2 `(60,10)`, L3 `(42,10)` / black-box scale | 6.36758 | 5.20957 | 11,028 |
+| Fine-priority: L2 `(35,10)`, L3 `(53,10)` / black-box scale | 2.61994 | 2.48777 | 11,020 |
+
+The complete budget includes the 5,040 leaf forward columns, admissible
+forward and transpose products, and four calibration columns (two forward,
+two transpose). All candidates are strictly below 11,040. The black-box scale
+estimated with seed 911 strongly upweights output component 0
+(`D_r=(15178.04, 0.008105, 0.008129)`), but that harms both the shared
+subspace and whole-block reconstruction. The oracle block fit also fails, so
+this is not simply a calibration-noise problem. Per-level widths are compatible
+with the fixed periodic schedule but the public compressor presently accepts
+only one global `(k,p)`; block-specific oracle ranks would require a larger
+redesign.
+
+The predeclared promotion required the fine-priority black-box candidate to
+reach component error at most 0.08, not exceed the incumbent whole-block proxy
+of 0.029231984, and stay below the complete column budget. It fails both error
+conditions. **No full BP7 run was authorized or performed; no thresholds,
+production equations, or coloring work changed.** The compact structured
+record is [bp7_remediation.json](results/bp7_remediation.json), with
+[the declared plan](configs/bp7_remediation.json).

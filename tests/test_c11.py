@@ -9,10 +9,12 @@ import numpy as np
 import pytest
 from benchmarks.diagnose import block_diagnostics, diagnostic_provenance
 from benchmarks.full import main, measure_seed, prepare
+from benchmarks.remediate import ComponentScaledOperator, inverse_scaled, screen_block
 from benchmarks.screen import select_promotions
 
 from gfcompress.geometry import FaultMesh
 from gfcompress.mockgf import MockGF
+from gfcompress.operators import DenseOperator
 from gfcompress.randomized import orth
 
 
@@ -152,3 +154,48 @@ def test_screen_rejects_a_nonmaximum_declared_width(monkeypatch):
     assert screen.assert_maximum_feasible_width(None, None, 7, 11) == 7
     with pytest.raises(ValueError, match="maximum strictly feasible"):
         screen.assert_maximum_feasible_width(None, None, 6, 11)
+
+
+def test_component_scaled_operator_preserves_rectangular_black_box_products():
+    matrix = np.arange(24, dtype=float).reshape(6, 4) + 1
+    operator = DenseOperator(matrix)
+    dr = np.array([2.0, 3.0, 2.0, 3.0, 2.0, 3.0])
+    dc = np.array([5.0, 7.0, 5.0, 7.0])
+    scaled = ComponentScaledOperator(operator, dr, dc)
+    omega = np.arange(8, dtype=float).reshape(4, 2) + 1
+    psi = np.arange(12, dtype=float).reshape(6, 2) + 1
+    np.testing.assert_allclose(scaled.matvec(omega), (dr[:, None] * matrix / dc) @ omega)
+    np.testing.assert_allclose(scaled.rmatvec(psi), (dr[:, None] * matrix / dc).T @ psi)
+    np.testing.assert_allclose(inverse_scaled(dr[:, None] * matrix / dc, dr, dc), matrix)
+
+
+def test_remediation_screen_reports_all_rectangular_component_errors():
+    rng = np.random.default_rng(4)
+    block = rng.normal(size=(12, 8))
+    result = screen_block(
+        block,
+        rank=3,
+        width=5,
+        seed=11,
+        dr=np.ones(12),
+        dc=np.ones(8),
+        dof_row=3,
+        dof_col=2,
+    )
+    for error in (result["projection_errors"], result["reconstruction_errors"]):
+        assert set(error["output"]) == {"0", "1", "2"}
+        assert set(error["input"]) == {"0", "1"}
+        assert error["worst_component"] >= error["all"]
+
+
+def test_remediation_plan_predeclares_bounded_strata_calibration_and_gate():
+    plan = json.loads(Path("benchmarks/configs/bp7_remediation.json").read_text())
+    assert plan["strata"]["quantiles"] == [0.05, 0.35, 0.65, 0.95]
+    assert plan["strata"]["maximum_entries"] == 2_000_000
+    assert plan["black_box_scaling"]["total_columns"] == 4
+    assert plan["promotion"]["component_error_max"] == 0.08
+    assert {policy["name"] for policy in plan["adaptive_policies"]} == {
+        "incumbent",
+        "coarse_priority",
+        "fine_priority",
+    }
