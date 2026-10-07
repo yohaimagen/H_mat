@@ -1,0 +1,392 @@
+{
+  "config": {
+    "acceptance": {
+      "absolute_response_floor": 1,
+      "comparison_relative_slack": 0.1,
+      "component_response_error_max": 0.08,
+      "frozen": true,
+      "global_relative_error_max": 2e-05,
+      "input_response_error_max": 3e-06,
+      "leaves_only_improvement_min": 1000,
+      "reason": "Frozen from all 3 construction seeds x 2 independent validation starts on the C.7 192-patch subset. One adjoint component has a near-zero response (~0.17), so its error uses the measured absolute floor 1.0. The selected-block limit is response-relative for deterministic unit drives, so zero output is 1.0 and cannot pass; these are subset criteria, not full-baseline claims.",
+      "selected_block_output_error_max": 0.4
+    },
+    "configuration_history": [
+      {
+        "configuration": "benchmarks/configs/bp7_fixed.json",
+        "outcome": "All three construction seeds passed storage/count gates but failed frozen full-data accuracy checks.",
+        "report": "benchmarks/results/bp7_fixed_initial.json"
+      },
+      {
+        "configuration": "benchmarks/configs/bp7_full_fixed_attempt1.json",
+        "outcome": "m128 k40 p10 passed storage/count and selected-block checks but all three seeds failed other frozen accuracy checks.",
+        "report": "benchmarks/results/bp7_fixed_attempt1.json"
+      }
+    ],
+    "construction_seeds": [
+      11,
+      23,
+      37
+    ],
+    "dataset": "bp7",
+    "full_runs": "opt-in",
+    "sampling": "fixed",
+    "schema_version": 1,
+    "selection": {
+      "alternatives": [
+        {
+          "k": 4,
+          "m": 8,
+          "p": 2,
+          "reason": "lower storage/sample cost, but fails the genuinely truncated selected-block gate"
+        },
+        {
+          "k": 3,
+          "m": 8,
+          "p": 2,
+          "reason": "lower storage; weaker global and input margins"
+        }
+      ],
+      "locking_rule": "a primary requires a measured leaves-only improvement factor and all additional block/input checks",
+      "primary": {
+        "k": 47,
+        "m": 512,
+        "p": 10,
+        "reason": "C.11 second full-data revision: coarsen leaves to move finer interactions into dense storage and raise rank within the strict column budget (predicted 10968<11040); all frozen thresholds unchanged."
+      },
+      "required_measures": [
+        "global_error",
+        "selected_block_errors",
+        "component_index_group_errors",
+        "localized_smooth_errors",
+        "leaves_only_improvement",
+        "storage",
+        "sampled_columns",
+        "apply_cost"
+      ],
+      "rule": "retain every seed; never choose a favorable seed or subset"
+    },
+    "sweep": {
+      "k": [
+        3,
+        4,
+        6
+      ],
+      "m": [
+        8,
+        12
+      ],
+      "p": [
+        1,
+        2
+      ]
+    },
+    "validation": {
+      "absolute_response_floor": 1,
+      "power_iterations": 4,
+      "status": "unchanged C.10 frozen thresholds; C.11 full-data candidate"
+    },
+    "validation_seeds": [
+      101,
+      103
+    ]
+  },
+  "construction_seed": 11,
+  "environment": {
+    "numpy": "2.4.6",
+    "omp_num_threads": "1",
+    "openblas_num_threads": "1",
+    "platform": "macOS-26.7.1-arm64-arm-64bit",
+    "processor": "arm",
+    "python": "3.12.9"
+  },
+  "predicted_full_construction": {
+    "matvec_calls": 61,
+    "matvec_columns": 8004,
+    "rmatvec_calls": 52,
+    "rmatvec_columns": 2964
+  },
+  "provenance": {
+    "command": [
+      "/private/tmp/H_mat-c11/.venv/bin/python",
+      "/private/tmp/H_mat-c11/benchmarks/diagnose.py",
+      "--run"
+    ],
+    "revision_supplied_by_orchestrator": "eaba6dc",
+    "source_sha256": {
+      "/private/tmp/H_mat-c11/benchmarks/diagnose.py": "fd25e2c43f0e60ab88c46e58630c0c598ef23196da43c40a4fc2c1d6df499055",
+      "benchmarks/configs/bp7_full_fixed.json": "9be8ff21e05a96d7a1b68964ee5292fe2654c8366fdba2233907e6ef4efce25e",
+      "src/gfcompress/__init__.py": "d10e1160f66dbdcc9439dd9b2a2f359e638ca43d200931e1d99a12c9d68fbb15",
+      "src/gfcompress/benchmark.py": "fe21c9862bc7ce3a0ec82dc1d41bb73e6568a15099ae640669819687eb704d15",
+      "src/gfcompress/build_tree.py": "74f71df24cef87b7503913db7eeef2220e74f5047b7ee9c0b70cc76687e8c19c",
+      "src/gfcompress/column_basis.py": "358965b1a2af4ad411d15c60b7f168c1968abd74807ca4fc99c804ec29b5b5cb",
+      "src/gfcompress/compress.py": "1bc92e79a11c8cabdc5051f6c2ea44bef3e67a5880245c27fc41c4da652a7087",
+      "src/gfcompress/error.py": "38b446ee5b028e0c46bf0caac8c5b70575d34666797c742589c01ec5ee013aa0",
+      "src/gfcompress/fixed_pattern.py": "6b12d96c7d0a19479906169992c5210ef5e86988c86b52f57afff652d4cf2b0c",
+      "src/gfcompress/geometry.py": "ac23cca8ec154653e58d386e231691ae0cb319116844cae63fdf9dd529c8ba49",
+      "src/gfcompress/hmatrix.py": "13bbb58709d01ca12fc648b7c4c111050a54c9a0b711e5da138b8b084c6acb71",
+      "src/gfcompress/interactions.py": "e32e58fb11dc126c9f44f2ddd0d84fbfd2b056b89c92f50d52f5a429b17e125e",
+      "src/gfcompress/leaf.py": "3d2ad543be4151ea8c2896153f007abd85940fa9ebb81c16874c1612ea4beba2",
+      "src/gfcompress/mockgf.py": "a03ba13eed0f4611b12c86531254d0dfdb7f47fec739409910d8cbb123f3a8ed",
+      "src/gfcompress/neighbors.py": "12a8a9245b5358e236616fa5520bab242449cfe203d358cdfe7d0b0c5a55149f",
+      "src/gfcompress/operators.py": "83fb1cef8b838001e10e652b16da2054433abb4d48b91d03026e6ec677f1f7dc",
+      "src/gfcompress/peeling.py": "ef77fa3e681e972d14c535ae9d039b37ff8a6cc5d65621e9566a1ca1d1c818da",
+      "src/gfcompress/randomized.py": "1e3c4b4b48322f957ba52ef99b2e68d5396bfa898582474ad3b6db24552406ab",
+      "src/gfcompress/realgf.py": "2bfc5860172b1952ab30d47ca8b57b525fdec074642949f2fbeba7c9218bd882",
+      "src/gfcompress/row_basis.py": "1388444f94593a20fd87ea3c84a8ae2f0f26d4d99a330b5557bfcaf78c7d72e9",
+      "src/gfcompress/sampling.py": "def3091e7b4a97879163d11d9a9769635aad2035f2fae1b25e0ad38ab14457a2",
+      "src/gfcompress/study.py": "d21fde0158861e83bc91791154bf3ade05e3659a6635bd9242ed814168606c8d",
+      "src/gfcompress/tree.py": "438c355e44d03c2b51afb59af4b5e84a1a225a825c06c180efde6f7aa16fc4b4"
+    }
+  },
+  "records": [
+    {
+      "alpha": [
+        0,
+        2
+      ],
+      "beta": [
+        2,
+        2
+      ],
+      "column_sample_contamination": 1.211557100332898e-15,
+      "component0_singular_tail": 0.031585826291266994,
+      "core_vs_projection_error_ratio": 2.25877694425697,
+      "errors": {
+        "clean_two_sample": {
+          "all": 0.029231984038525255,
+          "component0": 0.28215119584246634
+        },
+        "column_projection": {
+          "all": 0.010160825518315715,
+          "component0": 0.10390826027168285
+        },
+        "exact_sample_same_bases": {
+          "all": 0.02923198403852475,
+          "component0": 0.28215119584246623
+        },
+        "optimal_rank_k": {
+          "all": 0.0057572958587840325,
+          "component0": 0.057799379183852084
+        },
+        "reconstructed": {
+          "all": 0.029231984038523895,
+          "component0": 0.28215119584246096
+        },
+        "row_projection": {
+          "all": 0.010096600521284915,
+          "component0": 0.09956087813308595
+        },
+        "two_sided_projection": {
+          "all": 0.012941509834712707,
+          "component0": 0.1302537084320657
+        }
+      },
+      "left_sketch_condition": 18.613852447881705,
+      "level": 2,
+      "rank": 47,
+      "reference_frobenius": {
+        "all": 4.029432968135936,
+        "component0": 0.26593278410785476
+      },
+      "right_sketch_condition": 16.224429509382382,
+      "shape": [
+        615,
+        1914
+      ],
+      "singular_value_ratios": {
+        "1": 1.0,
+        "47": 0.0012772598245984297,
+        "48": 0.0012235164876797141,
+        "95": 0.0004882605132237371
+      }
+    },
+    {
+      "alpha": [
+        0,
+        0
+      ],
+      "beta": [
+        0,
+        2
+      ],
+      "column_sample_contamination": 3.7083738602053595e-16,
+      "component0_singular_tail": 0.02406911334616403,
+      "core_vs_projection_error_ratio": 2.138652719685462,
+      "errors": {
+        "clean_two_sample": {
+          "all": 0.00501361117805182,
+          "component0": 1.478194249232926
+        },
+        "column_projection": {
+          "all": 0.0016655521170618195,
+          "component0": 1.144777525818579
+        },
+        "exact_sample_same_bases": {
+          "all": 0.005013611178050942,
+          "component0": 1.4781942492326974
+        },
+        "optimal_rank_k": {
+          "all": 0.0006700766375177052,
+          "component0": 0.5320174735316233
+        },
+        "reconstructed": {
+          "all": 0.00501361117805049,
+          "component0": 1.4781942492328277
+        },
+        "row_projection": {
+          "all": 0.0017869587763203862,
+          "component0": 0.5040252010396196
+        },
+        "two_sided_projection": {
+          "all": 0.002344284853684827,
+          "component0": 1.157084994213681
+        }
+      },
+      "left_sketch_condition": 19.864027728128388,
+      "level": 2,
+      "rank": 47,
+      "reference_frobenius": {
+        "all": 31.046897493492196,
+        "component0": 0.020041219573003567
+      },
+      "right_sketch_condition": 16.309342630591676,
+      "shape": [
+        186,
+        410
+      ],
+      "singular_value_ratios": {
+        "1": 1.0,
+        "47": 0.0004176108132869703,
+        "48": 0.00038934946830098674,
+        "95": 3.422419119054192e-05
+      }
+    },
+    {
+      "alpha": [
+        2,
+        4
+      ],
+      "beta": [
+        5,
+        4
+      ],
+      "column_sample_contamination": 8.57892617163648e-16,
+      "component0_singular_tail": 0.09323250618822479,
+      "core_vs_projection_error_ratio": 1.9940492679959834,
+      "errors": {
+        "clean_two_sample": {
+          "all": 0.013892525511238736,
+          "component0": 0.511608221352958
+        },
+        "column_projection": {
+          "all": 0.005558799914841025,
+          "component0": 0.2109611279041269
+        },
+        "exact_sample_same_bases": {
+          "all": 0.013892525511238134,
+          "component0": 0.5116082213529425
+        },
+        "optimal_rank_k": {
+          "all": 0.003461302570669768,
+          "component0": 0.1276404038800098
+        },
+        "reconstructed": {
+          "all": 0.013892525511238126,
+          "component0": 0.5116082213529394
+        },
+        "row_projection": {
+          "all": 0.005572880802567094,
+          "component0": 0.2047359756391427
+        },
+        "two_sided_projection": {
+          "all": 0.006966992107070701,
+          "component0": 0.2603378306146753
+        }
+      },
+      "left_sketch_condition": 17.696024976846726,
+      "level": 3,
+      "rank": 47,
+      "reference_frobenius": {
+        "all": 3.124069999775832,
+        "component0": 0.058652579814746614
+      },
+      "right_sketch_condition": 16.297122415260013,
+      "shape": [
+        840,
+        550
+      ],
+      "singular_value_ratios": {
+        "1": 1.0,
+        "47": 0.0006791973585443059,
+        "48": 0.0006528463255466196,
+        "95": 0.0003051153753763067
+      }
+    },
+    {
+      "alpha": [
+        0,
+        0
+      ],
+      "beta": [
+        0,
+        2
+      ],
+      "column_sample_contamination": 8.095610960749798e-07,
+      "component0_singular_tail": 0.0,
+      "core_vs_projection_error_ratio": 6.9107575616560055,
+      "errors": {
+        "clean_two_sample": {
+          "all": 1.7263950236872999e-15,
+          "component0": 3.619349071512982e-11
+        },
+        "column_projection": {
+          "all": 8.392272708666692e-08,
+          "component0": 0.006948439854038744
+        },
+        "exact_sample_same_bases": {
+          "all": 1.1953809380135586e-07,
+          "component0": 0.008002844167698244
+        },
+        "optimal_rank_k": {
+          "all": 1.3672228375507715e-15,
+          "component0": 8.820726936796289e-12
+        },
+        "reconstructed": {
+          "all": 5.799696208089804e-07,
+          "component0": 0.028820346118807485
+        },
+        "row_projection": {
+          "all": 4.484190572929442e-16,
+          "component0": 3.765973077268417e-16
+        },
+        "two_sided_projection": {
+          "all": 8.392272708666745e-08,
+          "component0": 0.006948439854038752
+        }
+      },
+      "left_sketch_condition": 3.549734465352765,
+      "level": 3,
+      "rank": 20,
+      "reference_frobenius": {
+        "all": 895.6324468510103,
+        "component0": 0.010817379626250815
+      },
+      "right_sketch_condition": 3.112639745139095,
+      "shape": [
+        21,
+        20
+      ],
+      "singular_value_ratios": {
+        "1": 1.0,
+        "20": 2.3037052835193567e-08
+      }
+    }
+  ],
+  "selection": "largest scalar-area and first interaction pair per level",
+  "source": {
+    "mtime_ns": 1781936014000000000,
+    "path": "real_gfs/gf_bp7/gf_mat.bin",
+    "size": 2193935064
+  }
+}
