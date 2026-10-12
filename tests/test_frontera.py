@@ -198,6 +198,10 @@ def test_tracked_correction_record_preserves_gate_and_timing_provenance() -> Non
     assert report["conditional_block_preflight"]["used_for_gate"] is False
     assert report["full_compression"]["status"] == "gated_not_run"
     assert report["derived_correction"]["streaming_timings_reused_without_full_matrix_rescan"]
+    assert (
+        report["derived_correction"]["original_measured_record_sha256"]
+        == "89696e68ed460d776fd302ad766d1bf0ff879aee0ac8674a3dcc866d1a5f32d8"
+    )
     assert "deliberately_pessimistic_linear_rhs_upper_seconds" in report["prediction"]
     peak = report["prediction"]["peak_memory_model"]
     assert "full, truncated, and subtraction-result" in peak["included_lifetimes"]

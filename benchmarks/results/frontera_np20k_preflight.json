@@ -218,7 +218,7 @@
   "derived_correction": {
     "round": 1,
     "date": "2026-10-12",
-    "original_measured_record_sha256": "2bed0850fdee67c107aa98734707d2757bdd7915ac3cc05704c9ad5b6d8f854f",
+    "original_measured_record_sha256": "89696e68ed460d776fd302ad766d1bf0ff879aee0ac8674a3dcc866d1a5f32d8",
     "streaming_timings_reused_without_full_matrix_rescan": true,
     "additional_matrix_io": "45 selected rows (14500800 bytes), only for expanded ordering hypotheses",
     "corrected_fields": [
