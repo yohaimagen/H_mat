@@ -103,11 +103,13 @@ def _read_values(
 
 
 class NativeDenseGF(MatVecOperator):
-    """Patch-major 3D elastostatic operator backed by a streamed checkpoint.
+    """Raw-file-order 3D operator backed by a streamed checkpoint.
 
-    The on-disk scalar order is used directly: three consecutive rows and two
-    consecutive columns belong to each coordinate.  That convention is
-    independently checked by the Frontera benchmark's spatial-decay test.
+    Products apply the stored matrix exactly and make no scalar permutation.
+    ``mesh`` is a conditional patch-major interpretation of the coordinates;
+    the Frontera preflight marks that physical mapping unresolved, so it must
+    not be used for production compression until writer metadata establishes
+    the row and column layouts.
     """
 
     def __init__(
@@ -131,6 +133,8 @@ class NativeDenseGF(MatVecOperator):
         self.header = read_native_dense_header(self.mat_path)
         self.dof_row = dimension
         self.dof_col = dimension - 1
+        self.basis_functions_per_element = basis_functions_per_element
+        self.ordering_status = "unresolved"
         if self.header.rows % self.dof_row or self.header.cols % self.dof_col:
             raise ValueError("matrix dimensions are not complete patch-major dof blocks")
         n_patches = self.header.rows // self.dof_row

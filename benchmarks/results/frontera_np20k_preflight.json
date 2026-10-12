@@ -1,11 +1,15 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "completed_preflight",
   "purpose": "bounded Frontera feasibility evidence; not a C.11 baseline",
   "environment": {
     "python": "3.12.9",
     "numpy": "2.4.6",
+    "scipy": "1.17.1",
     "platform": "macOS-26.7.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "logical_cpu_count": 11,
     "openblas_num_threads": "1",
     "omp_num_threads": "1",
     "veclib_maximum_threads": "1"
@@ -44,10 +48,10 @@
     }
   },
   "limitations": [
-    "patch-major ordering is measured evidence, not explicit row metadata",
-    "stratified blocks are bounded subsamples and do not certify global accuracy",
+    "physical row/column ordering is unresolved without authoritative writer metadata",
+    "conditional patch-major block spectra are not compression decision evidence",
     "no frozen Frontera operator-wide tolerance or validation plan exists",
-    "wall-time projections extrapolate width-3 products and are not full-run timings"
+    "the linear-RHS wall time is a deliberately pessimistic upper extrapolation"
   ],
   "header": {
     "comm_size": 224,
@@ -59,70 +63,59 @@
     "values_offset": 24
   },
   "coordinates": {
-    "shape": [
-      20140,
-      3
-    ],
-    "minimum": [
-      -200.00000000000006,
-      -7.584728526968992e-16,
-      -100.00000000000003
-    ],
-    "maximum": [
-      200.00000000000006,
-      1.2601191250172779e-14,
-      3.2984826991136984e-16
-    ],
+    "shape": [20140, 3],
+    "minimum": [-200.00000000000006, -7.584728526968992e-16, -100.00000000000003],
+    "maximum": [200.00000000000006, 1.2601191250172779e-14, 3.2984826991136984e-16],
     "unique": 19300,
-    "pca_variance_ratio": [
-      0.9424866376618872,
-      0.057513362338112786,
-      6.593597818796413e-36
-    ],
+    "pca_variance_ratio": [0.9424866376618872, 0.057513362338112786, 6.593597818796413e-36],
     "tree_dimension": 2,
-    "patch_length_quantiles": [
-      0.5662970770633976,
-      0.6896551724137963,
-      0.8935746892376757
-    ]
+    "patch_length_quantiles": [0.5662970770633976, 0.6896551724137963, 0.8935746892376757]
   },
   "ordering": {
-    "probes": [
-      {
-        "patch": 0,
-        "patch_major_spearman": -0.9575418980677524,
-        "component_major_null_spearman": 0.019128166547175515,
-        "same_location_strength_rank_zero_based": 3
+    "status": "unresolved",
+    "passes_gate": false,
+    "authoritative_writer_mapping_available": false,
+    "probe_patches": [0, 5034, 10069, 15104, 20139],
+    "hypotheses": {
+      "patch_major_rows__patch_major_cols": {
+        "median_spearman": -0.8707878182662286,
+        "same_location_rank_median_zero_based": 3.0
       },
-      {
-        "patch": 5034,
-        "patch_major_spearman": -0.8974399941218938,
-        "component_major_null_spearman": 0.06691696672659903,
-        "same_location_strength_rank_zero_based": 5
+      "patch_major_rows__element_blocked_cols": {
+        "median_spearman": -0.8894075024479784,
+        "same_location_rank_median_zero_based": 9.0
       },
-      {
-        "patch": 10069,
-        "patch_major_spearman": -0.8200778843084596,
-        "component_major_null_spearman": -0.07689427889475331,
-        "same_location_strength_rank_zero_based": 0
+      "patch_major_rows__global_component_cols": {
+        "median_spearman": -0.11687182193119065,
+        "same_location_rank_median_zero_based": 2823.0
       },
-      {
-        "patch": 15104,
-        "patch_major_spearman": -0.8707878182662286,
-        "component_major_null_spearman": -0.10293880849215083,
-        "same_location_strength_rank_zero_based": 5
+      "element_blocked_rows__patch_major_cols": {
+        "median_spearman": -0.8550539445906198,
+        "same_location_rank_median_zero_based": 1.0
       },
-      {
-        "patch": 20139,
-        "patch_major_spearman": -0.7341837459986754,
-        "component_major_null_spearman": -0.0286938763511096,
-        "same_location_strength_rank_zero_based": 0
+      "element_blocked_rows__element_blocked_cols": {
+        "median_spearman": -0.8469103686311876,
+        "same_location_rank_median_zero_based": 0.0
+      },
+      "element_blocked_rows__global_component_cols": {
+        "median_spearman": -0.12091907323987901,
+        "same_location_rank_median_zero_based": 1294.0
+      },
+      "global_component_rows__patch_major_cols": {
+        "median_spearman": -0.1730803966859904,
+        "same_location_rank_median_zero_based": 80.0
+      },
+      "global_component_rows__element_blocked_cols": {
+        "median_spearman": -0.12636515148326072,
+        "same_location_rank_median_zero_based": 165.0
+      },
+      "global_component_rows__global_component_cols": {
+        "median_spearman": -0.0286938763511096,
+        "same_location_rank_median_zero_based": 2968.0
       }
-    ],
-    "patch_major_median_spearman": -0.8707878182662286,
-    "component_major_null_median_spearman": -0.0286938763511096,
-    "passes_gate": true,
-    "interpretation": "negative correlation means block magnitude decays with coordinate distance; the component-major hypothesis is a falsification null"
+    },
+    "strongest_decay_hypothesis": "patch_major_rows__element_blocked_cols",
+    "reason": "spatial decay is not an identifying test: patch-major, per-element component-blocked, global component-major, and mixed hypotheses can all retain strong correlation; no authoritative local writer mapping was available"
   },
   "streaming": {
     "full_passes": 2,
@@ -140,89 +133,9 @@
   },
   "tree": {
     "depth": 4,
-    "occupied_boxes_by_level": [
-      1,
-      4,
-      8,
-      24,
-      80
-    ],
+    "occupied_boxes_by_level": [1, 4, 8, 24, 80],
     "leaf_patch_count_max": 356
   },
-  "block_preflight": [
-    {
-      "level": 2,
-      "stratum": "closest",
-      "separation_over_diameter": 0.7071067811865476,
-      "source_block_patch_shape": [2596, 2472],
-      "sample_patch_shape": [64, 64],
-      "shape": [192, 128],
-      "sigma_candidate_over_sigma_0": 3.6046749456589596e-05,
-      "rank_at_0.01": 5,
-      "rank_at_0.0001": 29,
-      "rank_at_1e-06": 120
-    },
-    {
-      "level": 2,
-      "stratum": "farthest",
-      "separation_over_diameter": 1.4142135623730951,
-      "source_block_patch_shape": [2556, 2550],
-      "sample_patch_shape": [64, 64],
-      "shape": [192, 128],
-      "sigma_candidate_over_sigma_0": 1.8124113510733698e-06,
-      "rank_at_0.01": 3,
-      "rank_at_0.0001": 9,
-      "rank_at_1e-06": 62
-    },
-    {
-      "level": 3,
-      "stratum": "closest",
-      "separation_over_diameter": 0.7071067811865475,
-      "source_block_patch_shape": [1343, 1259],
-      "sample_patch_shape": [64, 64],
-      "shape": [192, 128],
-      "sigma_candidate_over_sigma_0": 1.4187813734881793e-05,
-      "rank_at_0.01": 5,
-      "rank_at_0.0001": 23,
-      "rank_at_1e-06": 99
-    },
-    {
-      "level": 3,
-      "stratum": "farthest",
-      "separation_over_diameter": 2.0,
-      "source_block_patch_shape": [35, 35],
-      "sample_patch_shape": [35, 35],
-      "shape": [105, 70],
-      "sigma_candidate_over_sigma_0": 5.170754379223585e-06,
-      "rank_at_0.01": 3,
-      "rank_at_0.0001": 13,
-      "rank_at_1e-06": 62
-    },
-    {
-      "level": 4,
-      "stratum": "closest",
-      "separation_over_diameter": 0.7071067811865469,
-      "source_block_patch_shape": [344, 346],
-      "sample_patch_shape": [64, 64],
-      "shape": [192, 128],
-      "sigma_candidate_over_sigma_0": 2.152523486360705e-05,
-      "rank_at_0.01": 6,
-      "rank_at_0.0001": 32,
-      "rank_at_1e-06": 91
-    },
-    {
-      "level": 4,
-      "stratum": "farthest",
-      "separation_over_diameter": 2.0,
-      "source_block_patch_shape": [305, 308],
-      "sample_patch_shape": [64, 64],
-      "shape": [192, 128],
-      "sigma_candidate_over_sigma_0": 1.8360292103911746e-06,
-      "rank_at_0.01": 4,
-      "rank_at_0.0001": 11,
-      "rank_at_1e-06": 65
-    }
-  ],
   "prediction": {
     "candidate": {"m": 512, "k": 47, "p": 10},
     "products": {
@@ -236,7 +149,8 @@
     "full_matrix_passes": 137,
     "bytes_read": 2667354489600,
     "io_floor_seconds_from_width3_products": 2830.197227441182,
-    "linear_rhs_seconds_from_width3_products": 94346.98831265653,
+    "deliberately_pessimistic_linear_rhs_upper_seconds": 94346.98831265653,
+    "linear_rhs_upper_method": "charges one third of the measured width-3 pass time to every scheduled column; this ignores wider-BLAS efficiency and is not a compute-time estimate",
     "flop_estimate": 66703331980800,
     "storage": {
       "factor_blocks": 1476,
@@ -251,10 +165,11 @@
     "peak_memory_model": {
       "maximum_leaf_probe_columns": 712,
       "maximum_admissible_probe_columns": 57,
-      "maximum_forward_workspace_bytes": 958986240,
-      "maximum_adjoint_workspace_bytes": 105533600,
-      "estimated_peak_array_bytes": 4145077264,
-      "excludes": "Python/BLAS overhead and allocator fragmentation; not a measured RSS"
+      "maximum_forward_workspace_bytes": 1303138560,
+      "maximum_adjoint_workspace_bytes": 123901280,
+      "modeled_known_live_array_bytes": 4489229584,
+      "included_lifetimes": "probe plus full, truncated, and subtraction-result arrays during peeling; retained three-factor blocks and leaves; finalization overlap",
+      "excludes": "Python/BLAS overhead, allocator fragmentation, and unmodeled LAPACK workspace; not a measured or strict upper-bound RSS"
     }
   },
   "disk": {
@@ -265,10 +180,138 @@
     "status": "gated_not_run",
     "reasons": [
       "no frozen Frontera operator-wide accuracy tolerance or independent validation plan",
-      "bounded block subsamples cannot certify the candidate rank for every full block",
+      "conditional block subsamples cannot certify the candidate rank for every full block",
+      "physical row/column ordering is unresolved",
       "predicted construction reads exceed 1000000000000 bytes"
     ],
     "does_not_fix_bp7": true,
     "does_not_complete_c11": true
+  },
+  "provenance": {
+    "revision_label": "task/C.11 correction-round-1; commit unavailable because Git commands prohibited",
+    "command": [
+      "/Users/ymagen/work/H_mat/.venv/bin/python",
+      "-m",
+      "benchmarks.frontera",
+      "--output",
+      "/tmp/frontera_np20k_preflight.json",
+      "--chunk-rows",
+      "64",
+      "--run"
+    ],
+    "arguments": {
+      "dataset": "/Volumes/Extreme SSD/H_mat/frontera_np20k_3d",
+      "output": "/tmp/frontera_np20k_preflight.json",
+      "chunk_rows": 64,
+      "run": true
+    },
+    "source_sha256": {
+      "/Users/ymagen/.codex/worktrees/c11-frontera/H_mat/benchmarks/frontera.py": "3d42d0d7ac52cfd6e54247b5217f19c28d5843705b36572a56533ecfc0ac7dc8",
+      "src/gfcompress/frontera.py": "fa0a602655b4b94f751a026f4354bb74c761349c37a51e43e9dde37a06f4afa4",
+      "src/gfcompress/benchmark.py": "fe21c9862bc7ce3a0ec82dc1d41bb73e6568a15099ae640669819687eb704d15",
+      "src/gfcompress/build_tree.py": "74f71df24cef87b7503913db7eeef2220e74f5047b7ee9c0b70cc76687e8c19c",
+      "src/gfcompress/interactions.py": "e32e58fb11dc126c9f44f2ddd0d84fbfd2b056b89c92f50d52f5a429b17e125e"
+    },
+    "dirty_state": "not collected: this task prohibited Git commands",
+    "source_hash_scope": "hashes are for correction-round-1 source; streamed product logic is unchanged from the original timing run, while the operator gained an explicit unresolved-ordering label and runner reporting/order diagnostics were corrected"
+  },
+  "derived_correction": {
+    "round": 1,
+    "date": "2026-10-12",
+    "original_measured_record_sha256": "2bed0850fdee67c107aa98734707d2757bdd7915ac3cc05704c9ad5b6d8f854f",
+    "streaming_timings_reused_without_full_matrix_rescan": true,
+    "additional_matrix_io": "45 selected rows (14500800 bytes), only for expanded ordering hypotheses",
+    "corrected_fields": [
+      "ordering hypotheses and gate",
+      "rank labels",
+      "runtime extrapolation label",
+      "known-live array model",
+      "software/timing provenance"
+    ]
+  },
+  "conditional_block_preflight": {
+    "status": "untrusted_ordering_dependent",
+    "assumed_ordering": "patch_major",
+    "used_for_gate": false,
+    "records": [
+      {
+        "level": 2,
+        "stratum": "closest",
+        "separation_over_diameter": 0.7071067811865476,
+        "source_block_patch_shape": [2596, 2472],
+        "sample_patch_shape": [64, 64],
+        "shape": [192, 128],
+        "relative_sigma_at_candidate_rank": 3.6046749456589596e-05,
+        "rank_semantics": "rank r retains sigma_1..sigma_r; the reported tail criterion uses sigma_(r+1)/sigma_1 <= tolerance, inclusive",
+        "rank_for_relative_tail_at_most_0.01": 5,
+        "rank_for_relative_tail_at_most_0.0001": 29,
+        "rank_for_relative_tail_at_most_1e-06": 120
+      },
+      {
+        "level": 2,
+        "stratum": "farthest",
+        "separation_over_diameter": 1.4142135623730951,
+        "source_block_patch_shape": [2556, 2550],
+        "sample_patch_shape": [64, 64],
+        "shape": [192, 128],
+        "relative_sigma_at_candidate_rank": 1.8124113510733698e-06,
+        "rank_semantics": "rank r retains sigma_1..sigma_r; the reported tail criterion uses sigma_(r+1)/sigma_1 <= tolerance, inclusive",
+        "rank_for_relative_tail_at_most_0.01": 3,
+        "rank_for_relative_tail_at_most_0.0001": 9,
+        "rank_for_relative_tail_at_most_1e-06": 62
+      },
+      {
+        "level": 3,
+        "stratum": "closest",
+        "separation_over_diameter": 0.7071067811865475,
+        "source_block_patch_shape": [1343, 1259],
+        "sample_patch_shape": [64, 64],
+        "shape": [192, 128],
+        "relative_sigma_at_candidate_rank": 1.4187813734881793e-05,
+        "rank_semantics": "rank r retains sigma_1..sigma_r; the reported tail criterion uses sigma_(r+1)/sigma_1 <= tolerance, inclusive",
+        "rank_for_relative_tail_at_most_0.01": 5,
+        "rank_for_relative_tail_at_most_0.0001": 23,
+        "rank_for_relative_tail_at_most_1e-06": 99
+      },
+      {
+        "level": 3,
+        "stratum": "farthest",
+        "separation_over_diameter": 2.0,
+        "source_block_patch_shape": [35, 35],
+        "sample_patch_shape": [35, 35],
+        "shape": [105, 70],
+        "relative_sigma_at_candidate_rank": 5.170754379223585e-06,
+        "rank_semantics": "rank r retains sigma_1..sigma_r; the reported tail criterion uses sigma_(r+1)/sigma_1 <= tolerance, inclusive",
+        "rank_for_relative_tail_at_most_0.01": 3,
+        "rank_for_relative_tail_at_most_0.0001": 13,
+        "rank_for_relative_tail_at_most_1e-06": 62
+      },
+      {
+        "level": 4,
+        "stratum": "closest",
+        "separation_over_diameter": 0.7071067811865469,
+        "source_block_patch_shape": [344, 346],
+        "sample_patch_shape": [64, 64],
+        "shape": [192, 128],
+        "relative_sigma_at_candidate_rank": 2.152523486360705e-05,
+        "rank_semantics": "rank r retains sigma_1..sigma_r; the reported tail criterion uses sigma_(r+1)/sigma_1 <= tolerance, inclusive",
+        "rank_for_relative_tail_at_most_0.01": 6,
+        "rank_for_relative_tail_at_most_0.0001": 32,
+        "rank_for_relative_tail_at_most_1e-06": 91
+      },
+      {
+        "level": 4,
+        "stratum": "farthest",
+        "separation_over_diameter": 2.0,
+        "source_block_patch_shape": [305, 308],
+        "sample_patch_shape": [64, 64],
+        "shape": [192, 128],
+        "relative_sigma_at_candidate_rank": 1.8360292103911746e-06,
+        "rank_semantics": "rank r retains sigma_1..sigma_r; the reported tail criterion uses sigma_(r+1)/sigma_1 <= tolerance, inclusive",
+        "rank_for_relative_tail_at_most_0.01": 4,
+        "rank_for_relative_tail_at_most_0.0001": 11,
+        "rank_for_relative_tail_at_most_1e-06": 65
+      }
+    ]
   }
 }

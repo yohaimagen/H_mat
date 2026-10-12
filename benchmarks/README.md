@@ -2,8 +2,9 @@
 
 The Frontera native-dense feasibility measurement is documented in
 [`FRONTERA.md`](FRONTERA.md). It streams the 19.47 GB checkpoint without a
-native full-matrix copy and stops at a documented preflight gate; it is not a
-C.11 baseline or a BP7 correction.
+native full-matrix copy and stops at a documented preflight gate. Physical
+row/column ordering remains unresolved, so conditional block spectra are not
+decision evidence. This is not a C.11 baseline or a BP7 correction.
 
 Run the reproducible synthetic report with one BLAS thread:
 

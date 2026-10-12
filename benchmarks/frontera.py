@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import scipy
 from scipy.stats import spearmanr
 
 from gfcompress.benchmark import predict_fixed_products
@@ -30,6 +31,7 @@ DEFAULT_DATASET = Path("/Volumes/Extreme SSD/H_mat/frontera_np20k_3d")
 CANDIDATE = {"m": 512, "k": 47, "p": 10}
 SAMPLE_PATCHES = 64
 MAX_FULL_READ_BYTES = 1_000_000_000_000
+ORDERINGS = ("patch_major", "element_blocked", "global_component")
 
 
 def _peak_rss_bytes() -> int:
@@ -92,50 +94,70 @@ def stream_check(operator: NativeDenseGF, seed: int = 20261012) -> dict[str, Any
     }
 
 
-def _block_strength(block: np.ndarray, n_patches: int, patch_major: bool) -> np.ndarray:
-    if patch_major:
-        grouped = block.reshape(3, n_patches, 2)
+def _scalar_indices(
+    patches: np.ndarray, dof: int, n_patches: int, nbf: int, ordering: str
+) -> np.ndarray:
+    """Map patch-major logical scalar indices to one candidate raw layout."""
+    patches = np.asarray(patches, dtype=np.intp).reshape(-1)
+    components = np.arange(dof, dtype=np.intp)
+    if ordering == "patch_major":
+        indices = patches[:, None] * dof + components
+    elif ordering == "element_blocked":
+        element, basis = np.divmod(patches, nbf)
+        indices = element[:, None] * (dof * nbf) + components * nbf + basis[:, None]
+    elif ordering == "global_component":
+        indices = components * n_patches + patches[:, None]
     else:
-        grouped = np.stack((block[:, :n_patches], block[:, n_patches:]), axis=2)
-    return np.linalg.norm(grouped, axis=(0, 2))
+        raise ValueError(f"unknown ordering {ordering!r}")
+    return indices.reshape(-1)
 
 
 def ordering_evidence(operator: NativeDenseGF) -> dict[str, Any]:
-    """Compare patch-major spatial decay with a component-major null."""
+    """Compare plausible layouts, while leaving the writer mapping unresolved."""
     n = operator.mesh.n_patches
+    nbf = operator.basis_functions_per_element
     probes = np.unique(np.linspace(0, n - 1, 5, dtype=np.intp))
     all_cols = np.arange(operator.shape[1], dtype=np.intp)
-    records = []
+    column_maps = {
+        ordering: _scalar_indices(np.arange(n), 2, n, nbf, ordering) for ordering in ORDERINGS
+    }
+    correlations: dict[str, list[float]] = {
+        f"{row}_rows__{col}_cols": [] for row in ORDERINGS for col in ORDERINGS
+    }
+    location_ranks: dict[str, list[int]] = {name: [] for name in correlations}
     for patch in probes:
         distance = np.linalg.norm(operator.coordinates - operator.coordinates[patch], axis=1)
         keep = distance > 0
-        patch_rows = 3 * patch + np.arange(3, dtype=np.intp)
-        component_rows = patch + n * np.arange(3, dtype=np.intp)
-        patch_block = operator.read_block(patch_rows, all_cols)
-        component_block = operator.read_block(component_rows, all_cols)
-        patch_strength = _block_strength(patch_block, n, True)
-        component_strength = _block_strength(component_block, n, False)
-        patch_rho = float(spearmanr(distance[keep], patch_strength[keep]).statistic)
-        component_rho = float(spearmanr(distance[keep], component_strength[keep]).statistic)
-        patch_rank = int(np.count_nonzero(patch_strength > patch_strength[patch]))
-        records.append(
-            {
-                "patch": int(patch),
-                "patch_major_spearman": patch_rho,
-                "component_major_null_spearman": component_rho,
-                "same_location_strength_rank_zero_based": patch_rank,
-            }
-        )
-    patch_median = float(np.median([item["patch_major_spearman"] for item in records]))
-    null_median = float(np.median([item["component_major_null_spearman"] for item in records]))
+        for row_ordering in ORDERINGS:
+            rows = _scalar_indices(np.array([patch]), 3, n, nbf, row_ordering)
+            raw_block = operator.read_block(rows, all_cols)
+            for col_ordering in ORDERINGS:
+                name = f"{row_ordering}_rows__{col_ordering}_cols"
+                grouped = raw_block[:, column_maps[col_ordering]].reshape(3, n, 2)
+                strength = np.linalg.norm(grouped, axis=(0, 2))
+                correlations[name].append(
+                    float(spearmanr(distance[keep], strength[keep]).statistic)
+                )
+                location_ranks[name].append(int(np.count_nonzero(strength > strength[patch])))
+    hypotheses = {
+        name: {
+            "median_spearman": float(np.median(values)),
+            "same_location_rank_median_zero_based": float(np.median(location_ranks[name])),
+        }
+        for name, values in correlations.items()
+    }
+    best = min(hypotheses, key=lambda name: hypotheses[name]["median_spearman"])
     return {
-        "probes": records,
-        "patch_major_median_spearman": patch_median,
-        "component_major_null_median_spearman": null_median,
-        "passes_gate": patch_median < -0.5 and patch_median < null_median - 0.2,
-        "interpretation": (
-            "negative correlation means block magnitude decays with coordinate distance; "
-            "the component-major hypothesis is a falsification null"
+        "status": "unresolved",
+        "passes_gate": False,
+        "authoritative_writer_mapping_available": False,
+        "probe_patches": probes.tolist(),
+        "hypotheses": hypotheses,
+        "strongest_decay_hypothesis": best,
+        "reason": (
+            "spatial decay is not an identifying test: patch-major, per-element "
+            "component-blocked, global component-major, and mixed hypotheses can all retain "
+            "strong correlation; no authoritative local writer mapping was available"
         ),
     }
 
@@ -147,16 +169,27 @@ def _sample(values: np.ndarray, count: int) -> np.ndarray:
     return np.sort(values)[positions]
 
 
+def _rank_for_relative_tail(relative: np.ndarray, tolerance: float) -> int | None:
+    """Smallest retained rank whose next singular ratio is at most tolerance."""
+    below = np.flatnonzero(relative <= tolerance)
+    return int(below[0]) if below.size else None
+
+
 def _rank_summary(block: np.ndarray, candidate_rank: int) -> dict[str, Any]:
     singular = np.linalg.svd(block, compute_uv=False)
     relative = singular / singular[0]
     result: dict[str, Any] = {
         "shape": list(block.shape),
-        "sigma_candidate_over_sigma_0": float(relative[min(candidate_rank, relative.size) - 1]),
+        "relative_sigma_at_candidate_rank": float(relative[min(candidate_rank, relative.size) - 1]),
+        "rank_semantics": (
+            "rank r retains sigma_1..sigma_r; the reported tail criterion uses "
+            "sigma_(r+1)/sigma_1 <= tolerance, inclusive"
+        ),
     }
     for tolerance in (1e-2, 1e-4, 1e-6):
-        below = np.flatnonzero(relative <= tolerance)
-        result[f"rank_at_{tolerance:g}"] = int(below[0]) if below.size else None
+        result[f"rank_for_relative_tail_at_most_{tolerance:g}"] = _rank_for_relative_tail(
+            relative, tolerance
+        )
     return result
 
 
@@ -198,6 +231,15 @@ def block_preflight(
                 }
             )
     return records
+
+
+def _known_live_product_workspace_bytes(
+    shape: tuple[int, int], width: int, chunk_bytes: int, *, transpose: bool
+) -> int:
+    """Known simultaneous probe, full, truncated, and residual arrays."""
+    rows, cols = shape
+    input_rows, output_rows = (rows, cols) if transpose else (cols, rows)
+    return 8 * width * (input_rows + 3 * output_rows) + chunk_bytes
 
 
 def estimate_storage(root: TreeNode, k: int) -> dict[str, int]:
@@ -253,13 +295,17 @@ def construction_prediction(
     storage = estimate_storage(root, CANDIDATE["k"])
     maximum_leaf_width = max(node.col_indices.size for node in list(root.iter_levels())[-1])
     admissible_width = CANDIDATE["k"] + CANDIDATE["p"]
-    forward_workspace = (
-        8 * maximum_leaf_width * (operator.shape[1] + 2 * operator.shape[0])
-        + operator.maximum_chunk_bytes
+    forward_workspace = _known_live_product_workspace_bytes(
+        operator.shape,
+        int(maximum_leaf_width),
+        operator.maximum_chunk_bytes,
+        transpose=False,
     )
-    adjoint_workspace = (
-        8 * admissible_width * (operator.shape[0] + 2 * operator.shape[1])
-        + operator.maximum_chunk_bytes
+    adjoint_workspace = _known_live_product_workspace_bytes(
+        operator.shape,
+        admissible_width,
+        operator.maximum_chunk_bytes,
+        transpose=True,
     )
     peeling_factor_bytes = 8 * (
         storage["factor_entries_upper_bound"] + storage["factor_core_entries_upper_bound"]
@@ -285,7 +331,11 @@ def construction_prediction(
         "full_matrix_passes": calls,
         "bytes_read": calls * matrix_bytes,
         "io_floor_seconds_from_width3_products": io_floor_seconds,
-        "linear_rhs_seconds_from_width3_products": linear_rhs_seconds,
+        "deliberately_pessimistic_linear_rhs_upper_seconds": linear_rhs_seconds,
+        "linear_rhs_upper_method": (
+            "charges one third of the measured width-3 pass time to every scheduled column; "
+            "this ignores wider-BLAS efficiency and is not a compute-time estimate"
+        ),
         "flop_estimate": 2 * operator.header.rows * operator.header.cols * columns,
         "storage": storage,
         "peak_memory_model": {
@@ -293,8 +343,15 @@ def construction_prediction(
             "maximum_admissible_probe_columns": admissible_width,
             "maximum_forward_workspace_bytes": int(forward_workspace),
             "maximum_adjoint_workspace_bytes": int(adjoint_workspace),
-            "estimated_peak_array_bytes": int(max(leaf_extraction_peak, finalization_peak)),
-            "excludes": "Python/BLAS overhead and allocator fragmentation; not a measured RSS",
+            "modeled_known_live_array_bytes": int(max(leaf_extraction_peak, finalization_peak)),
+            "included_lifetimes": (
+                "probe plus full, truncated, and subtraction-result arrays during peeling; "
+                "retained three-factor blocks and leaves; finalization overlap"
+            ),
+            "excludes": (
+                "Python/BLAS overhead, allocator fragmentation, and unmodeled LAPACK "
+                "workspace; not a measured or strict upper-bound RSS"
+            ),
         },
     }
 
@@ -303,10 +360,57 @@ def _environment() -> dict[str, Any]:
     return {
         "python": platform.python_version(),
         "numpy": np.__version__,
+        "scipy": scipy.__version__,
         "platform": platform.platform(),
+        "machine": platform.machine(),
+        "processor": platform.processor(),
+        "logical_cpu_count": os.cpu_count(),
         "openblas_num_threads": os.environ.get("OPENBLAS_NUM_THREADS", "unset"),
         "omp_num_threads": os.environ.get("OMP_NUM_THREADS", "unset"),
         "veclib_maximum_threads": os.environ.get("VECLIB_MAXIMUM_THREADS", "unset"),
+    }
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _provenance(args: argparse.Namespace) -> dict[str, Any]:
+    sources = [
+        Path(__file__),
+        Path("src/gfcompress/frontera.py"),
+        Path("src/gfcompress/benchmark.py"),
+        Path("src/gfcompress/build_tree.py"),
+        Path("src/gfcompress/interactions.py"),
+    ]
+    return {
+        "revision_label": args.revision,
+        "command": [sys.executable, *sys.argv],
+        "arguments": {
+            "dataset": str(args.dataset),
+            "output": str(args.output),
+            "chunk_rows": args.chunk_rows,
+            "run": args.run,
+        },
+        "source_sha256": {str(path): _sha256(path) for path in sources},
+        "dirty_state": "not collected: this task prohibited Git commands",
+    }
+
+
+def full_compression_gate(ordering: dict[str, Any], prediction: dict[str, Any]) -> dict[str, Any]:
+    reasons = [
+        "no frozen Frontera operator-wide accuracy tolerance or independent validation plan",
+        "conditional block subsamples cannot certify the candidate rank for every full block",
+    ]
+    if ordering["status"] != "resolved_authoritative":
+        reasons.append("physical row/column ordering is unresolved")
+    if prediction["bytes_read"] > MAX_FULL_READ_BYTES:
+        reasons.append(f"predicted construction reads exceed {MAX_FULL_READ_BYTES} bytes")
+    return {
+        "status": "gated_not_run",
+        "reasons": reasons,
+        "does_not_fix_bp7": True,
+        "does_not_complete_c11": True,
     }
 
 
@@ -317,6 +421,7 @@ def main() -> None:
         "--output", type=Path, default=Path("benchmarks/results/frontera_np20k_preflight.json")
     )
     parser.add_argument("--chunk-rows", type=int, default=64)
+    parser.add_argument("--revision", default="not-supplied")
     parser.add_argument("--run", action="store_true")
     args = parser.parse_args()
     for name in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
@@ -325,10 +430,11 @@ def main() -> None:
     matrix = args.dataset / "gf" / "gf_mat.bin"
     coordinates = args.dataset / "gf_coords.bin"
     report: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "not_run",
         "purpose": "bounded Frontera feasibility evidence; not a C.11 baseline",
         "environment": _environment(),
+        "provenance": _provenance(args),
         "source": {
             "matrix": _identity(matrix),
             "coordinates": _identity(coordinates, digest=True),
@@ -338,10 +444,10 @@ def main() -> None:
             },
         },
         "limitations": [
-            "patch-major ordering is measured evidence, not explicit row metadata",
-            "stratified blocks are bounded subsamples and do not certify global accuracy",
+            "physical row/column ordering is unresolved without authoritative writer metadata",
+            "conditional patch-major block spectra are not compression decision evidence",
             "no frozen Frontera operator-wide tolerance or validation plan exists",
-            "wall-time projections extrapolate width-3 products and are not full-run timings",
+            "the linear-RHS wall time is a deliberately pessimistic upper extrapolation",
         ],
     }
     if not args.run:
@@ -371,26 +477,18 @@ def main() -> None:
         "occupied_boxes_by_level": [len(nodes) for nodes in levels],
         "leaf_patch_count_max": max(node.patch_indices.size for node in levels[-1]),
     }
-    report["block_preflight"] = block_preflight(operator, root, CANDIDATE["k"])
+    report["conditional_block_preflight"] = {
+        "status": "untrusted_ordering_dependent",
+        "assumed_ordering": "patch_major",
+        "used_for_gate": False,
+        "records": block_preflight(operator, root, CANDIDATE["k"]),
+    }
     report["prediction"] = construction_prediction(operator, root, report["streaming"])
     report["disk"] = {
         "free_bytes_before_exit": shutil.disk_usage(args.dataset).free,
         "large_outputs_written": False,
     }
-    gate_reasons = [
-        "no frozen Frontera operator-wide accuracy tolerance or independent validation plan",
-        "bounded block subsamples cannot certify the candidate rank for every full block",
-    ]
-    if not report["ordering"]["passes_gate"]:
-        gate_reasons.append("patch-major ordering evidence failed")
-    if report["prediction"]["bytes_read"] > MAX_FULL_READ_BYTES:
-        gate_reasons.append(f"predicted construction reads exceed {MAX_FULL_READ_BYTES} bytes")
-    report["full_compression"] = {
-        "status": "gated_not_run",
-        "reasons": gate_reasons,
-        "does_not_fix_bp7": True,
-        "does_not_complete_c11": True,
-    }
+    report["full_compression"] = full_compression_gate(report["ordering"], report["prediction"])
     report["status"] = "completed_preflight"
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")

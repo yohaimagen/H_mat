@@ -13,37 +13,56 @@ respectively; process peak RSS was 195 MB, with at most 41.2 MB of simultaneous
 big/native-endian row buffers. Relative residuals were between `1.5e-15` and
 `9.5e-15`.
 
-Five spatial probes support the expected patch-major order. The median
-Spearman correlation between coordinate distance and patch-block magnitude
-was `-0.871`; the component-major falsification null was `-0.029`. The
-coordinate cloud is planar after PCA (`94.25%`, `5.75%`, and effectively zero
-variance), so the production tree is two-dimensional while the operator keeps
-three row and two column components per patch.
+The physical scalar ordering is unresolved. Five spatial probes were evaluated
+under all nine row/column combinations of patch-major, component-blocked within
+each 10-basis-function element, and globally component-major layouts. Several
+hypotheses retain strong decay: patch-major/patch-major has median Spearman
+correlation `-0.871`, patch-major rows with element-blocked columns is even
+stronger at `-0.889`, and element-blocked/element-blocked is `-0.847`. Spatial
+decay therefore does not identify the writer layout, and no authoritative local
+writer metadata was available. The coordinate cloud is planar after PCA
+(`94.25%`, `5.75%`, and effectively zero variance), but no physical tree/dof
+mapping is accepted until the ordering is established independently.
 
-Bounded `64 x 64` patch samples from the closest and farthest interaction-list
-blocks at levels 2--4 reached relative singular value `1e-4` by ranks 9--32.
-At `1e-6`, they required ranks 62--120. These samples show useful far-field
-structure around `1e-4`; they do not certify a global rank or operator error.
+The earlier `64 x 64` patch spectra are retained in the JSON only as
+`conditional_block_preflight`: they assume patch-major rows and columns, are
+marked untrusted, and are not used by the gate or as evidence for a production
+rank. Their rank fields now state the boundary convention explicitly: rank
+`r` retains the first `r` singular values and tests the next singular value
+against the inclusive tolerance.
 
 For the diagnostic candidate `m=512, k=47, p=10`, the fixed scheduler predicts
 73 forward and 64 adjoint calls, 13,704 combined construction columns, and
 2.67 TB read across 137 full matrix passes. Finalized factors plus dense leaves
 are upper-bounded at 3.16 GB of numerical storage. The array-only peak-memory
-model is 4.15 GB, excluding Python/BLAS overhead and allocator fragmentation.
-Extrapolating the measured width-three products gives a 47-minute I/O floor
-but a 26.2-hour linear-RHS compute estimate; neither is a full-run timing.
+model includes simultaneous probe, full product, truncated product, subtraction
+result, retained factors/leaves, and finalization overlap, giving 4.49 GB of
+known-live arrays. It excludes Python/BLAS overhead, allocator fragmentation,
+and unmodeled LAPACK workspace, so it is not an RSS upper bound. The measured
+width-three passes imply a 47-minute I/O floor. Charging one third of that
+width-three time to every scheduled column gives 26.2 hours, but this is a
+deliberately pessimistic upper extrapolation that ignores wider-BLAS efficiency,
+not a compute-time estimate or full-run timing.
 
 Full compression was not run. It is gated because there is no frozen
 Frontera-specific operator-wide accuracy tolerance or independent validation
-plan, bounded block samples cannot certify every full block, and predicted
-construction traffic exceeds the predeclared 1 TB read ceiling. No large or
-temporary data were written.
+plan, the physical ordering is unresolved, conditional block samples cannot
+certify every full block, and predicted construction traffic exceeds the
+predeclared 1 TB read ceiling. No large or temporary data were written.
+
+Correction round 1 reused the original two-pass timings without another full
+matrix scan. It read 45 selected rows (14,500,800 bytes) to expand the ordering
+hypotheses, corrected deterministic derived fields, and records the original
+measurement invocation, current source hashes, SciPy/CPU details, and the hash
+of the original measured JSON. Git state is explicitly unavailable because
+this task prohibited Git commands.
 
 Reproduce the bounded measurement with:
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
-  PYTHONPATH=src .venv/bin/python -m benchmarks.frontera --run
+  PYTHONPATH=src .venv/bin/python -m benchmarks.frontera \
+  --revision <source-revision> --run
 ```
 
 The machine-readable record is
