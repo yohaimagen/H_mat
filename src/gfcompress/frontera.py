@@ -219,6 +219,10 @@ class NativeDenseGF(MatVecOperator):
 
     @property
     def maximum_chunk_bytes(self) -> int:
-        """Maximum simultaneous big/native-endian row-buffer bytes."""
+        """Maximum simultaneous row-buffer bytes during chunk iteration.
+
+        A consumer can retain the previous native-endian block while the generator
+        allocates both the next big-endian read buffer and its native-endian copy.
+        """
         rows = min(self.chunk_rows, self.header.rows)
-        return 2 * rows * self.header.cols * 8
+        return 3 * rows * self.header.cols * 8

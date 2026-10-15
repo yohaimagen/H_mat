@@ -9,9 +9,10 @@ dense matrix with shape `60,420 x 40,280` (`3 x 20,140` rows and
 The streamed operator made one forward and one adjoint pass, each with three
 right-hand sides. Those two passes jointly check forward linearity, adjoint
 linearity, and the adjoint identity. They sustained 0.943 and 0.942 GB/s,
-respectively; process peak RSS was 195 MB, with at most 41.2 MB of simultaneous
-big/native-endian row buffers. Relative residuals were between `1.5e-15` and
-`9.5e-15`.
+respectively; process peak RSS was 195 MB. The corrected lifetime model allows
+61.9 MB for three simultaneous row chunks: the previous native-endian block,
+the next big-endian read buffer, and its native-endian copy. Relative residuals
+were between `1.5e-15` and `9.5e-15`.
 
 The physical scalar ordering is unresolved. Five spatial probes were evaluated
 under all nine row/column combinations of patch-major, component-blocked within
@@ -36,7 +37,7 @@ For the diagnostic candidate `m=512, k=47, p=10`, the fixed scheduler predicts
 2.67 TB read across 137 full matrix passes. Finalized factors plus dense leaves
 are upper-bounded at 3.16 GB of numerical storage. The array-only peak-memory
 model includes simultaneous probe, full product, truncated product, subtraction
-result, retained factors/leaves, and finalization overlap, giving 4.49 GB of
+result, retained factors/leaves, and finalization overlap, giving 4.51 GB of
 known-live arrays. It excludes Python/BLAS overhead, allocator fragmentation,
 and unmodeled LAPACK workspace, so it is not an RSS upper bound. The measured
 width-three passes imply a 47-minute I/O floor. Charging one third of that
@@ -52,10 +53,12 @@ predeclared 1 TB read ceiling. No large or temporary data were written.
 
 Correction round 1 reused the original two-pass timings without another full
 matrix scan. It read 45 selected rows (14,500,800 bytes) to expand the ordering
-hypotheses, corrected deterministic derived fields, and records the original
-measurement invocation, current source hashes, SciPy/CPU details, and the hash
-of the original measured JSON. Git state is explicitly unavailable because
-this task prohibited Git commands.
+hypotheses. Correction round 3 only adjusted deterministic row-buffer and
+dependent workspace accounting; it performed no dataset scan or new
+measurement, and preserves the original timings and peak RSS. The record also
+contains the original measurement invocation, current source hashes, SciPy/CPU
+details, and the hash of the original measured JSON. Git state is explicitly
+unavailable because this task prohibited Git commands.
 
 Reproduce the bounded measurement with:
 

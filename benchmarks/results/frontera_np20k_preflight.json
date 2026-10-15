@@ -129,7 +129,7 @@
     "adjoint_linearity_relative": 1.5034179078399772e-15,
     "adjoint_identity_relative": 6.0833411553240946e-15,
     "peak_rss_bytes": 194953216,
-    "maximum_converted_chunk_bytes": 41246720
+    "maximum_converted_chunk_bytes": 61870080
   },
   "tree": {
     "depth": 4,
@@ -165,9 +165,9 @@
     "peak_memory_model": {
       "maximum_leaf_probe_columns": 712,
       "maximum_admissible_probe_columns": 57,
-      "maximum_forward_workspace_bytes": 1303138560,
-      "maximum_adjoint_workspace_bytes": 123901280,
-      "modeled_known_live_array_bytes": 4489229584,
+      "maximum_forward_workspace_bytes": 1323761920,
+      "maximum_adjoint_workspace_bytes": 144524640,
+      "modeled_known_live_array_bytes": 4509852944,
       "included_lifetimes": "probe plus full, truncated, and subtraction-result arrays during peeling; retained three-factor blocks and leaves; finalization overlap",
       "excludes": "Python/BLAS overhead, allocator fragmentation, and unmodeled LAPACK workspace; not a measured or strict upper-bound RSS"
     }
@@ -207,25 +207,27 @@
     },
     "source_sha256": {
       "/Users/ymagen/.codex/worktrees/c11-frontera/H_mat/benchmarks/frontera.py": "3d42d0d7ac52cfd6e54247b5217f19c28d5843705b36572a56533ecfc0ac7dc8",
-      "src/gfcompress/frontera.py": "fa0a602655b4b94f751a026f4354bb74c761349c37a51e43e9dde37a06f4afa4",
+      "src/gfcompress/frontera.py": "7e262f92531aea5fdf7f4c9f43e182c65dc9d0f3bbe646a6283f599e3de869e1",
       "src/gfcompress/benchmark.py": "fe21c9862bc7ce3a0ec82dc1d41bb73e6568a15099ae640669819687eb704d15",
       "src/gfcompress/build_tree.py": "74f71df24cef87b7503913db7eeef2220e74f5047b7ee9c0b70cc76687e8c19c",
       "src/gfcompress/interactions.py": "e32e58fb11dc126c9f44f2ddd0d84fbfd2b056b89c92f50d52f5a429b17e125e"
     },
     "dirty_state": "not collected: this task prohibited Git commands",
-    "source_hash_scope": "hashes are for correction-round-1 source; streamed product logic is unchanged from the original timing run, while the operator gained an explicit unresolved-ordering label and runner reporting/order diagnostics were corrected"
+    "source_hash_scope": "hashes are for correction-round-3 source; streamed product logic and original measured timings are unchanged, while ordering diagnostics and deterministic memory-lifetime accounting were corrected"
   },
   "derived_correction": {
-    "round": 1,
-    "date": "2026-10-12",
+    "round": 3,
+    "date": "2026-10-15",
     "original_measured_record_sha256": "89696e68ed460d776fd302ad766d1bf0ff879aee0ac8674a3dcc866d1a5f32d8",
     "streaming_timings_reused_without_full_matrix_rescan": true,
+    "final_chunk_lifetime_adjustment": "deterministic three-chunk lifetime correction; no dataset scan or new measurement",
+    "original_peak_rss_and_timings_preserved": true,
     "additional_matrix_io": "45 selected rows (14500800 bytes), only for expanded ordering hypotheses",
     "corrected_fields": [
       "ordering hypotheses and gate",
       "rank labels",
       "runtime extrapolation label",
-      "known-live array model",
+      "known-live array model, including three simultaneous row chunks",
       "software/timing provenance"
     ]
   },

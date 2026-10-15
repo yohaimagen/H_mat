@@ -93,7 +93,7 @@ def test_native_dense_products_are_linear_and_adjoint(tmp_path: Path) -> None:
     assert np.vdot(operator.matvec(x[:, 0]), u[:, 0]) == pytest.approx(
         np.vdot(x[:, 0], operator.rmatvec(u[:, 0]))
     )
-    assert operator.maximum_chunk_bytes == 2 * 7 * 40 * 8
+    assert operator.maximum_chunk_bytes == 3 * 7 * 40 * 8
 
 
 def test_two_pass_stream_check_validates_both_linearities(tmp_path: Path) -> None:
@@ -204,7 +204,14 @@ def test_tracked_correction_record_preserves_gate_and_timing_provenance() -> Non
     )
     assert "deliberately_pessimistic_linear_rhs_upper_seconds" in report["prediction"]
     peak = report["prediction"]["peak_memory_model"]
+    assert report["streaming"]["maximum_converted_chunk_bytes"] == 61_870_080
+    assert peak["maximum_forward_workspace_bytes"] == 1_323_761_920
+    assert peak["maximum_adjoint_workspace_bytes"] == 144_524_640
+    assert peak["modeled_known_live_array_bytes"] == 4_509_852_944
     assert "full, truncated, and subtraction-result" in peak["included_lifetimes"]
+    assert report["derived_correction"]["final_chunk_lifetime_adjustment"] == (
+        "deterministic three-chunk lifetime correction; no dataset scan or new " "measurement"
+    )
     assert report["provenance"]["command"][-1] == "--run"
     source = Path("src/gfcompress/frontera.py")
     assert (
