@@ -1,0 +1,18 @@
+{
+  "construction_seeds": [11, 23, 37],
+  "incumbent": {"m": 512, "width": 57, "k": 47, "p": 10},
+  "candidates": [
+    {"m": 8, "width": 23, "k": 17, "p": 6},
+    {"m": 16, "width": 33, "k": 23, "p": 10},
+    {"m": 128, "width": 53, "k": 37, "p": 16}
+  ],
+  "selection": "largest scalar-area and first interaction pair at each level for each candidate's own tree, matching the prior diagnostic rule",
+  "screen": "clean block-only Gaussian sketches matching the fixed schedule, excluding peeling contamination; all three construction seeds. Each candidate is checked to use its maximum sketch width whose predicted combined construction columns remain strictly below n_cols=11040.",
+  "candidate_rationale": "The prior full runs favor added oversampling over a rank-heavy split for component error (37,20 beat 51,6), while the m=512 screen deteriorated below p=10. Preserve roughly 30% of each smaller maximum width for oversampling: (m,k,p)=(8,17,6), (16,23,10), (128,37,16). These are predeclared screening choices, not changed acceptance thresholds.",
+  "promotion": {
+    "component_worst_ratio_max": 0.5,
+    "all_worst_ratio_max": 1.0,
+    "maximum_promotions": 1,
+    "reason": "Require a material (at least twofold) reduction of worst representative component error without worsening worst full-block error; rank candidates by component error. Incumbent full validation misses component by 5.1x and input by 16.3x. This is a screening rule, not an acceptance threshold or proof of infeasibility."
+  }
+}
