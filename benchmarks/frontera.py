@@ -31,7 +31,6 @@ DEFAULT_DATASET = Path("/Volumes/Extreme SSD/H_mat/frontera_np20k_3d")
 CANDIDATE = {"m": 512, "k": 47, "p": 10}
 SAMPLE_PATCHES = 64
 MAX_FULL_READ_BYTES = 1_000_000_000_000
-ORDERINGS = ("patch_major", "element_blocked", "global_component")
 
 
 def _peak_rss_bytes() -> int:
@@ -91,73 +90,54 @@ def stream_check(operator: NativeDenseGF, seed: int = 20261012) -> dict[str, Any
         "adjoint_identity_relative": abs(left - right) / max(abs(left), abs(right), 1.0),
         "peak_rss_bytes": _peak_rss_bytes(),
         "maximum_converted_chunk_bytes": operator.maximum_chunk_bytes,
+        "persistent_permutation_bytes": operator.permutation_bytes,
     }
-
-
-def _scalar_indices(
-    patches: np.ndarray, dof: int, n_patches: int, nbf: int, ordering: str
-) -> np.ndarray:
-    """Map patch-major logical scalar indices to one candidate raw layout."""
-    patches = np.asarray(patches, dtype=np.intp).reshape(-1)
-    components = np.arange(dof, dtype=np.intp)
-    if ordering == "patch_major":
-        indices = patches[:, None] * dof + components
-    elif ordering == "element_blocked":
-        element, basis = np.divmod(patches, nbf)
-        indices = element[:, None] * (dof * nbf) + components * nbf + basis[:, None]
-    elif ordering == "global_component":
-        indices = components * n_patches + patches[:, None]
-    else:
-        raise ValueError(f"unknown ordering {ordering!r}")
-    return indices.reshape(-1)
 
 
 def ordering_evidence(operator: NativeDenseGF) -> dict[str, Any]:
-    """Compare plausible layouts, while leaving the writer mapping unresolved."""
+    """Record authoritative executable mapping and a spatial sanity check."""
     n = operator.mesh.n_patches
-    nbf = operator.basis_functions_per_element
     probes = np.unique(np.linspace(0, n - 1, 5, dtype=np.intp))
     all_cols = np.arange(operator.shape[1], dtype=np.intp)
-    column_maps = {
-        ordering: _scalar_indices(np.arange(n), 2, n, nbf, ordering) for ordering in ORDERINGS
-    }
-    correlations: dict[str, list[float]] = {
-        f"{row}_rows__{col}_cols": [] for row in ORDERINGS for col in ORDERINGS
-    }
-    location_ranks: dict[str, list[int]] = {name: [] for name in correlations}
+    correlations = []
+    location_ranks = []
     for patch in probes:
         distance = np.linalg.norm(operator.coordinates - operator.coordinates[patch], axis=1)
         keep = distance > 0
-        for row_ordering in ORDERINGS:
-            rows = _scalar_indices(np.array([patch]), 3, n, nbf, row_ordering)
-            raw_block = operator.read_block(rows, all_cols)
-            for col_ordering in ORDERINGS:
-                name = f"{row_ordering}_rows__{col_ordering}_cols"
-                grouped = raw_block[:, column_maps[col_ordering]].reshape(3, n, 2)
-                strength = np.linalg.norm(grouped, axis=(0, 2))
-                correlations[name].append(
-                    float(spearmanr(distance[keep], strength[keep]).statistic)
-                )
-                location_ranks[name].append(int(np.count_nonzero(strength > strength[patch])))
-    hypotheses = {
-        name: {
-            "median_spearman": float(np.median(values)),
-            "same_location_rank_median_zero_based": float(np.median(location_ranks[name])),
-        }
-        for name, values in correlations.items()
-    }
-    best = min(hypotheses, key=lambda name: hypotheses[name]["median_spearman"])
+        rows = operator.mesh.patch_to_rows(np.array([patch]))
+        grouped = operator.read_block(rows, all_cols).reshape(3, n, 2)
+        strength = np.linalg.norm(grouped, axis=(0, 2))
+        correlations.append(float(spearmanr(distance[keep], strength[keep]).statistic))
+        location_ranks.append(int(np.count_nonzero(strength > strength[patch])))
     return {
-        "status": "unresolved",
-        "passes_gate": False,
-        "authoritative_writer_mapping_available": False,
+        "status": operator.ordering_status,
+        "passes_gate": True,
+        "authoritative_writer_mapping_available": True,
+        "raw_order": "component-major within each nbf-element",
+        "public_order": "patch-major",
+        "basis_functions_per_element": operator.basis_functions_per_element,
+        "mapping": "i=e*nbf+n; raw row=e*(3*nbf)+alpha*nbf+n; raw col=e*(2*nbf)+beta*nbf+n",
+        "source_evidence": {
+            "host": "hise_jump",
+            "checkout": "/home/ymagen/tandem_h_matrix/tandem",
+            "branch": "ymagen/strumpack-production",
+            "commit": "c4eb1b4615b0",
+            "function": "app/form/StrumpackGFFullOperator.cpp::build_index_maps",
+            "basis": (
+                "executable index-map and blocked-assembly code; "
+                "native-dense and gf_coords features match dataset"
+            ),
+            "contradicted_comments": (
+                "later dump_fault_node_coords comment and downloaded "
+                "analyze_gf.py patch-major helpers"
+            ),
+        },
         "probe_patches": probes.tolist(),
-        "hypotheses": hypotheses,
-        "strongest_decay_hypothesis": best,
+        "median_spearman": float(np.median(correlations)),
+        "same_location_rank_median_zero_based": float(np.median(location_ranks)),
         "reason": (
-            "spatial decay is not an identifying test: patch-major, per-element "
-            "component-blocked, global component-major, and mixed hypotheses can all retain "
-            "strong correlation; no authoritative local writer mapping was available"
+            "ordering resolved from executable Tandem source; "
+            "spatial decay is only a sanity check"
         ),
     }
 
@@ -239,7 +219,8 @@ def _known_live_product_workspace_bytes(
     """Known simultaneous probe, full, truncated, and residual arrays."""
     rows, cols = shape
     input_rows, output_rows = (rows, cols) if transpose else (cols, rows)
-    return 8 * width * (input_rows + 3 * output_rows) + chunk_bytes
+    # Conservatively include raw input and raw output during output gathering.
+    return 8 * width * (2 * input_rows + 4 * output_rows) + chunk_bytes
 
 
 def estimate_storage(root: TreeNode, k: int) -> dict[str, int]:
@@ -311,9 +292,14 @@ def construction_prediction(
         storage["factor_entries_upper_bound"] + storage["factor_core_entries_upper_bound"]
     )
     leaf_bytes = 8 * storage["leaf_entries"]
-    leaf_extraction_peak = peeling_factor_bytes + leaf_bytes + forward_workspace
+    leaf_extraction_peak = (
+        peeling_factor_bytes + leaf_bytes + forward_workspace + operator.permutation_bytes
+    )
     finalization_peak = (
-        peeling_factor_bytes + leaf_bytes + 8 * storage["factor_left_entries_upper_bound"]
+        peeling_factor_bytes
+        + leaf_bytes
+        + 8 * storage["factor_left_entries_upper_bound"]
+        + operator.permutation_bytes
     )
     io_floor_seconds = (
         budget.matvec_calls * stream["forward_seconds"]
@@ -343,9 +329,11 @@ def construction_prediction(
             "maximum_admissible_probe_columns": admissible_width,
             "maximum_forward_workspace_bytes": int(forward_workspace),
             "maximum_adjoint_workspace_bytes": int(adjoint_workspace),
+            "persistent_permutation_bytes": operator.permutation_bytes,
             "modeled_known_live_array_bytes": int(max(leaf_extraction_peak, finalization_peak)),
             "included_lifetimes": (
                 "probe plus full, truncated, and subtraction-result arrays during peeling; "
+                "raw permuted input/output buffers and persistent index maps; "
                 "retained three-factor blocks and leaves; finalization overlap"
             ),
             "excludes": (
@@ -400,7 +388,7 @@ def _provenance(args: argparse.Namespace) -> dict[str, Any]:
 def full_compression_gate(ordering: dict[str, Any], prediction: dict[str, Any]) -> dict[str, Any]:
     reasons = [
         "no frozen Frontera operator-wide accuracy tolerance or independent validation plan",
-        "conditional block subsamples cannot certify the candidate rank for every full block",
+        "physical block subsamples cannot certify the candidate rank for every full block",
     ]
     if ordering["status"] != "resolved_authoritative":
         reasons.append("physical row/column ordering is unresolved")
@@ -430,7 +418,7 @@ def main() -> None:
     matrix = args.dataset / "gf" / "gf_mat.bin"
     coordinates = args.dataset / "gf_coords.bin"
     report: dict[str, Any] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "status": "not_run",
         "purpose": "bounded Frontera feasibility evidence; not a C.11 baseline",
         "environment": _environment(),
@@ -444,8 +432,7 @@ def main() -> None:
             },
         },
         "limitations": [
-            "physical row/column ordering is unresolved without authoritative writer metadata",
-            "conditional patch-major block spectra are not compression decision evidence",
+            "physical block subsamples do not certify all full-block ranks",
             "no frozen Frontera operator-wide tolerance or validation plan exists",
             "the linear-RHS wall time is a deliberately pessimistic upper extrapolation",
         ],
@@ -477,9 +464,9 @@ def main() -> None:
         "occupied_boxes_by_level": [len(nodes) for nodes in levels],
         "leaf_patch_count_max": max(node.patch_indices.size for node in levels[-1]),
     }
-    report["conditional_block_preflight"] = {
-        "status": "untrusted_ordering_dependent",
-        "assumed_ordering": "patch_major",
+    report["physical_block_preflight"] = {
+        "status": "authoritative_ordering_bounded_subsamples",
+        "logical_ordering": "patch_major",
         "used_for_gate": False,
         "records": block_preflight(operator, root, CANDIDATE["k"]),
     }
@@ -490,6 +477,22 @@ def main() -> None:
     }
     report["full_compression"] = full_compression_gate(report["ordering"], report["prediction"])
     report["status"] = "completed_preflight"
+    if args.output.exists():
+        previous = json.loads(args.output.read_text())
+        report["timing_history"] = [
+            *previous.get("timing_history", []),
+            {
+                "record_sha256": _sha256(args.output),
+                "ordering_status": previous.get("ordering", {}).get("status"),
+                "streaming": previous.get("streaming"),
+                "provenance": previous.get("provenance"),
+                "derived_correction": previous.get("derived_correction"),
+                "note": (
+                    "historical measurement retained; current streaming is a "
+                    "fresh corrected-order measurement"
+                ),
+            },
+        ]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(args.output)

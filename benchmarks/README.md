@@ -3,8 +3,9 @@
 The Frontera native-dense feasibility measurement is documented in
 [`FRONTERA.md`](FRONTERA.md). It streams the 19.47 GB checkpoint without a
 native full-matrix copy and stops at a documented preflight gate. Physical
-row/column ordering remains unresolved, so conditional block spectra are not
-decision evidence. This is not a C.11 baseline or a BP7 correction.
+row/column ordering is resolved from Tandem's executable index map, and the
+reader exposes logical patch-major products. Bounded physical block spectra
+do not replace operator-wide validation. This is not a C.11 baseline or a BP7 correction.
 
 Run the reproducible synthetic report with one BLAS thread:
 

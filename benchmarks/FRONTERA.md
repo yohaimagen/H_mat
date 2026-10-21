@@ -6,59 +6,73 @@ dense matrix with shape `60,420 x 40,280` (`3 x 20,140` rows and
 `2 x 20,140` columns). Its 19.47 GB value block begins directly after the
 24-byte Tandem/PETSc header.
 
-The streamed operator made one forward and one adjoint pass, each with three
-right-hand sides. Those two passes jointly check forward linearity, adjoint
-linearity, and the adjoint identity. They sustained 0.943 and 0.942 GB/s,
-respectively; process peak RSS was 195 MB. The corrected lifetime model allows
-61.9 MB for three simultaneous row chunks: the previous native-endian block,
-the next big-endian read buffer, and its native-endian copy. Relative residuals
-were between `1.5e-15` and `9.5e-15`.
+Physical ordering is now resolved from executable Tandem source on `hise_jump`:
+checkout `/home/ymagen/tandem_h_matrix/tandem`, branch
+`ymagen/strumpack-production`, commit `c4eb1b4615b0`, function
+`app/form/StrumpackGFFullOperator.cpp::build_index_maps`, corroborated by the
+blocked assembly code. The native-dense and `gf_coords` features match this
+dataset. For logical patch `i=e*nbf+n`, the raw row is
+`e*(3*nbf)+alpha*nbf+n` and raw column is `e*(2*nbf)+beta*nbf+n`, with
+`nbf=10`. The later `dump_fault_node_coords` comment and downloaded
+`analyze_gf.py` patch-major helpers contradict this executable mapping and are
+not ordering authority.
 
-The physical scalar ordering is unresolved. Five spatial probes were evaluated
-under all nine row/column combinations of patch-major, component-blocked within
-each 10-basis-function element, and globally component-major layouts. Several
-hypotheses retain strong decay: patch-major/patch-major has median Spearman
-correlation `-0.871`, patch-major rows with element-blocked columns is even
-stronger at `-0.889`, and element-blocked/element-blocked is `-0.847`. Spatial
-decay therefore does not identify the writer layout, and no authoritative local
-writer metadata was available. The coordinate cloud is planar after PCA
-(`94.25%`, `5.75%`, and effectively zero variance), but no physical tree/dof
-mapping is accepted until the ordering is established independently.
+`NativeDenseGF` exposes logical patch-major products and diagnostic blocks.
+It scatters input vectors to raw Tandem order, streams the original matrix,
+then gathers outputs to logical order. Two O(N) maps occupy 805,600 bytes;
+there is no matrix permutation, rewrite, or full-matrix cache. Tests encode
+independent tiny logical matrices into element-blocked files and cover both
+products, vector and multiple-RHS shapes, adjoint identity, repeated diagnostic
+indices, valid basis counts including one, and invalid basis counts.
 
-The earlier `64 x 64` patch spectra are retained in the JSON only as
-`conditional_block_preflight`: they assume patch-major rows and columns, are
-marked untrusted, and are not used by the gate or as evidence for a production
-rank. Their rank fields now state the boundary convention explicitly: rank
-`r` retains the first `r` singular values and tests the next singular value
-against the inclusive tolerance.
+The fresh corrected-order measurement made exactly one forward and one adjoint
+pass, each with three right-hand sides, reading 38,939,481,600 value bytes.
+They took 20.878 and 20.895 seconds (0.933 and 0.932 GB/s), respectively.
+Forward linearity, adjoint linearity, and adjoint-identity relative residuals
+were `9.42e-15`, `1.51e-15`, and `1.19e-15`. Process peak RSS at the streaming
+checkpoint was 183.2 MB. The chunk-lifetime allowance remains 61.9 MB: the
+previous native-endian block, next raw read buffer, and native-endian copy.
 
-For the diagnostic candidate `m=512, k=47, p=10`, the fixed scheduler predicts
-73 forward and 64 adjoint calls, 13,704 combined construction columns, and
-2.67 TB read across 137 full matrix passes. Finalized factors plus dense leaves
-are upper-bounded at 3.16 GB of numerical storage. The array-only peak-memory
-model includes simultaneous probe, full product, truncated product, subtraction
-result, retained factors/leaves, and finalization overlap, giving 4.51 GB of
-known-live arrays. It excludes Python/BLAS overhead, allocator fragmentation,
-and unmodeled LAPACK workspace, so it is not an RSS upper bound. The measured
-width-three passes imply a 47-minute I/O floor. Charging one third of that
-width-three time to every scheduled column gives 26.2 hours, but this is a
-deliberately pessimistic upper extrapolation that ignores wider-BLAS efficiency,
-not a compute-time estimate or full-run timing.
+Five bounded spatial probes give median Spearman correlation `-0.847` and
+median same-location strength rank zero. These are sanity checks, not the
+basis for identifying ordering. The coordinate cloud is planar after PCA
+(`94.25%`, `5.75%`, and effectively zero variance).
 
-Full compression was not run. It is gated because there is no frozen
-Frontera-specific operator-wide accuracy tolerance or independent validation
-plan, the physical ordering is unresolved, conditional block samples cannot
-certify every full block, and predicted construction traffic exceeds the
-predeclared 1 TB read ceiling. No large or temporary data were written.
+Corrected physical block spectra sample closest and farthest interaction-list
+pairs at levels 2–4, using at most 64 patches per side. The smallest retained
+ranks for a next-singular-value ratio at most `1e-4` are respectively
+`29, 9, 26, 7, 34, 10`; for `1e-6` they are `118, 59, 99, 50, 88, 67`.
+These bounded spectra do not certify every full block or operator-wide error.
+Rank `r` retains the first `r` singular values and tests the next singular
+value against the inclusive tolerance. The diagnostic candidate remains
+`m=512, k=47, p=10`; it is not a validated production rank.
 
-Correction round 1 reused the original two-pass timings without another full
-matrix scan. It read 45 selected rows (14,500,800 bytes) to expand the ordering
-hypotheses. Correction round 3 only adjusted deterministic row-buffer and
-dependent workspace accounting; it performed no dataset scan or new
-measurement, and preserves the original timings and peak RSS. The record also
-contains the original measurement invocation, current source hashes, SciPy/CPU
-details, and the hash of the original measured JSON. Git state is explicitly
-unavailable because this task prohibited Git commands.
+The fixed scheduler predicts 73 forward and 64 adjoint calls, 13,704 combined
+construction columns, and 2.67 TB read across 137 matrix passes. Finalized
+factors plus dense leaves are upper-bounded at 3,161,579,392 numerical bytes.
+The conservative known-live-array model includes the probe, full product,
+truncated product, subtraction result, raw permuted input/output, persistent
+maps, retained factors/leaves, and finalization overlap. Its peak is
+5,084,245,744 bytes, including maximum forward and adjoint workspaces of
+1,897,349,120 and 190,443,840 bytes. It excludes Python/BLAS overhead, allocator
+fragmentation, and unmodeled LAPACK workspace; it is not an RSS upper bound.
+The new width-three timings imply a 47.7-minute I/O floor and a deliberately
+pessimistic 26.5-hour linear-RHS upper extrapolation. Neither is a full-run
+timing or a reliable compute-time estimate.
+
+Full compression remains gated: predicted traffic exceeds the declared 1 TB
+read ceiling, no frozen Frontera operator-wide tolerance or independent
+validation plan exists, and bounded block spectra cannot certify full-block
+ranks. No full compression, matrix rewrite, cache, or large output was made.
+
+The JSON `timing_history` explicitly preserves the earlier raw-order timing
+record, provenance, correction metadata, and record hash. Those historical
+passes sustained about 0.943/0.942 GB/s with 195 MB peak RSS; correction rounds
+reused their timings and only revised ordering hypotheses or lifetime
+accounting. They are distinct from this fresh corrected-order measurement.
+Current provenance includes source hashes, the supplied base revision
+`16646f8`, command, thread settings, and source-revision evidence. Git state
+was not collected because the implementer is prohibited from using Git.
 
 Reproduce the bounded measurement with:
 

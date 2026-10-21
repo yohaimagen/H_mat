@@ -103,13 +103,11 @@ def _read_values(
 
 
 class NativeDenseGF(MatVecOperator):
-    """Raw-file-order 3D operator backed by a streamed checkpoint.
+    """Logical patch-major 3D operator backed by Tandem element-blocked data.
 
-    Products apply the stored matrix exactly and make no scalar permutation.
-    ``mesh`` is a conditional patch-major interpretation of the coordinates;
-    the Frontera preflight marks that physical mapping unresolved, so it must
-    not be used for production compression until writer metadata establishes
-    the row and column layouts.
+    For patch ``i=e*nbf+n`` and component ``a``, Tandem stores scalar index
+    ``e*(dof*nbf)+a*nbf+n``. Only vectors and index maps are permuted; matrix
+    chunks remain in their original file order.
     """
 
     def __init__(
@@ -123,8 +121,12 @@ class NativeDenseGF(MatVecOperator):
     ) -> None:
         if dimension != 3:
             raise ValueError("the Frontera native-dense reader currently supports 3D only")
-        if basis_functions_per_element < 1:
-            raise ValueError("basis_functions_per_element must be positive")
+        if (
+            not isinstance(basis_functions_per_element, (int, np.integer))
+            or isinstance(basis_functions_per_element, bool)
+            or basis_functions_per_element < 1
+        ):
+            raise ValueError("basis_functions_per_element must be a positive integer")
         if chunk_rows < 1:
             raise ValueError("chunk_rows must be positive")
 
@@ -134,7 +136,7 @@ class NativeDenseGF(MatVecOperator):
         self.dof_row = dimension
         self.dof_col = dimension - 1
         self.basis_functions_per_element = basis_functions_per_element
-        self.ordering_status = "unresolved"
+        self.ordering_status = "resolved_authoritative"
         if self.header.rows % self.dof_row or self.header.cols % self.dof_col:
             raise ValueError("matrix dimensions are not complete patch-major dof blocks")
         n_patches = self.header.rows // self.dof_row
@@ -142,6 +144,18 @@ class NativeDenseGF(MatVecOperator):
             raise ValueError("row and column dimensions imply different patch counts")
         if n_patches % basis_functions_per_element:
             raise ValueError("patch count is not divisible by basis_functions_per_element")
+
+        element, basis = np.divmod(np.arange(n_patches, dtype=np.intp), basis_functions_per_element)
+        self.row_logical_to_raw, self.col_logical_to_raw = (
+            (
+                element[:, None] * (dof * basis_functions_per_element)
+                + np.arange(dof) * basis_functions_per_element
+                + basis[:, None]
+            ).reshape(-1)
+            for dof in (self.dof_row, self.dof_col)
+        )
+        self.row_logical_to_raw.flags.writeable = False
+        self.col_logical_to_raw.flags.writeable = False
 
         self.chunk_rows = chunk_rows
         self.coordinates = read_native_coordinates(
@@ -176,25 +190,31 @@ class NativeDenseGF(MatVecOperator):
     def matvec(self, omega: NDArray[np.floating]) -> NDArray[np.floating]:
         """Return ``A @ omega`` after one sequential, bounded-memory pass."""
         rhs, vector = self._rhs(omega, self.header.cols, "omega")
+        raw_rhs = np.empty_like(rhs)
+        raw_rhs[self.col_logical_to_raw] = rhs
         result = np.empty((self.header.rows, rhs.shape[1]), dtype=np.float64)
         with self.mat_path.open("rb") as stream:
             for start, stop, block in self._chunks(stream):
-                result[start:stop] = block @ rhs
+                result[start:stop] = block @ raw_rhs
+        result = result[self.row_logical_to_raw]
         return result[:, 0] if vector else result
 
     def rmatvec(self, psi: NDArray[np.floating]) -> NDArray[np.floating]:
         """Return ``A.T @ psi`` after one sequential, bounded-memory pass."""
         rhs, vector = self._rhs(psi, self.header.rows, "psi")
+        raw_rhs = np.empty_like(rhs)
+        raw_rhs[self.row_logical_to_raw] = rhs
         result = np.zeros((self.header.cols, rhs.shape[1]), dtype=np.float64)
         with self.mat_path.open("rb") as stream:
             for start, stop, block in self._chunks(stream):
-                result += block.T @ rhs[start:stop]
+                result += block.T @ raw_rhs[start:stop]
+        result = result[self.col_logical_to_raw]
         return result[:, 0] if vector else result
 
     def read_block(
         self, row_indices: NDArray[np.integer], col_indices: NDArray[np.integer]
     ) -> NDArray[np.float64]:
-        """Read a bounded diagnostic block without exposing it to compression."""
+        """Read logical patch-major indices for bounded diagnostics only."""
         rows = np.asarray(row_indices, dtype=np.intp).reshape(-1)
         cols = np.asarray(col_indices, dtype=np.intp).reshape(-1)
         if rows.size == 0 or cols.size == 0:
@@ -203,6 +223,8 @@ class NativeDenseGF(MatVecOperator):
             raise ValueError("row index outside matrix")
         if cols.min() < 0 or cols.max() >= self.header.cols:
             raise ValueError("column index outside matrix")
+        rows = self.row_logical_to_raw[rows]
+        cols = self.col_logical_to_raw[cols]
         order = np.argsort(rows, kind="stable")
         sorted_rows = rows[order]
         result = np.empty((rows.size, cols.size), dtype=np.float64)
@@ -216,6 +238,11 @@ class NativeDenseGF(MatVecOperator):
     def shape(self) -> tuple[int, int]:
         """Matrix shape ``(3*N, 2*N)``."""
         return (self.header.rows, self.header.cols)
+
+    @property
+    def permutation_bytes(self) -> int:
+        """Persistent logical-to-raw index storage (linear in patch count)."""
+        return self.row_logical_to_raw.nbytes + self.col_logical_to_raw.nbytes
 
     @property
     def maximum_chunk_bytes(self) -> int:

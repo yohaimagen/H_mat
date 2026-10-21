@@ -15,7 +15,6 @@ from benchmarks.frontera import (
     _known_live_product_workspace_bytes,
     _provenance,
     _rank_for_relative_tail,
-    _scalar_indices,
     construction_prediction,
     estimate_storage,
     full_compression_gate,
@@ -33,37 +32,35 @@ from gfcompress.frontera import (
 from gfcompress.interactions import build_lists
 
 
-def _fixture(tmp_path: Path) -> tuple[Path, Path, np.ndarray, np.ndarray]:
+def _fixture(tmp_path: Path, nbf: int = 10) -> tuple[Path, Path, np.ndarray, np.ndarray]:
     rng = np.random.default_rng(4)
     matrix = rng.standard_normal((60, 40))
     coordinates = rng.standard_normal((20, 3))
     matrix_path = tmp_path / "gf_mat.bin"
     with matrix_path.open("wb") as stream:
         stream.write(struct.pack(">6i", 8, 40, PETSC_MAT_CLASSID, 60, 40, -1))
-        matrix.astype(">f8").tofile(stream)
+        raw = matrix.reshape(20 // nbf, nbf, 3, 20 // nbf, nbf, 2).transpose(0, 2, 1, 3, 5, 4)
+        raw.astype(">f8").tofile(stream)
     coordinate_path = tmp_path / "gf_coords.bin"
     coordinates.astype(">f8").tofile(coordinate_path)
     return matrix_path, coordinate_path, matrix, coordinates
 
 
-def _element_blocked_fixture(tmp_path: Path) -> NativeDenseGF:
+def _element_blocked_fixture(tmp_path: Path) -> tuple[NativeDenseGF, np.ndarray]:
     n, nbf = 20, 10
     coordinates = np.column_stack((np.r_[np.arange(10), np.arange(20, 30)], np.zeros((20, 2))))
     distance = np.abs(coordinates[:, 0, None] - coordinates[:, 0])
     strength = 1.0 / (1.0 + distance) ** 2
     component = np.arange(1, 7, dtype=float).reshape(3, 2)
     physical = np.einsum("ij,ab->iajb", strength, component).reshape(3 * n, 2 * n)
-    row_map = _scalar_indices(np.arange(n), 3, n, nbf, "element_blocked")
-    col_map = _scalar_indices(np.arange(n), 2, n, nbf, "element_blocked")
-    raw = np.empty_like(physical)
-    raw[np.ix_(row_map, col_map)] = physical
+    raw = physical.reshape(2, nbf, 3, 2, nbf, 2).transpose(0, 2, 1, 3, 5, 4)
     matrix_path = tmp_path / "blocked_mat.bin"
     with matrix_path.open("wb") as stream:
         stream.write(struct.pack(">6i", 2, 40, PETSC_MAT_CLASSID, 60, 40, -1))
         raw.astype(">f8").tofile(stream)
     coordinate_path = tmp_path / "blocked_coords.bin"
     coordinates.astype(">f8").tofile(coordinate_path)
-    return NativeDenseGF(matrix_path, coordinate_path, chunk_rows=7)
+    return NativeDenseGF(matrix_path, coordinate_path, chunk_rows=7), physical
 
 
 def test_native_dense_header_and_coordinates(tmp_path: Path) -> None:
@@ -76,10 +73,13 @@ def test_native_dense_header_and_coordinates(tmp_path: Path) -> None:
     np.testing.assert_array_equal(loaded, coordinates)
 
 
-def test_native_dense_products_are_linear_and_adjoint(tmp_path: Path) -> None:
-    matrix_path, coordinate_path, matrix, _ = _fixture(tmp_path)
-    operator = NativeDenseGF(matrix_path, coordinate_path, chunk_rows=7)
-    assert operator.ordering_status == "unresolved"
+@pytest.mark.parametrize("nbf", [1, 2, 5, 10, 20])
+def test_native_dense_products_are_linear_and_adjoint(tmp_path: Path, nbf: int) -> None:
+    matrix_path, coordinate_path, matrix, _ = _fixture(tmp_path, nbf)
+    operator = NativeDenseGF(
+        matrix_path, coordinate_path, chunk_rows=7, basis_functions_per_element=nbf
+    )
+    assert operator.ordering_status == "resolved_authoritative"
     rng = np.random.default_rng(9)
     x = rng.standard_normal((40, 2))
     y = rng.standard_normal((40, 2))
@@ -130,17 +130,27 @@ def test_storage_prediction_matches_tree_pair_enumeration(tmp_path: Path) -> Non
     assert result["total_bytes_upper_bound"] == 8 * (expected_factors + expected_leaves)
 
 
-def test_ordering_compares_element_blocked_but_remains_unresolved(tmp_path: Path) -> None:
-    evidence = ordering_evidence(_element_blocked_fixture(tmp_path))
-    blocked = "element_blocked_rows__element_blocked_cols"
-    patch = "patch_major_rows__patch_major_cols"
-    assert (
-        evidence["hypotheses"][blocked]["median_spearman"]
-        < evidence["hypotheses"][patch]["median_spearman"]
-    )
-    assert evidence["strongest_decay_hypothesis"].endswith("__element_blocked_cols")
-    assert evidence["status"] == "unresolved"
-    assert evidence["passes_gate"] is False
+def test_element_blocked_physical_operator_and_authoritative_ordering(tmp_path: Path) -> None:
+    operator, physical = _element_blocked_fixture(tmp_path)
+    evidence = ordering_evidence(operator)
+    assert evidence["median_spearman"] == pytest.approx(-1)
+    assert evidence["status"] == "resolved_authoritative"
+    assert evidence["passes_gate"] is True
+    assert evidence["source_evidence"]["commit"] == "c4eb1b4615b0"
+    for dof, mapping in ((3, operator.row_logical_to_raw), (2, operator.col_logical_to_raw)):
+        np.testing.assert_array_equal(np.sort(mapping), np.arange(20 * dof))
+        for patch in range(20):
+            for component in range(dof):
+                assert mapping[dof * patch + component] == (
+                    patch // 10 * dof * 10 + component * 10 + patch % 10
+                )
+    np.testing.assert_allclose(operator.matvec(np.eye(40)), physical)
+    np.testing.assert_allclose(operator.rmatvec(np.eye(60)), physical.T)
+    rows, cols = np.array([31, 2, 31, 29]), np.array([21, 1, 19, 1])
+    np.testing.assert_array_equal(operator.read_block(rows, cols), physical[np.ix_(rows, cols)])
+    raw = np.fromfile(operator.mat_path, dtype=">f8", offset=24).reshape(60, 40)
+    assert not np.allclose(raw, physical)
+    assert operator.permutation_bytes == 100 * np.dtype(np.intp).itemsize
 
 
 def test_rank_boundary_is_inclusive_and_uses_next_singular_value() -> None:
@@ -161,7 +171,7 @@ def test_prediction_names_runtime_upper_and_models_three_outputs(tmp_path: Path)
     assert (
         peak["modeled_known_live_array_bytes"] >= prediction["storage"]["total_bytes_upper_bound"]
     )
-    expected = 8 * 5 * (40 + 3 * 60) + operator.maximum_chunk_bytes
+    expected = 8 * 5 * (2 * 40 + 4 * 60) + operator.maximum_chunk_bytes
     assert (
         _known_live_product_workspace_bytes(
             operator.shape, 5, operator.maximum_chunk_bytes, transpose=False
@@ -175,6 +185,12 @@ def test_gate_and_provenance_make_unresolved_state_explicit(monkeypatch) -> None
     assert gate["status"] == "gated_not_run"
     assert "physical row/column ordering is unresolved" in gate["reasons"]
     assert any("1000000000000" in reason for reason in gate["reasons"])
+    resolved = full_compression_gate(
+        {"status": "resolved_authoritative"}, {"bytes_read": 2_000_000_000_000}
+    )
+    assert resolved["status"] == "gated_not_run"
+    assert "physical row/column ordering is unresolved" not in resolved["reasons"]
+    assert len(resolved["reasons"]) == 3
 
     args = SimpleNamespace(
         revision="review-correction",
@@ -194,22 +210,24 @@ def test_gate_and_provenance_make_unresolved_state_explicit(monkeypatch) -> None
 
 def test_tracked_correction_record_preserves_gate_and_timing_provenance() -> None:
     report = json.loads(Path("benchmarks/results/frontera_np20k_preflight.json").read_text())
-    assert report["ordering"]["status"] == "unresolved"
-    assert report["conditional_block_preflight"]["used_for_gate"] is False
+    assert report["ordering"]["status"] == "resolved_authoritative"
+    assert report["physical_block_preflight"]["used_for_gate"] is False
     assert report["full_compression"]["status"] == "gated_not_run"
-    assert report["derived_correction"]["streaming_timings_reused_without_full_matrix_rescan"]
+    history = report["timing_history"][-1]
+    assert history["derived_correction"]["streaming_timings_reused_without_full_matrix_rescan"]
     assert (
-        report["derived_correction"]["original_measured_record_sha256"]
+        history["derived_correction"]["original_measured_record_sha256"]
         == "89696e68ed460d776fd302ad766d1bf0ff879aee0ac8674a3dcc866d1a5f32d8"
     )
     assert "deliberately_pessimistic_linear_rhs_upper_seconds" in report["prediction"]
     peak = report["prediction"]["peak_memory_model"]
     assert report["streaming"]["maximum_converted_chunk_bytes"] == 61_870_080
-    assert peak["maximum_forward_workspace_bytes"] == 1_323_761_920
-    assert peak["maximum_adjoint_workspace_bytes"] == 144_524_640
-    assert peak["modeled_known_live_array_bytes"] == 4_509_852_944
+    assert peak["maximum_forward_workspace_bytes"] == 1_897_349_120
+    assert peak["maximum_adjoint_workspace_bytes"] == 190_443_840
+    assert peak["modeled_known_live_array_bytes"] == 5_084_245_744
+    assert peak["persistent_permutation_bytes"] == 805600
     assert "full, truncated, and subtraction-result" in peak["included_lifetimes"]
-    assert report["derived_correction"]["final_chunk_lifetime_adjustment"] == (
+    assert history["derived_correction"]["final_chunk_lifetime_adjustment"] == (
         "deterministic three-chunk lifetime correction; no dataset scan or new " "measurement"
     )
     assert report["provenance"]["command"][-1] == "--run"
@@ -217,6 +235,12 @@ def test_tracked_correction_record_preserves_gate_and_timing_provenance() -> Non
     assert (
         report["provenance"]["source_sha256"][str(source)]
         == hashlib.sha256(source.read_bytes()).hexdigest()
+    )
+    hashes = report["provenance"]["source_sha256"]
+    benchmark_key = next(key for key in hashes if key.endswith("benchmarks/frontera.py"))
+    assert (
+        hashes[benchmark_key]
+        == hashlib.sha256(Path("benchmarks/frontera.py").read_bytes()).hexdigest()
     )
 
 
@@ -253,3 +277,10 @@ def test_native_dense_rhs_shapes_are_checked(tmp_path: Path) -> None:
         operator.matvec(np.ones(39))
     with pytest.raises(ValueError, match="psi"):
         operator.rmatvec(np.ones((60, 1, 1)))
+
+
+@pytest.mark.parametrize("nbf", [0, -1, 1.5, True, 3])
+def test_native_dense_rejects_invalid_element_basis_count(tmp_path: Path, nbf) -> None:
+    matrix_path, coordinate_path, _, _ = _fixture(tmp_path)
+    with pytest.raises(ValueError, match="basis_functions_per_element"):
+        NativeDenseGF(matrix_path, coordinate_path, basis_functions_per_element=nbf)
