@@ -1,7 +1,18 @@
 # C.11 full fixed-pattern baselines
 
-**C.11 is not accepted: BP3 passes, but BP7 still fails frozen discriminating
-accuracy checks. The gate to coloring remains closed.** Both full datasets were
+**Revised contract, PI decision 2026-10-22:** C.11 requires successful full
+BP3 and Frontera 3D baselines. BP7 remains complete negative evidence and is
+not a mandatory success gate: the small-fault geometry has insufficient
+meaningful far field. Its failed results below remain failed, with no relaxed
+thresholds or discarded seeds. BP3 passes; Frontera formal confirmation has
+not run, so C.11 is not accepted and coloring remains closed. The one-seed
+Frontera pilot is calibration only. See [the formal protocol](FRONTERA.md#formal-c11-confirmation)
+and [frozen configuration](configs/frontera_full_fixed.json).
+
+The remainder records the historical BP3/BP7 experiments under the original
+two-success contract, including the full negative evidence and unsuccessful
+remedies. Historical statements about BP7 blocking C.11 are superseded only
+by the explicit contract revision above. Both original full datasets were
 run with construction seeds 11, 23, 37 and independent validation starts 101,
 103. No tolerance was relaxed and no seed was discarded.
 

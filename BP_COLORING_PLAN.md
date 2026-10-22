@@ -336,9 +336,16 @@ then freeze full BP3/BP7 results before any graph-coloring implementation.
   factor and additional block/input checks. Mark full runs opt-in regardless
   of whether they happen to be fast on the development machine.
 
-### Task C.11 — Full BP3/BP7 fixed baselines and gate to coloring
+### Task C.11 — Full BP3/Frontera fixed baselines and BP7 negative evidence
 
-* **Scope:** Full fixed-pattern compression and validation of both datasets.
+* **Scope:** Full fixed-pattern compression and validation of BP3 and the larger
+  Frontera 3D GF. **PI contract revision (2026-10-22):** BP7 is retained as
+  complete negative evidence; its small-fault geometry has insufficient
+  meaningful far field and success is no longer mandatory. BP7's failed
+  results, thresholds, and attempted remedies remain unchanged and visible.
+  This explicit C.11/C.12 contract supersedes earlier BP3/BP7 success-gate
+  wording (including the older AGENTS.md scope summary); it does not relabel
+  BP7 as passing or implement any coloring task.
 * **Steps:**
   1. Run the locked configurations, with at least three construction seeds per
      dataset. Use independent validation vectors and norm starts from C.10.
@@ -348,10 +355,18 @@ then freeze full BP3/BP7 results before any graph-coloring implementation.
      end-to-end setup. Report setup break-even when applies are faster.
   4. Save small structured result records and a human-readable baseline report;
      large matrices/factors remain gitignored if retained locally.
-* **Output:** `benchmarks/results/bp3_fixed.json`, `bp7_fixed.json`, and
+  5. Frontera uses `benchmarks/configs/frontera_full_fixed.json`, reviewed before
+     confirmation, seeds 11/23/37 and validation starts 101/103. The pilot seed
+     20261012 is feasibility calibration only. Stream NativeDenseGF without a
+     native matrix copy; checkpoint each seed and enforce declared resource
+     guards. Do not tune thresholds using confirmatory outcomes.
+* **Output:** `benchmarks/results/bp3_fixed.json`, preserved `bp7_fixed.json`,
+  an external `benchmark_results/formal_fixed/frontera_fixed.json` plus per-seed
+  records (small accepted summaries may subsequently be archived in the repo), and
   `benchmarks/RESULTS.md` (or one consistent equivalent layout established in
   C.8), linked to exact configurations and revisions.
-* **Acceptance — mandatory gate:** Both full datasets run successfully; pass
+* **Acceptance — mandatory gate:** BP3 and Frontera each run all three seeds
+  successfully; pass
   the frozen accuracy/discriminating checks; store fewer numerical entries than
   dense; and use fewer construction columns than `n_cols`, counting both
   forward and transpose columns. Actual speedup is measured, not assumed.
@@ -369,7 +384,8 @@ rank policy, operator interface, and numerical reconstruction equations.
 
 ### Task C.12 — Canonical constraints and incompatibility graphs
 
-* **Prerequisite:** C.11 accepted for both datasets.
+* **Prerequisite:** Revised C.11 accepted for BP3 and Frontera; BP7 remains
+  documented negative evidence, not a required success.
 * **Scope:** Sampling descriptors and a new minimal graph-construction module,
   following Eq. 4.4 and Definition 4.1.
 * **Steps:**
@@ -537,7 +553,7 @@ C.0  activate/reconcile
   -> C.1 geometry -> C.2 PCA -> C.3 ranks -> C.4 randomness -> C.5 sampling
   -> C.6 synthetic validation -> C.7 real subsets -> C.8 accounting
   -> C.9 measured improvements -> C.10 operating points
-  -> C.11 FULL FIXED BP3/BP7 BASELINES — mandatory gate
+  -> C.11 FULL FIXED BP3/FRONTERA BASELINES + BP7 NEGATIVE EVIDENCE — mandatory gate
   -> C.12 graphs -> C.13 DSatur -> C.14 admissible probes
   -> C.15 leaf probes -> C.16 public coloring/regression
   -> C.17 FULL PAIRED BP3/BP7 COMPARISON -> C.18 delivery

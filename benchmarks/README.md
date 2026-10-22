@@ -7,6 +7,11 @@ row/column ordering is resolved from Tandem's executable index map, and the
 reader exposes logical patch-major products. Bounded physical block spectra
 do not replace operator-wide validation. This is not a C.11 baseline or a BP7 correction.
 
+The reviewed-before-run [formal Frontera protocol](FRONTERA.md#formal-c11-confirmation)
+uses three fixed-path seeds and the revised BP3-plus-Frontera C.11 acceptance
+contract. BP7 remains documented negative evidence. Formal confirmation is
+opt-in and has not been run as part of implementing the runner.
+
 Run the reproducible synthetic report with one BLAS thread:
 
 ```sh
