@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "reader": {"chunk_rows": 64, "basis_functions_per_element": 10},
+  "screen_seeds": [401, 409, 419],
+  "comparator": {"m": 512, "k": 64, "p": 20},
+  "candidates": [{"m": 512, "k": 96, "p": 32}, {"m": 512, "k": 128, "p": 32}],
+  "target": {"level": 4, "alpha_index": 16, "beta_index": 2},
+  "representative_levels": [3],
+  "maximum_block_entries": 8000000,
+  "promotion": {"l4_all_ratio_max": 0.8, "representative_all": 1.0, "reason": "Promote at most one candidate only if its worst clean L4 reconstruction improves the comparator by at least 20% and no representative block worsens. This screen rule is not an acceptance threshold."}
+}

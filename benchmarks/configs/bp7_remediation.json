@@ -1,0 +1,36 @@
+{
+  "full_tree": {"m": 512},
+  "strata": {
+    "quantiles": [0.05, 0.35, 0.65, 0.95],
+    "maximum_entries": 2000000,
+    "rule": "At every admissible level, sort all pairs by scalar area then dyadic cells and select these four area quantiles. This is deterministic, bounded, and deliberately not the prior largest/first rule."
+  },
+  "subset": {"max_patches": 192, "regions": 4, "m": 8},
+  "black_box_scaling": {
+    "seed": 911,
+    "probes_per_side": 2,
+    "total_columns": 4,
+    "rule": "Two independent forward columns estimate output component RMS; two independent transpose columns after output scaling estimate input RMS. These four calibration columns are counted in every candidate budget."
+  },
+  "screen_seed": 811,
+  "rank_grid": [20, 35, 47, 53, 60],
+  "adaptive_policies": [
+    {"name": "incumbent", "levels": {"2": {"k": 47, "p": 10}, "3": {"k": 47, "p": 10}}},
+    {"name": "coarse_priority", "levels": {"2": {"k": 60, "p": 10}, "3": {"k": 42, "p": 10}}},
+    {"name": "fine_priority", "levels": {"2": {"k": 35, "p": 10}, "3": {"k": 53, "p": 10}}}
+  ],
+  "combinations": [
+    {"policy": "incumbent", "scaling": "identity"},
+    {"policy": "incumbent", "scaling": "black_box_rms"},
+    {"policy": "incumbent", "scaling": "oracle_stratified_rms"},
+    {"policy": "coarse_priority", "scaling": "black_box_rms"},
+    {"policy": "fine_priority", "scaling": "black_box_rms"}
+  ],
+  "promotion": {
+    "policy": "fine_priority",
+    "scaling": "black_box_rms",
+    "component_error_max": 0.08,
+    "whole_block_max": 0.029231984038525255,
+    "rule": "A full BP7 run is authorized only if the predeclared candidate's worst output-or-input component reconstruction error is at most 0.08, its worst whole-block reconstruction error does not exceed the incumbent representative 0.029231984038525255 proxy, and its complete fixed-pattern budget including scaling calibration is strictly below 11040."
+  }
+}
