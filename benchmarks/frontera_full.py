@@ -86,6 +86,29 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError("timing must match the shared full-baseline protocol")
     if any(value <= 0 for value in config["guards"].values()):
         raise ValueError("resource guards must be positive")
+    confirmation = config.get("confirmation", {})
+    if not isinstance(confirmation, dict):
+        raise ValueError("confirmation must be an object")
+    if confirmation.get("requires_screen_promotion") and not config.get("configuration_version"):
+        raise ValueError("screen-gated candidates require a versioned configuration")
+
+
+def prediction_for_primary(
+    source: GuardedNativeDenseGF, root: Any, primary: dict[str, int]
+) -> dict[str, Any]:
+    """Reuse the reviewed predictor for a versioned primary configuration."""
+    import benchmarks.frontera as frontera
+
+    original = frontera.CANDIDATE
+    frontera.CANDIDATE = primary
+    try:
+        return construction_prediction(
+            source,
+            root,
+            {"forward_seconds": 0.0, "adjoint_seconds": 0.0, "rhs_columns_per_pass": 3},
+        )
+    finally:
+        frontera.CANDIDATE = original
 
 
 class GuardedNativeDenseGF(NativeDenseGF):
@@ -142,15 +165,8 @@ def preflight(source: GuardedNativeDenseGF, config: dict[str, Any]) -> dict[str,
     ):
         raise ValueError("dataset shape/size differs from frozen configuration")
     primary = config["selection"]["primary"]
-    # This helper's fixed candidate is deliberately checked before reuse.
-    if primary != {"m": 512, "k": 47, "p": 10}:
-        raise ValueError("Frontera resource prediction requires the frozen pilot parameters")
     root = build_tree(source.mesh, primary["m"])
-    prediction = construction_prediction(
-        source,
-        root,
-        {"forward_seconds": 0.0, "adjoint_seconds": 0.0, "rhs_columns_per_pass": 3},
-    )
+    prediction = prediction_for_primary(source, root, primary)
     for name in (
         "io_floor_seconds_from_width3_products",
         "deliberately_pessimistic_linear_rhs_upper_seconds",
@@ -170,6 +186,14 @@ def preflight(source: GuardedNativeDenseGF, config: dict[str, Any]) -> dict[str,
         raise RuntimeError("construction columns must be below n_cols")
     if prediction["storage"]["total_bytes_upper_bound"] >= source.header.value_bytes:
         raise RuntimeError("predicted numerical storage must be below dense")
+    expected = config.get("expected_prediction", {})
+    if expected:
+        if prediction["combined_construction_columns"] != expected["construction_columns"]:
+            raise RuntimeError("candidate construction-column prediction changed")
+        if prediction["storage"]["total_bytes_upper_bound"] > expected["storage_bytes_upper_bound"]:
+            raise RuntimeError("candidate storage prediction exceeds reviewed bound")
+        if memory["modeled_known_live_array_bytes"] > expected["modeled_live_bytes_upper_bound"]:
+            raise RuntimeError("candidate live-memory prediction exceeds reviewed bound")
     # C.10: 17 direction/component calls, <= one selected block per active level,
     # and four calls per power iteration. Timing adds 2*(1+5) dense products.
     levels = len(list(root.iter_levels())) - 2
@@ -279,6 +303,7 @@ def main() -> None:
     parser.add_argument("--config", type=Path, default=CONFIG)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--screen-report", type=Path)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--run", action="store_true")
     args = parser.parse_args()
@@ -323,6 +348,13 @@ def main() -> None:
     if not args.run:
         print(json.dumps(report, indent=2))
         return
+    confirmation = config.get("confirmation", {})
+    if confirmation.get("requires_screen_promotion"):
+        if args.screen_report is None:
+            raise ValueError("screen-gated candidate requires --screen-report")
+        screen = json.loads(args.screen_report.read_text())
+        if screen.get("promotion") != config["selection"]["primary"]:
+            raise ValueError("screen report did not promote this candidate")
     for name in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
         if os.environ.get(name) != "1":
             raise ValueError(f"{name}=1 is required")

@@ -200,3 +200,36 @@ reading the external matrix or creating output. For an interrupted invocation,
 repeat the same command with `--resume`. Results go to the external dataset's
 `benchmark_results/formal_fixed/{frontera_fixed,seed_11,seed_23,seed_37}.json`.
 Only reviewed small summaries may later be copied into the repository.
+
+## Correction round 1: bounded v1 screen
+
+The external formal v1 record remains failed: all three seeds passed the global,
+component/input, storage, and count checks, but leaves-only improvement was only
+76.84--79.94 (required: 100), and seed 11's selected L4 response was 0.001306
+(required: 0.001). Those thresholds and seeds are preserved; this screen does
+not rerun confirmation.
+
+Before any new confirmation, the versioned screen compares clean randomized
+reconstructions of the failed L4 `16,2` interaction and one bounded physical
+block at level 3. The level-2 blocks exceed the eight-million-entry ceiling.
+It uses exact `NativeDenseGF.read_block`
+access only, never a full dense copy or factors. The comparator is `(512,64,20)`;
+the only alternatives are `(512,96,32)` and `(512,128,32)`. Their exact predicted
+construction columns are 17,160, 22,792, and 26,888; reviewed storage/working-set
+bounds are 3.54/4.25/4.96 GB and 5.49/6.25/7.04 GB, respectively.
+
+Promotion is predeclared: at most one candidate may proceed only when its worst
+clean L4 reconstruction improves the comparator by at least 20% and no bounded
+representative block worsens. This is a local screen rule, not a frozen C.11
+acceptance threshold. If no candidate promotes, v2 confirmation remains gated.
+
+```sh
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
+PYTHONPATH=/Users/ymagen/.codex/worktrees/c11-frontera/H_mat/src \
+/Users/ymagen/work/H_mat/.venv/bin/python -m benchmarks.frontera_screen \
+  --revision '<reviewed-source-commit>' --run
+```
+
+The screen writes only a small JSON result under the external dataset. A promoted
+v2 candidate still needs review before its fresh seeds `41,43,47` and validation
+starts `107,109` can be used with `benchmarks.frontera_full --screen-report`.

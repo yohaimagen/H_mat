@@ -9,6 +9,15 @@ not run, so C.11 is not accepted and coloring remains closed. The one-seed
 Frontera pilot is calibration only. See [the formal protocol](FRONTERA.md#formal-c11-confirmation)
 and [frozen configuration](configs/frontera_full_fixed.json).
 
+The external formal Frontera v1 record is retained as failed evidence: its
+leaves-only improvement missed 100 on every seed (76.84--79.94), and seed 11
+also missed the selected-L4 limit (0.001306 vs 0.001). Correction round 1 adds
+an opt-in bounded physical-block screen, not a new confirmation. Its comparator
+and alternatives, promotion rule, and fresh gated v2 configuration are recorded
+in [FRONTERA.md](FRONTERA.md#correction-round-1-bounded-v1-screen),
+[frontera_screen_v1.json](configs/frontera_screen_v1.json), and
+[frontera_full_fixed_v2.json](configs/frontera_full_fixed_v2.json).
+
 The remainder records the historical BP3/BP7 experiments under the original
 two-success contract, including the full negative evidence and unsuccessful
 remedies. Historical statements about BP7 blocking C.11 are superseded only

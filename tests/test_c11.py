@@ -292,6 +292,24 @@ def test_frontera_contract_freezes_independent_seeds_thresholds_and_new_success_
         validate_config(config)
 
 
+def test_frontera_v2_candidate_is_screen_gated_with_fresh_confirmation_seeds():
+    from benchmarks.frontera_full import validate_config
+    from benchmarks.frontera_screen import promote
+
+    candidate = json.loads(Path("benchmarks/configs/frontera_full_fixed_v2.json").read_text())
+    validate_config(candidate)
+    assert candidate["construction_seeds"] == [41, 43, 47]
+    assert candidate["validation_seeds"] == [107, 109]
+    assert candidate["expected_prediction"]["construction_columns"] == 22_792
+    assert candidate["confirmation"]["requires_screen_promotion"]
+    results = [
+        {"parameters": {"k": 64}, "l4_all": 1.0, "representative_all": 1.0},
+        {"parameters": {"k": 96}, "l4_all": 0.7, "representative_all": 1.0},
+        {"parameters": {"k": 128}, "l4_all": 0.6, "representative_all": 1.1},
+    ]
+    assert promote(results, {"l4_all_ratio_max": 0.8, "representative_all": 1.0}) == {"k": 96}
+
+
 def test_frontera_stream_guards_prevent_excess_width_reads_rss_and_low_disk(tmp_path, monkeypatch):
     import benchmarks.frontera_full as formal
 
