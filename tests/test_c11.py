@@ -620,9 +620,10 @@ def test_screen_rejects_incomplete_or_tampered_evidence(damage):
         validate_screen(report, binding, manifest)
 
 
-def test_evidence_atomic_no_overwrite_and_dataset_source_binding(tmp_path):
+def test_evidence_exclusive_no_overwrite_and_dataset_source_binding(tmp_path, monkeypatch):
     from benchmarks.frontera_screen import evidence_binding, seal, verify, write_once
 
+    monkeypatch.setattr("os.link", lambda *args: pytest.fail("exFAT does not support hard links"))
     config, _ = _frontera_fixture(tmp_path)
     binding = evidence_binding(tmp_path, config, "reviewed-fixture")
     record = {"schema_version": 2, "kind": "fixture", "binding": binding}
@@ -641,6 +642,34 @@ def test_evidence_atomic_no_overwrite_and_dataset_source_binding(tmp_path):
         stream.write(b"x")
     with pytest.raises(ValueError, match="coordinate hash"):
         evidence_binding(tmp_path, config, "reviewed-fixture")
+
+
+def test_evidence_failed_write_closes_file_and_preserves_partial_evidence(tmp_path, monkeypatch):
+    import os
+
+    from benchmarks.frontera_screen import verify, write_once
+
+    descriptors = []
+
+    def failed_sync(fd):
+        descriptors.append(fd)
+        raise OSError("simulated sync failure")
+
+    monkeypatch.setattr(os, "fsync", failed_sync)
+    path = tmp_path / "evidence.json"
+    with pytest.raises(OSError, match="sync failure"):
+        write_once(path, {"schema_version": 2, "kind": "fixture", "binding": {}})
+    with pytest.raises(OSError):
+        os.fstat(descriptors[0])
+    assert path.exists()
+    # Model a crash-truncated final file; loading rejects it and retry cannot replace it.
+    path.write_text('{"schema_version": 2,')
+    original = path.read_bytes()
+    with pytest.raises(json.JSONDecodeError):
+        verify(json.loads(path.read_text()), "fixture", {})
+    with pytest.raises(FileExistsError):
+        write_once(path, {"replacement": True})
+    assert path.read_bytes() == original
 
 
 def test_screen_read_accounting_and_resource_guards(tmp_path, monkeypatch):

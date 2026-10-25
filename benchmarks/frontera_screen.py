@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 import shutil
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -87,17 +86,17 @@ def verify(report: dict[str, Any], kind: str, binding: dict[str, Any]) -> None:
 
 
 def write_once(path: Path, report: dict[str, Any]) -> None:
-    """Publish complete evidence atomically; even concurrent writers cannot overwrite."""
+    """Create evidence exclusively, including on exFAT; never overwrite a partial file.
+
+    A crash may leave truncated JSON, which consumers must reject on loading.
+    """
+    payload = json.dumps(seal(report), indent=2, sort_keys=True, allow_nan=False) + "\n"
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=".evidence-")
-    try:
-        with os.fdopen(fd, "w") as stream:
-            stream.write(json.dumps(seal(report), indent=2, sort_keys=True, allow_nan=False) + "\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.link(temporary, path)
-    finally:
-        os.unlink(temporary)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
 
 
 def check_resources(dataset: Path, plan: dict[str, Any]) -> None:
