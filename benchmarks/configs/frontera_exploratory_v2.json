@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "stage": "exploratory",
+  "candidate": {"m": 512, "k": 96, "p": 32},
+  "construction_seed": 431,
+  "validation_seed": 433,
+  "formal_config": "benchmarks/configs/frontera_full_fixed_v2.json",
+  "early_gates": {"random_leaves_only_improvement_min": 150.0, "selected_block_error_max": 0.0005},
+  "absolute_response_floor": 1e-12,
+  "expected_data": {"shape": [60420, 40280], "matrix_file_bytes": 19469740824, "coordinate_sha256": "7b315f1fed83de485028da55c3bf27fe50c79f81da875cd467e70d6266810e72", "ordering_source_commit": "c4eb1b4615b0"},
+  "later_diagnostics": "none: successful early evidence unlocks separately invoked fresh formal seeds; failed early gates stop immediately"
+}

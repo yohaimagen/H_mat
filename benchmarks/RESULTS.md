@@ -4,8 +4,8 @@
 BP3 and Frontera 3D baselines. BP7 remains complete negative evidence and is
 not a mandatory success gate: the small-fault geometry has insufficient
 meaningful far field. Its failed results below remain failed, with no relaxed
-thresholds or discarded seeds. BP3 passes; Frontera formal confirmation has
-not run, so C.11 is not accepted and coloring remains closed. The one-seed
+thresholds or discarded seeds. BP3 passes; Frontera formal v1 failed,
+so C.11 is not accepted and coloring remains closed. The one-seed
 Frontera pilot is calibration only. See [the formal protocol](FRONTERA.md#formal-c11-confirmation)
 and [frozen configuration](configs/frontera_full_fixed.json).
 
@@ -17,6 +17,16 @@ and alternatives, promotion rule, and fresh gated v2 configuration are recorded
 in [FRONTERA.md](FRONTERA.md#correction-round-1-bounded-v1-screen),
 [frontera_screen_v1.json](configs/frontera_screen_v1.json), and
 [frontera_full_fixed_v2.json](configs/frontera_full_fixed_v2.json).
+
+Correction round 2 adds a separate one-seed exploratory gate between the bounded
+screen and fresh formal v2 confirmation. Its frozen early limits are 150x random
+leaves-only improvement in both directions and `5e-4` selected-block response
+error. Complete content-bound screen and exploratory reports are required;
+bare promotion flags cannot unlock formal seeds. The two full physical L4
+blocks require 668,970,240 matrix-value bytes, reused across candidates with
+paired maximum-width probes. See the [revised protocol](FRONTERA.md#correction-round-2-exploratory-gate-and-evidence-validation).
+No external matrix run occurred during this implementation round; all new
+screen, exploratory, and formal v2 numerical outcomes remain unmeasured.
 
 The remainder records the historical BP3/BP7 experiments under the original
 two-success contract, including the full negative evidence and unsuccessful

@@ -238,9 +238,10 @@ def test_tracked_correction_record_preserves_gate_and_timing_provenance() -> Non
     )
     hashes = report["provenance"]["source_sha256"]
     benchmark_key = next(key for key in hashes if key.endswith("benchmarks/frontera.py"))
+    # Historical evidence stays bound to the measured runner, even when its
+    # prediction API gains an explicit candidate for later configurations.
     assert (
-        hashes[benchmark_key]
-        == hashlib.sha256(Path("benchmarks/frontera.py").read_bytes()).hexdigest()
+        hashes[benchmark_key] == "1275444f3320fea269733dd796b4f361b5f27aef39a854bd9abba6b82a0fbe14"
     )
 
 

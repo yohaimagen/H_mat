@@ -261,21 +261,23 @@ def construction_prediction(
     operator: NativeDenseGF,
     root: TreeNode,
     stream: dict[str, Any],
+    candidate: dict[str, int] | None = None,
 ) -> dict[str, Any]:
+    candidate = CANDIDATE if candidate is None else candidate
     products = predict_fixed_products(
         root,
         operator.mesh,
-        CANDIDATE["k"],
-        CANDIDATE["p"],
+        candidate["k"],
+        candidate["p"],
         ProductCounts(0, 0, 0, 0),
     )
     budget = products.total_budget
     calls = budget.matvec_calls + budget.rmatvec_calls
     columns = budget.matvec_columns + budget.rmatvec_columns
     matrix_bytes = operator.header.value_bytes
-    storage = estimate_storage(root, CANDIDATE["k"])
+    storage = estimate_storage(root, candidate["k"])
     maximum_leaf_width = max(node.col_indices.size for node in list(root.iter_levels())[-1])
-    admissible_width = CANDIDATE["k"] + CANDIDATE["p"]
+    admissible_width = candidate["k"] + candidate["p"]
     forward_workspace = _known_live_product_workspace_bytes(
         operator.shape,
         int(maximum_leaf_width),
@@ -310,7 +312,7 @@ def construction_prediction(
         + budget.rmatvec_columns * stream["adjoint_seconds"]
     ) / stream["rhs_columns_per_pass"]
     return {
-        "candidate": CANDIDATE,
+        "candidate": candidate,
         "products": asdict(budget),
         "combined_construction_columns": columns,
         "combined_columns_below_n_cols": columns < operator.shape[1],

@@ -210,10 +210,11 @@ component/input, storage, and count checks, but leaves-only improvement was only
 not rerun confirmation.
 
 Before any new confirmation, the versioned screen compares clean randomized
-reconstructions of the failed L4 `16,2` interaction and one bounded physical
-block at level 3. The level-2 blocks exceed the eight-million-entry ceiling.
-It uses exact `NativeDenseGF.read_block`
-access only, never a full dense copy or factors. The comparator is `(512,64,20)`;
+reconstructions of the failed L4 `16,2` interaction and the predeclared L4
+`4,16` representative. Their whole physical shapes are `1038 x 712` and
+`1038 x 692`; both have minimum dimension above rank 128. Each block is read
+once in row orientation and reused for all candidates and seeds, totaling
+668,970,240 matrix-value bytes. The comparator is `(512,64,20)`;
 the only alternatives are `(512,96,32)` and `(512,128,32)`. Their exact predicted
 construction columns are 17,160, 22,792, and 26,888; reviewed storage/working-set
 bounds are 3.54/4.25/4.96 GB and 5.49/6.25/7.04 GB, respectively.
@@ -221,7 +222,9 @@ bounds are 3.54/4.25/4.96 GB and 5.49/6.25/7.04 GB, respectively.
 Promotion is predeclared: at most one candidate may proceed only when its worst
 clean L4 reconstruction improves the comparator by at least 20% and no bounded
 representative block worsens. This is a local screen rule, not a frozen C.11
-acceptance threshold. If no candidate promotes, v2 confirmation remains gated.
+acceptance threshold. Candidates are considered in predeclared cost order:
+rank 96 wins when both qualify. If only rank 128 qualifies, no full construction
+is authorized by the current v2 configuration.
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
@@ -230,6 +233,53 @@ PYTHONPATH=/Users/ymagen/.codex/worktrees/c11-frontera/H_mat/src \
   --revision '<reviewed-source-commit>' --run
 ```
 
-The screen writes only a small JSON result under the external dataset. A promoted
-v2 candidate still needs review before its fresh seeds `41,43,47` and validation
-starts `107,109` can be used with `benchmarks.frontera_full --screen-report`.
+## Correction round 2: exploratory gate and evidence validation
+
+The screen uses independent left/right PCG64 streams per block and seed. It
+generates the maximum width once, slices prefixes for every candidate, and
+records the hashes of both sliced probes. The locked plan includes full block
+dimensions, exact row/column index hashes, occupied cell counts, and expected
+row-read bytes. Runtime checks enforce those identities, actual bytes returned,
+eight million maximum block entries, 4 GiB RSS, 100 GiB free disk, and an explicit
+20 GB diagnostic matrix-read ceiling. No external matrix values were read in
+this implementation round; coordinates and the 24-byte header established the
+predeclared block identities.
+
+Only promotion of `(512,96,32)` unlocks the one-construction exploratory stage
+in [frontera_exploratory_v2.json](configs/frontera_exploratory_v2.json), using
+construction seed 431 and independent validation seed 433. Both random forward
+and adjoint responses must improve on leaves-only by at least 150x. Every
+preselected largest genuinely truncated block per level must have response
+error at most `5e-4`. This stage runs no power-method diagnostics or timing,
+whether it passes or fails. A failure records the early evidence and stops.
+
+```sh
+# Use the same single-thread settings and reviewed revision as the screen.
+PYTHONPATH=src .venv/bin/python -m benchmarks.frontera_full --exploratory \
+  --screen-report '<dataset>/benchmark_results/frontera_screen_v1/frontera_screen.json' \
+  --revision '<reviewed-source-commit>' --run
+
+PYTHONPATH=src .venv/bin/python -m benchmarks.frontera_full \
+  --config benchmarks/configs/frontera_full_fixed_v2.json \
+  --screen-report '<dataset>/benchmark_results/frontera_screen_v1/frontera_screen.json' \
+  --exploratory-report '<dataset>/benchmark_results/exploratory_v2/frontera_exploratory.json' \
+  --revision '<reviewed-source-commit>' --run
+```
+
+Fresh formal seeds `41,43,47` and starts `107,109` remain locked until both
+reports validate. The formal accuracy thresholds are unchanged. Outputs use
+separate `exploratory_v2` and `formal_fixed_v2` directories; failed v1 evidence
+is retained. Screen and exploratory evidence is published atomically and cannot
+be overwritten, including with `--resume`.
+
+Version-2 evidence binds canonical content hashes to the exact configurations,
+plan, runner/helper/compressor source hashes, supplied reviewed revision,
+coordinate digest, matrix stat identity, and ordering authority. Consumers
+recompute the geometric identities and probe hashes and require complete seeds,
+candidates, results, and matching aggregates; a bare promotion flag is rejected.
+Exploration additionally hashes the full matrix once, and formal execution
+independently verifies that digest. The screen does not scan the matrix for a
+hash. Hashes provide reproducible content/provenance checks, not a cryptographic
+signature from an independent authority: trusted orchestrator execution and an
+immutable dataset during each stage remain assumptions. No new Frontera
+accuracy or timing result is claimed here; C.11 and coloring remain gated.

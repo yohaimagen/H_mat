@@ -1,11 +1,16 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "expected_data": {"shape": [60420, 40280], "matrix_file_bytes": 19469740824, "coordinate_sha256": "7b315f1fed83de485028da55c3bf27fe50c79f81da875cd467e70d6266810e72", "ordering_source_commit": "c4eb1b4615b0"},
+  "occupied_cells_by_level": [1, 4, 8, 24, 80],
+  "guards": {"rss_limit_bytes": 4294967296, "minimum_external_free_bytes": 107374182400, "maximum_read_bytes": 20000000000},
   "reader": {"chunk_rows": 64, "basis_functions_per_element": 10},
   "screen_seeds": [401, 409, 419],
   "comparator": {"m": 512, "k": 64, "p": 20},
   "candidates": [{"m": 512, "k": 96, "p": 32}, {"m": 512, "k": 128, "p": 32}],
-  "target": {"level": 4, "alpha_index": 16, "beta_index": 2},
-  "representative_levels": [3],
+  "blocks": [
+    {"name": "failed_l4", "level": 4, "alpha_index": 16, "beta_index": 2, "shape": [1038, 712], "expected_read_bytes": 334485120, "index_sha256": ["e1b8148cebd4255f16d7b64d543da5ba4599fb45e53f9869c30762026be50726", "7fbb5d43d03f4ab3527d0805c89a25fee58e57867bb7e35b64195382105dcc6c"]},
+    {"name": "representative_l4", "level": 4, "alpha_index": 4, "beta_index": 16, "shape": [1038, 692], "expected_read_bytes": 334485120, "index_sha256": ["f0808e243570ad8297e2e56158f5d8e9fda778a5e2e8d03fccfe0f9bd83ea3d7", "66b0f5e671e5b2b2ab62b2081cbdef0cb04cf44b65f18d6681a65fa25b42d7bc"]}
+  ],
   "maximum_block_entries": 8000000,
   "promotion": {"l4_all_ratio_max": 0.8, "representative_all": 1.0, "reason": "Promote at most one candidate only if its worst clean L4 reconstruction improves the comparator by at least 20% and no representative block worsens. This screen rule is not an acceptance threshold."}
 }

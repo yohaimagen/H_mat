@@ -22,16 +22,31 @@ from benchmarks.frontera import (
     _peak_rss_bytes,
     construction_prediction,
 )
+from benchmarks.frontera_screen import (
+    DEFAULT_PLAN,
+    array_hash,
+    block_manifest,
+    evidence_binding,
+    validate_screen,
+    verify,
+    write_once,
+)
 from benchmarks.full import measure_seed
 from numpy.typing import NDArray
 
 from gfcompress.benchmark import isolated_peak_rss
 from gfcompress.build_tree import build_tree
+from gfcompress.compress import compress
 from gfcompress.frontera import NativeDenseGF
+from gfcompress.hmatrix import HMatrix
+from gfcompress.interactions import build_lists
 from gfcompress.study import validate_seed_plan
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "benchmarks/configs/frontera_full_fixed.json"
+EXPLORATORY = ROOT / "benchmarks/configs/frontera_exploratory_v2.json"
+V2_CONFIG = ROOT / "benchmarks/configs/frontera_full_fixed_v2.json"
+EARLY_PROBE_POLICY = "PCG64 SeedSequence([validation_seed, side]); unit selected-box drives"
 
 
 def sha256(path: Path) -> str:
@@ -93,24 +108,6 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError("screen-gated candidates require a versioned configuration")
 
 
-def prediction_for_primary(
-    source: GuardedNativeDenseGF, root: Any, primary: dict[str, int]
-) -> dict[str, Any]:
-    """Reuse the reviewed predictor for a versioned primary configuration."""
-    import benchmarks.frontera as frontera
-
-    original = frontera.CANDIDATE
-    frontera.CANDIDATE = primary
-    try:
-        return construction_prediction(
-            source,
-            root,
-            {"forward_seconds": 0.0, "adjoint_seconds": 0.0, "rhs_columns_per_pass": 3},
-        )
-    finally:
-        frontera.CANDIDATE = original
-
-
 class GuardedNativeDenseGF(NativeDenseGF):
     """Stream unchanged file data with RSS, width, traffic, and free-space guards."""
 
@@ -166,7 +163,12 @@ def preflight(source: GuardedNativeDenseGF, config: dict[str, Any]) -> dict[str,
         raise ValueError("dataset shape/size differs from frozen configuration")
     primary = config["selection"]["primary"]
     root = build_tree(source.mesh, primary["m"])
-    prediction = prediction_for_primary(source, root, primary)
+    prediction = construction_prediction(
+        source,
+        root,
+        {"forward_seconds": 0.0, "adjoint_seconds": 0.0, "rhs_columns_per_pass": 3},
+        primary,
+    )
     for name in (
         "io_floor_seconds_from_width3_products",
         "deliberately_pessimistic_linear_rhs_upper_seconds",
@@ -297,6 +299,172 @@ def execute_seed(
         raise
 
 
+def exploratory_manifest(source: NativeDenseGF, config: dict[str, Any]) -> list[dict[str, Any]]:
+    """C.10's largest genuinely truncated block per level, determined before construction."""
+    root = build_tree(source.mesh, config["candidate"]["m"])
+    lists = build_lists(root)
+    result = []
+    for nodes in list(root.iter_levels())[2:]:
+        pairs = [
+            (a, b)
+            for a in nodes
+            for b in lists.interaction[a]
+            if min(a.row_indices.size, b.col_indices.size) > config["candidate"]["k"]
+        ]
+        if not pairs:
+            continue
+        a, b = min(
+            pairs,
+            key=lambda pair: (
+                -min(pair[0].row_indices.size, pair[1].col_indices.size),
+                pair[0].cell_coords,
+                pair[1].cell_coords,
+            ),
+        )
+        x = np.zeros(source.shape[1])
+        x[b.col_indices] = 1.0
+        result.append(
+            {
+                "level": a.level,
+                "alpha_index": a.index_in_level,
+                "beta_index": b.index_in_level,
+                "rows": a.row_indices.tolist(),
+                "cols": b.col_indices.tolist(),
+                "index_sha256": [
+                    array_hash(i.astype("<i8")) for i in (a.row_indices, b.col_indices)
+                ],
+                "probe_sha256": array_hash(x),
+            }
+        )
+    if not result:
+        raise ValueError("exploratory validation requires truncated blocks")
+    return result
+
+
+def exploratory_probes(source: NativeDenseGF, config: dict[str, Any]) -> dict[str, np.ndarray]:
+    return {
+        side: np.random.default_rng(
+            np.random.SeedSequence([config["validation_seed"], index])
+        ).standard_normal(size)
+        for index, (side, size) in enumerate(
+            (("forward", source.shape[1]), ("adjoint", source.shape[0]))
+        )
+    }
+
+
+def early_gates(records: dict[str, Any], config: dict[str, Any]) -> dict[str, bool]:
+    floor = config["absolute_response_floor"]
+    random = records["random"]
+    selected = records["selected_blocks"]
+    finite = all(
+        np.isfinite(r[key]) and r[key] >= 0
+        for r in [*random.values(), *selected]
+        for key in ("error", "reference_norm")
+    )
+    finite = finite and all(
+        np.isfinite(r["leaves_error"]) and r["leaves_error"] >= 0 for r in random.values()
+    )
+    return {
+        "finite": finite,
+        "random_leaves_only": finite
+        and set(random) == {"forward", "adjoint"}
+        and all(
+            r["leaves_error"] / max(r["error"], np.finfo(float).tiny)
+            >= config["early_gates"]["random_leaves_only_improvement_min"]
+            for r in random.values()
+        ),
+        "selected_blocks": finite
+        and bool(selected)
+        and all(
+            r["reference_norm"] > floor
+            and r["error"] / r["reference_norm"]
+            <= config["early_gates"]["selected_block_error_max"]
+            for r in selected
+        ),
+    }
+
+
+def measure_exploratory(
+    source: GuardedNativeDenseGF, config: dict[str, Any], manifest: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """One construction and early checks only: no power iterations or timing passes."""
+    hmat = compress(
+        source,
+        source.mesh,
+        **config["candidate"],
+        seed=config["construction_seed"],
+        sampling="fixed",
+    )
+    leaves = HMatrix(root=hmat.root, mesh=source.mesh, leaves=hmat.leaves)
+    records: dict[str, Any] = {"random": {}, "selected_blocks": []}
+    for side, x in exploratory_probes(source, config).items():
+        name = "matvec" if side == "forward" else "rmatvec"
+        actual = getattr(source, name)(x)
+        records["random"][side] = {
+            "error": float(np.linalg.norm(getattr(hmat, name)(x) - actual)),
+            "leaves_error": float(np.linalg.norm(getattr(leaves, name)(x) - actual)),
+            "reference_norm": float(np.linalg.norm(actual)),
+            "probe_sha256": array_hash(x),
+        }
+    for spec in manifest:
+        x = np.zeros(source.shape[1])
+        x[spec["cols"]] = 1.0
+        actual = source.matvec(x)[spec["rows"]]
+        records["selected_blocks"].append(
+            {
+                "identity": spec,
+                "error": float(np.linalg.norm(hmat.matvec(x)[spec["rows"]] - actual)),
+                "reference_norm": float(np.linalg.norm(actual)),
+            }
+        )
+    gates = early_gates(records, config)
+    return {
+        "construction_seed": config["construction_seed"],
+        "validation_seed": config["validation_seed"],
+        "records": records,
+        "gates": gates,
+        "all_pass": all(gates.values()),
+        "later_diagnostics_run": False,
+        "streamed_passes": source.completed_passes,
+    }
+
+
+def validate_exploratory(
+    report: dict[str, Any],
+    binding: dict[str, Any],
+    source: NativeDenseGF,
+    screen: dict[str, Any],
+    matrix_sha256: str,
+) -> None:
+    verify(report, "exploratory", binding)
+    config = binding["config"]
+    run = report.get("run", {})
+    manifest = exploratory_manifest(source, config)
+    if (
+        report.get("screen_content_sha256") != screen["content_sha256"]
+        or report.get("matrix_sha256") != matrix_sha256
+        or len(matrix_sha256) != 64
+        or any(c not in "0123456789abcdef" for c in matrix_sha256)
+        or report.get("probe_policy") != EARLY_PROBE_POLICY
+        or report.get("manifest") != manifest
+        or run.get("construction_seed") != config["construction_seed"]
+        or run.get("validation_seed") != config["validation_seed"]
+        or run.get("later_diagnostics_run") is not False
+    ):
+        raise ValueError("exploratory identity/seeds mismatch")
+    records = run.get("records", {})
+    if [r.get("identity") for r in records.get("selected_blocks", [])] != manifest:
+        raise ValueError("incomplete exploratory blocks")
+    if set(records.get("random", {})) != {"forward", "adjoint"}:
+        raise ValueError("incomplete exploratory random checks")
+    for side, x in exploratory_probes(source, config).items():
+        if records["random"][side].get("probe_sha256") != array_hash(x):
+            raise ValueError("exploratory probe mismatch")
+    gates = early_gates(records, config)
+    if run.get("gates") != gates or run.get("all_pass") is not True or not all(gates.values()):
+        raise ValueError("exploratory early gates failed")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
@@ -304,12 +472,21 @@ def main() -> None:
     parser.add_argument("--revision", required=True)
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--screen-report", type=Path)
+    parser.add_argument("--exploratory-report", type=Path)
+    parser.add_argument("--exploratory", action="store_true")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--run", action="store_true")
     args = parser.parse_args()
+    if args.exploratory:
+        args.config = V2_CONFIG
     config = _load_config("frontera", args.config)
     validate_config(config)
-    output = (args.output_dir or args.dataset / "benchmark_results/formal_fixed").resolve()
+    stage = (
+        "exploratory_v2"
+        if args.exploratory
+        else ("formal_fixed_v2" if config.get("configuration_version") else "formal_fixed")
+    )
+    output = (args.output_dir or args.dataset / "benchmark_results" / stage).resolve()
     if not output.is_relative_to(args.dataset.resolve()) or output.is_relative_to(ROOT):
         raise ValueError("output directory must be inside the external dataset, outside repository")
     sources = [
@@ -328,6 +505,8 @@ def main() -> None:
     }
     report: dict[str, Any] = {
         "schema_version": 1,
+        "stage": stage,
+        "exploratory_config": json.loads(EXPLORATORY.read_text()) if args.exploratory else None,
         "dataset": "frontera",
         "config": config,
         "identity": identity,
@@ -349,17 +528,45 @@ def main() -> None:
         print(json.dumps(report, indent=2))
         return
     confirmation = config.get("confirmation", {})
+    screen = None
+    exploration = None
     if confirmation.get("requires_screen_promotion"):
+        if config != json.loads(V2_CONFIG.read_text()):
+            raise ValueError("v2 requires the exact frozen configuration")
         if args.screen_report is None:
             raise ValueError("screen-gated candidate requires --screen-report")
         screen = json.loads(args.screen_report.read_text())
-        if screen.get("promotion") != config["selection"]["primary"]:
+        plan = json.loads(DEFAULT_PLAN.read_text())
+        screen_source = NativeDenseGF(
+            args.dataset / "gf/gf_mat.bin", args.dataset / "gf_coords.bin", **plan["reader"]
+        )
+        if (
+            validate_screen(
+                screen,
+                evidence_binding(args.dataset, plan, args.revision),
+                block_manifest(screen_source, plan),
+            )
+            != config["selection"]["primary"]
+        ):
             raise ValueError("screen report did not promote this candidate")
+        if not args.exploratory:
+            if args.exploratory_report is None:
+                raise ValueError("formal v2 requires --exploratory-report")
+            exploration = json.loads(args.exploratory_report.read_text())
+            validate_exploratory(
+                exploration,
+                evidence_binding(args.dataset, json.loads(EXPLORATORY.read_text()), args.revision),
+                screen_source,
+                screen,
+                exploration.get("matrix_sha256", ""),
+            )
     for name in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
         if os.environ.get(name) != "1":
             raise ValueError(f"{name}=1 is required")
     if output.exists() and any(output.iterdir()) and not args.resume:
         raise ValueError("output exists; use --resume with identical source/config/data identity")
+    if args.exploratory and (output / "frontera_exploratory.json").exists():
+        raise FileExistsError("exploratory evidence is immutable, including with --resume")
     source = GuardedNativeDenseGF(args.dataset, config)
     report["preflight"] = preflight(source, config)
     start = time.perf_counter()
@@ -370,6 +577,39 @@ def main() -> None:
     hash_seconds = time.perf_counter() - start
     if identity["data"]["coordinates"]["sha256"] != config["expected_data"]["coordinate_sha256"]:
         raise ValueError("coordinate hash differs from frozen dataset")
+    if args.exploratory:
+        exploratory_config = json.loads(EXPLORATORY.read_text())
+        binding = evidence_binding(args.dataset, exploratory_config, args.revision)
+        manifest = exploratory_manifest(source, exploratory_config)
+        run = measure_exploratory(source, exploratory_config, manifest)
+        check_identity(args.dataset, identity)
+        if evidence_binding(args.dataset, exploratory_config, args.revision) != binding:
+            raise ValueError("exploratory source/dataset changed")
+        assert screen is not None
+        result = {
+            "schema_version": 2,
+            "kind": "exploratory",
+            "probe_policy": EARLY_PROBE_POLICY,
+            "binding": binding,
+            "screen_content_sha256": screen["content_sha256"],
+            "matrix_sha256": identity["data"]["matrix"]["sha256"],
+            "manifest": manifest,
+            "run": run,
+        }
+        write_once(output / "frontera_exploratory.json", result)
+        print(output / "frontera_exploratory.json")
+        return
+    if exploration is not None:
+        assert screen is not None
+        validate_exploratory(
+            exploration,
+            evidence_binding(args.dataset, json.loads(EXPLORATORY.read_text()), args.revision),
+            source,
+            screen,
+            identity["data"]["matrix"]["sha256"],
+        )
+        identity["screen_content_sha256"] = screen["content_sha256"]
+        identity["exploratory_content_sha256"] = exploration["content_sha256"]
     pilot = args.dataset / config["calibration"]["path"]
     report["pilot_identity"] = {"stat": _file_identity(pilot), "sha256": sha256(pilot)}
     report["hashing"] = {

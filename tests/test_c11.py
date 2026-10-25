@@ -302,11 +302,27 @@ def test_frontera_v2_candidate_is_screen_gated_with_fresh_confirmation_seeds():
     assert candidate["validation_seeds"] == [107, 109]
     assert candidate["expected_prediction"]["construction_columns"] == 22_792
     assert candidate["confirmation"]["requires_screen_promotion"]
+    assert candidate["confirmation"]["requires_exploratory_pass"]
+    original = _frontera_config()["acceptance"]
+    assert {k: v for k, v in candidate["acceptance"].items() if k != "reason"} == {
+        k: v for k, v in original.items() if k != "reason"
+    }
+    exploration = json.loads(Path("benchmarks/configs/frontera_exploratory_v2.json").read_text())
+    assert exploration["candidate"] == candidate["selection"]["primary"]
+    assert exploration["early_gates"] == {
+        "random_leaves_only_improvement_min": 150.0,
+        "selected_block_error_max": 5e-4,
+    }
+    seeds = candidate["construction_seeds"] + candidate["validation_seeds"] + [11, 23, 37, 101, 103]
+    assert exploration["construction_seed"] not in seeds
+    assert exploration["validation_seed"] not in seeds
     results = [
         {"parameters": {"k": 64}, "l4_all": 1.0, "representative_all": 1.0},
         {"parameters": {"k": 96}, "l4_all": 0.7, "representative_all": 1.0},
         {"parameters": {"k": 128}, "l4_all": 0.6, "representative_all": 1.1},
     ]
+    assert promote(results, {"l4_all_ratio_max": 0.8, "representative_all": 1.0}) == {"k": 96}
+    results[2]["representative_all"] = 0.5
     assert promote(results, {"l4_all_ratio_max": 0.8, "representative_all": 1.0}) == {"k": 96}
 
 
@@ -482,3 +498,422 @@ def test_frontera_resume_preserves_completed_seeds_and_rejects_changed_config(
     with pytest.raises(ValueError, match="identity mismatch"):
         formal.main()
     assert json.loads(aggregate.read_text()) == resumed
+
+
+def _screen_evidence():
+    from benchmarks.frontera_screen import PROBE_POLICY, array_hash, probes, seal
+
+    plan = json.loads(Path("benchmarks/configs/frontera_screen_v1.json").read_text())
+    manifest = [{**b, "shape": [132, 130]} for b in plan["blocks"]]
+    results = []
+    for candidate, error in zip(
+        [plan["comparator"], *plan["candidates"]], [1.0, 0.7, 0.6], strict=True
+    ):
+        records = []
+        for spec in manifest:
+            for seed in plan["screen_seeds"]:
+                ga, gb = probes(spec, seed, 160)
+                width = candidate["k"] + candidate["p"]
+                records.append(
+                    {
+                        "block": spec["name"],
+                        "seed": seed,
+                        "probe_sha256": [array_hash(ga[:, :width]), array_hash(gb[:, :width])],
+                        "errors": {"clean_two_sample": {"all": error}},
+                    }
+                )
+        results.append(
+            {
+                "parameters": candidate,
+                "records": records,
+                "l4_all": error,
+                "representative_all": error,
+            }
+        )
+    binding = {"config": plan, "fixture": True}
+    return (
+        seal(
+            {
+                "schema_version": 2,
+                "kind": "screen",
+                "binding": binding,
+                "manifest": manifest,
+                "probe_policy": PROBE_POLICY,
+                "actual_read_bytes": sum(b["expected_read_bytes"] for b in manifest),
+                "results": results,
+                "promotion": plan["candidates"][0],
+            }
+        ),
+        binding,
+        manifest,
+    )
+
+
+def test_screen_nested_paired_probes_and_separate_streams():
+    from benchmarks.frontera_screen import _record, probes
+
+    spec = {"shape": [32, 16], "level": 4, "alpha_index": 16, "beta_index": 2}
+    ga, gb = probes(spec, 401, 12)
+    again = probes(spec, 401, 12)
+    np.testing.assert_array_equal(ga, again[0])
+    np.testing.assert_array_equal(gb, again[1])
+    assert not np.array_equal(ga[:16], gb)
+    mesh = FaultMesh(np.column_stack((np.arange(64), np.zeros(64))), np.ones(64))
+    block = MockGF(mesh).matvec(np.eye(64))[:32, 48:64]
+    from benchmarks.frontera_screen import array_hash
+
+    for k, p in [(3, 2), (6, 3)]:
+        record = _record(block, {"k": k, "p": p}, ga, gb, 2)
+        assert record["probe_sha256"] == [array_hash(ga[:, : k + p]), array_hash(gb[:, : k + p])]
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "bare",
+        "tamper",
+        "revision",
+        "seed",
+        "candidate",
+        "block",
+        "probe",
+        "aggregate",
+        "promotion",
+        "bytes",
+        "nan",
+    ],
+)
+def test_screen_rejects_incomplete_or_tampered_evidence(damage):
+    from benchmarks.frontera_screen import seal, validate_screen
+
+    report, binding, manifest = _screen_evidence()
+    assert validate_screen(report, binding, manifest) == {"m": 512, "k": 96, "p": 32}
+    if damage == "bare":
+        report = {"promotion": report["promotion"]}
+    elif damage == "tamper":
+        report["promotion"] = None
+    elif damage == "revision":
+        binding = {**binding, "revision": "different"}
+    else:
+        if damage == "seed":
+            report["results"][0]["records"].pop()
+        elif damage == "candidate":
+            report["results"].reverse()
+        elif damage == "block":
+            report["manifest"][0]["alpha_index"] = 7
+            manifest = [{**b} for b in _screen_evidence()[2]]
+        elif damage == "probe":
+            report["results"][0]["records"][0]["probe_sha256"][0] = "wrong"
+        elif damage == "aggregate":
+            report["results"][0]["l4_all"] = 0.2
+        elif damage == "promotion":
+            report["promotion"] = report["results"][2]["parameters"]
+        elif damage == "bytes":
+            report["actual_read_bytes"] += 1
+        elif damage == "nan":
+            report["results"][0]["records"][0]["errors"]["clean_two_sample"]["all"] = float("nan")
+            with pytest.raises(ValueError):
+                seal(report)
+            return
+        report = seal(report)
+    with pytest.raises(ValueError):
+        validate_screen(report, binding, manifest)
+
+
+def test_evidence_atomic_no_overwrite_and_dataset_source_binding(tmp_path):
+    from benchmarks.frontera_screen import evidence_binding, seal, verify, write_once
+
+    config, _ = _frontera_fixture(tmp_path)
+    binding = evidence_binding(tmp_path, config, "reviewed-fixture")
+    record = {"schema_version": 2, "kind": "fixture", "binding": binding}
+    path = tmp_path / "report.json"
+    write_once(path, record)
+    original = path.read_bytes()
+    verify(json.loads(original), "fixture", binding)
+    with pytest.raises(FileExistsError):
+        write_once(path, {"replacement": True})
+    assert path.read_bytes() == original
+    assert not list(tmp_path.glob(".evidence-*"))
+    changed = {**binding, "sources": {}}
+    with pytest.raises(ValueError):
+        verify(seal(record), "fixture", changed)
+    with (tmp_path / "gf_coords.bin").open("ab") as stream:
+        stream.write(b"x")
+    with pytest.raises(ValueError, match="coordinate hash"):
+        evidence_binding(tmp_path, config, "reviewed-fixture")
+
+
+def test_screen_read_accounting_and_resource_guards(tmp_path, monkeypatch):
+    import benchmarks.frontera_screen as screen
+
+    from gfcompress.frontera import NativeDenseGF
+
+    config, matrix = _frontera_fixture(tmp_path)
+    source = NativeDenseGF(
+        tmp_path / "gf/gf_mat.bin", tmp_path / "gf_coords.bin", **config["reader"]
+    )
+    spec = {"shape": [3, 2], "rows": [0, 4, 9], "cols": [1, 8], "expected_read_bytes": 3 * 128 * 8}
+    plan = {"guards": {"rss_limit_bytes": 10**12, "minimum_external_free_bytes": 1}}
+    block, actual = screen.read_block_once(source, spec, plan)
+    np.testing.assert_array_equal(block, matrix[np.ix_(spec["rows"], spec["cols"])])
+    assert actual == spec["expected_read_bytes"]
+    with pytest.raises(RuntimeError, match="byte mismatch"):
+        screen.read_block_once(source, {**spec, "expected_read_bytes": 1}, plan)
+    monkeypatch.setattr(screen, "_peak_rss_bytes", lambda: 10**13)
+    with pytest.raises(RuntimeError, match="RSS"):
+        screen.check_resources(tmp_path, plan)
+    monkeypatch.setattr(screen, "_peak_rss_bytes", lambda: 0)
+    monkeypatch.setattr(screen.shutil, "disk_usage", lambda _: SimpleNamespace(free=0))
+    with pytest.raises(RuntimeError, match="free-disk"):
+        screen.check_resources(tmp_path, plan)
+
+
+def _exploratory_evidence(tmp_path):
+    import benchmarks.frontera_full as formal
+    from benchmarks.frontera_screen import array_hash, seal
+
+    config, _ = _frontera_fixture(tmp_path)
+    source = formal.GuardedNativeDenseGF(tmp_path, config)
+    exploration = json.loads(formal.EXPLORATORY.read_text())
+    exploration["candidate"] = {"m": 4, "k": 2, "p": 1}
+    manifest = formal.exploratory_manifest(source, exploration)
+    records = {
+        "random": {
+            side: {
+                "error": 1.0,
+                "leaves_error": 150.0,
+                "reference_norm": 2.0,
+                "probe_sha256": array_hash(x),
+            }
+            for side, x in formal.exploratory_probes(source, exploration).items()
+        },
+        "selected_blocks": [
+            {"identity": b, "error": 0.0005, "reference_norm": 1.0} for b in manifest
+        ],
+    }
+    gates = formal.early_gates(records, exploration)
+    binding = {"config": exploration}
+    screen = {"content_sha256": "screen-fixture"}
+    report = seal(
+        {
+            "schema_version": 2,
+            "kind": "exploratory",
+            "binding": binding,
+            "screen_content_sha256": screen["content_sha256"],
+            "matrix_sha256": "a" * 64,
+            "probe_policy": formal.EARLY_PROBE_POLICY,
+            "manifest": manifest,
+            "run": {
+                "construction_seed": 431,
+                "validation_seed": 433,
+                "records": records,
+                "gates": gates,
+                "all_pass": True,
+                "later_diagnostics_run": False,
+            },
+        }
+    )
+    return report, binding, source, screen
+
+
+@pytest.mark.parametrize(
+    "damage", ["random", "selected", "seed", "missing", "probe", "matrix", "screen", "later"]
+)
+def test_exploratory_evidence_requires_every_early_gate_and_identity(tmp_path, damage):
+    import benchmarks.frontera_full as formal
+    from benchmarks.frontera_screen import seal
+
+    report, binding, source, screen = _exploratory_evidence(tmp_path)
+    formal.validate_exploratory(report, binding, source, screen, "a" * 64)
+    run = report["run"]
+    if damage == "random":
+        run["records"]["random"]["forward"]["leaves_error"] = 149.9
+    elif damage == "selected":
+        run["records"]["selected_blocks"][0]["error"] = 0.000501
+    elif damage == "seed":
+        run["construction_seed"] = 41
+    elif damage == "missing":
+        run["records"]["selected_blocks"].pop()
+    elif damage == "probe":
+        run["records"]["random"]["adjoint"]["probe_sha256"] = "wrong"
+    elif damage == "matrix":
+        report["matrix_sha256"] = "wrong"
+    elif damage == "screen":
+        report["screen_content_sha256"] = "wrong"
+    elif damage == "later":
+        run["later_diagnostics_run"] = True
+    with pytest.raises(ValueError):
+        formal.validate_exploratory(seal(report), binding, source, screen, "a" * 64)
+
+
+def test_exploratory_constructs_once_and_stops_before_later_diagnostics(tmp_path, monkeypatch):
+    import benchmarks.frontera_full as formal
+
+    _, binding, source, _ = _exploratory_evidence(tmp_path)
+    calls = []
+    original = formal.compress
+
+    def construct(*args, **kwargs):
+        calls.append(kwargs["seed"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(formal, "compress", construct)
+    monkeypatch.setattr(formal, "measure_seed", lambda *args: pytest.fail("late diagnostics"))
+    run = formal.measure_exploratory(
+        source, binding["config"], formal.exploratory_manifest(source, binding["config"])
+    )
+    assert calls == [431]
+    assert not run["later_diagnostics_run"]
+    assert not run["all_pass"]
+
+
+def test_prediction_explicit_candidates_do_not_mutate_global_state(tmp_path):
+    from benchmarks.frontera import CANDIDATE, construction_prediction
+    from benchmarks.frontera_full import GuardedNativeDenseGF
+
+    from gfcompress.build_tree import build_tree
+
+    config, _ = _frontera_fixture(tmp_path)
+    source = GuardedNativeDenseGF(tmp_path, config)
+    root = build_tree(source.mesh, 4)
+    stream = {"forward_seconds": 1, "adjoint_seconds": 1, "rhs_columns_per_pass": 3}
+    original = CANDIDATE.copy()
+    first = construction_prediction(source, root, stream, {"m": 4, "k": 2, "p": 1})
+    second = construction_prediction(source, root, stream, {"m": 4, "k": 3, "p": 2})
+    assert construction_prediction(source, root, stream, {"m": 4, "k": 2, "p": 1}) == first
+    assert first["combined_construction_columns"] != second["combined_construction_columns"]
+    assert CANDIDATE == original
+
+
+@pytest.mark.parametrize(
+    "damage", [None, "cells", "shape", "hash", "bytes", "entries", "cap", "rank"]
+)
+def test_screen_manifest_guards_whole_block_geometry_and_cost(damage):
+    from benchmarks.frontera_screen import array_hash, block_manifest
+
+    from gfcompress.build_tree import build_tree
+    from gfcompress.interactions import build_lists
+
+    x, y = np.meshgrid(np.arange(48), np.arange(48))
+    mesh = FaultMesh(
+        np.column_stack((x.ravel(), y.ravel(), np.zeros(x.size))), np.ones(x.size), dof_row=3
+    )
+    root = build_tree(mesh, 200)
+    levels = list(root.iter_levels())
+    lists = build_lists(root)
+    a = next(a for a in levels[2] if lists.interaction[a])
+    b = lists.interaction[a][0]
+    spec = {
+        "name": "fixture",
+        "level": 2,
+        "alpha_index": a.index_in_level,
+        "beta_index": b.index_in_level,
+        "shape": [a.row_indices.size, b.col_indices.size],
+        "index_sha256": [array_hash(i.astype("<i8")) for i in (a.row_indices, b.col_indices)],
+        "expected_read_bytes": a.row_indices.size * mesh.n_cols * 8,
+    }
+    plan = {
+        "comparator": {"m": 200},
+        "expected_data": {"shape": [mesh.n_rows, mesh.n_cols]},
+        "occupied_cells_by_level": [len(n) for n in levels],
+        "blocks": [spec],
+        "maximum_block_entries": 8_000_000,
+        "guards": {"maximum_read_bytes": 20_000_000_000},
+    }
+    source = SimpleNamespace(shape=(mesh.n_rows, mesh.n_cols), mesh=mesh)
+    if damage is None:
+        result = block_manifest(source, plan)
+        assert result[0]["rows"] == a.row_indices.tolist()
+        return
+    if damage == "cells":
+        plan["occupied_cells_by_level"][0] = 2
+    elif damage == "shape":
+        spec["shape"][0] += 1
+    elif damage == "hash":
+        spec["index_sha256"][0] = "wrong"
+    elif damage == "bytes":
+        spec["expected_read_bytes"] += 1
+    elif damage == "entries":
+        plan["maximum_block_entries"] = 1
+    elif damage == "cap":
+        plan["guards"]["maximum_read_bytes"] = 1
+    elif damage == "rank":
+        plan["comparator"]["m"] = 1
+        plan["occupied_cells_by_level"] = [len(n) for n in build_tree(mesh, 1).iter_levels()]
+        spec["level"] = len(plan["occupied_cells_by_level"]) - 1
+    with pytest.raises(ValueError):
+        block_manifest(source, plan)
+
+
+def test_screen_reads_each_block_once_and_reuses_maximum_probes(tmp_path, monkeypatch):
+    import benchmarks.frontera_screen as screen
+
+    _, binding, manifest = _screen_evidence()
+    reads, seen = [], []
+    monkeypatch.setattr(screen, "check_resources", lambda *args: None)
+    monkeypatch.setattr(screen, "evidence_binding", lambda *args: binding)
+    monkeypatch.setattr(screen, "NativeDenseGF", lambda *args, **kwargs: SimpleNamespace(dof_row=3))
+    monkeypatch.setattr(screen, "block_manifest", lambda *args: manifest)
+
+    def read(_source, spec, _plan):
+        reads.append(spec["name"])
+        return np.zeros(spec["shape"]), spec["expected_read_bytes"]
+
+    def record(_block, candidate, ga, gb, _dof):
+        seen.append((ga, gb))
+        width = candidate["k"] + candidate["p"]
+        return {
+            "probe_sha256": [screen.array_hash(ga[:, :width]), screen.array_hash(gb[:, :width])],
+            "errors": {"clean_two_sample": {"all": {64: 1.0, 96: 0.7, 128: 0.6}[candidate["k"]]}},
+        }
+
+    monkeypatch.setattr(screen, "read_block_once", read)
+    monkeypatch.setattr(screen, "_record", record)
+    for name in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+        monkeypatch.setenv(name, "1")
+    monkeypatch.setattr(
+        "sys.argv", ["screen", "--dataset", str(tmp_path), "--revision", "fixture", "--run"]
+    )
+    screen.main()
+    assert reads == ["failed_l4", "representative_l4"]
+    for i in range(0, len(seen), 3):
+        assert all(seen[j][0] is seen[i][0] and seen[j][1] is seen[i][1] for j in range(i, i + 3))
+        assert seen[i][0].shape[1] == 160
+    with pytest.raises(FileExistsError):
+        screen.main()
+
+
+@pytest.mark.parametrize("evidence", ["none", "bare", "screen_only", "stale_exploration"])
+def test_formal_cli_rejects_bad_evidence_before_full_matrix_work(tmp_path, monkeypatch, evidence):
+    import benchmarks.frontera_full as formal
+
+    report, binding, manifest = _screen_evidence()
+    argv = [
+        "formal",
+        "--config",
+        str(formal.V2_CONFIG),
+        "--dataset",
+        str(tmp_path),
+        "--revision",
+        "fixture",
+        "--run",
+    ]
+    monkeypatch.setattr(formal, "NativeDenseGF", lambda *args, **kwargs: SimpleNamespace())
+    monkeypatch.setattr(formal, "evidence_binding", lambda *args: binding)
+    monkeypatch.setattr(formal, "block_manifest", lambda *args: manifest)
+    monkeypatch.setattr(
+        formal, "GuardedNativeDenseGF", lambda *args: pytest.fail("full matrix work")
+    )
+    if evidence != "none":
+        path = tmp_path / "screen.json"
+        path.write_text(
+            json.dumps({"promotion": report["promotion"]} if evidence == "bare" else report)
+        )
+        argv += ["--screen-report", str(path)]
+    if evidence == "stale_exploration":
+        path = tmp_path / "exploratory.json"
+        path.write_text('{"schema_version": 1, "all_pass": true}')
+        argv += ["--exploratory-report", str(path)]
+    monkeypatch.setattr("sys.argv", argv)
+    with pytest.raises(ValueError):
+        formal.main()

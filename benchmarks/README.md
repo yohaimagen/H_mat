@@ -133,3 +133,10 @@ rejects a nonmaximum width before sampling. It excludes peeling and full
 validation; its predeclared promotion rule is a screening decision, not a
 replacement for any frozen threshold. It reads bounded reference blocks without
 preparing a native copy of the entire dense operator.
+
+Frontera correction round 2 follows a separate three-stage protocol: bounded
+whole-block screen, one exploratory construction at `(m=512,k=96,p=32)`, then
+fresh formal v2 confirmation only after complete passing evidence validates.
+The exploratory early gates are 150x random leaves-only improvement and `5e-4`
+selected-block error; formal thresholds and failed v1 evidence are preserved.
+See [the commands, resource bounds, and provenance contract](FRONTERA.md#correction-round-2-exploratory-gate-and-evidence-validation).
