@@ -31,7 +31,7 @@ must remain untouched.
 | C.12 | `f8f4018` | APPROVED, no fixes | 22 focused; 487 passed/14 skipped; Ruff/Black/mypy pass | proceed C.13 |
 | C.13 | `35abe07` | APPROVED, no fixes | 32 focused; 519 passed/14 skipped; Ruff/Black/mypy pass | proceed C.14 |
 | C.14 | `08c37a8` | APPROVED, no fixes | 15 focused; 532 passed/14 skipped; Ruff/Black/mypy pass | proceed C.15 |
-| C.15 | pending | pending | pending | gated on C.14 approval |
+| C.15 | `dae5dd3` | APPROVED, no fixes | 15 focused; 547 passed/14 skipped; Ruff/Black/mypy pass | proceed C.16 |
 | C.16 | pending | pending | pending | gated on C.15 approval |
 
 Final GPT-6 Astra batch review is gated on per-task approval for C.12-C.16.
@@ -60,3 +60,13 @@ both rectangular sides and repeated unseeded boxes, streaming lifetime,
 direct peeled MockGF samples, exact fixed fallback, and schedule/operator-count
 agreement. The irregular synthetic path selected 1,624 admissible columns
 versus 2,184 fixed with comparable three-seed quality. Dense leaves remain C.15.
+
+### C.15 review record
+
+Sol approved `dae5dd3d0e112fd2aadc98aaaa79015adfd8da3c` with no
+findings. The review confirmed neighbor-only ownership, shared identity-slot
+isolation, global fixed width, fully peeled residual extraction, exact count
+accounting, and positive three-seed near-field quality. The retained rank-4
+negative case (5.25046% colored versus 3.03594% fixed) demonstrates that a
+cheaper schedule alone does not guarantee accuracy; C.16 must validate its
+chosen complete public configurations without relaxing the 5% criterion.
