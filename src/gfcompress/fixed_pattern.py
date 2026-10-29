@@ -126,13 +126,14 @@ Side = Literal["col", "row"]
 
 @dataclass(frozen=True)
 class PeriodicTestMatrix:
-    """A lightweight description of one fixed `6x...x6` probe.
+    """A lightweight Gaussian probe description, shared with colored groups.
 
     Attributes:
         pattern: The pattern-cell offset `(i_0 mod 6, ..., i_{d-1} mod 6)`
-            shared by every box in `active_boxes`, length `d`.
-        active_boxes: The level-`level` nodes whose pattern cell equals
-            `pattern`; their `col_indices` (resp. `row_indices`) rows of
+            shared by every box in a fixed probe, length `d`. Colored probes
+            use `(color,)` as a diagnostic label; realization ignores it.
+        active_boxes: The selected level-`level` nodes; their
+            `col_indices` (resp. `row_indices`) rows of
             `omega` hold independent Gaussian blocks, every other row is zero.
         The dense probe is deliberately not retained. Call :meth:`realize`
         immediately before its one matvec/rmatvec. ``omega`` and ``blocks``
