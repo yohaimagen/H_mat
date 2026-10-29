@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "configuration_version": "frontera-fixed-v2-exploratory-gated",
+  "dataset": "frontera",
+  "sampling": "fixed",
+  "full_runs": "validated screen promotion and passing one-seed exploration before opt-in confirmation",
+  "construction_seeds": [41, 43, 47],
+  "validation_seeds": [107, 109],
+  "sweep": {"m": [512], "k": [96], "p": [32]},
+  "selection": {"primary": {"m": 512, "k": 96, "p": 32}, "rule": "Complete content-bound screen promotion and passing exploratory_v2 evidence are both required; these fresh seeds are never reused from failed formal v1 or exploration."},
+  "confirmation": {"requires_screen_promotion": true, "requires_exploratory_pass": true, "screen_plan": "frontera_screen_v1", "status": "gated pending authenticated screen and exploratory evidence"},
+  "validation": {"power_iterations": 8, "absolute_response_floor": 1e-12, "status": "predeclared; starts activate only after screen promotion and exploratory gates pass"},
+  "acceptance": {"frozen": true, "absolute_response_floor": 1e-12, "global_relative_error_max": 1e-5, "component_response_error_max": 1e-4, "input_response_error_max": 1e-5, "selected_block_output_error_max": 0.001, "leaves_only_improvement_min": 100.0, "reason": "Unchanged C.11 acceptance thresholds; this version changes only the screened operating point and uses fresh confirmatory seeds."},
+  "reader": {"chunk_rows": 64, "basis_functions_per_element": 10},
+  "expected_data": {"shape": [60420, 40280], "matrix_file_bytes": 19469740824, "coordinate_sha256": "7b315f1fed83de485028da55c3bf27fe50c79f81da875cd467e70d6266810e72", "ordering_source_commit": "c4eb1b4615b0"},
+  "expected_prediction": {"construction_columns": 22792, "storage_bytes_upper_bound": 4250000000, "modeled_live_bytes_upper_bound": 6250000000},
+  "guards": {"rss_limit_bytes": 12884901888, "modeled_array_limit_bytes": 8589934592, "minimum_external_free_bytes": 107374182400, "maximum_rhs_columns": 1024, "maximum_total_passes_per_seed": 300, "maximum_total_read_bytes_per_seed": 6000000000000},
+  "timing": {"repeats": 5, "warmups": 1, "rhs_columns": 1, "seed": 101},
+  "calibration": {"path": "benchmark_results/full_construction_seed20261012.json", "construction_seed": 20261012, "formal_seed": false, "status": "v1 feasibility pilot only; excluded from v2 confirmation"},
+  "contract": {"required_success": ["bp3", "frontera"], "bp7": "retained negative evidence; not a mandatory success gate", "authority": "C.11 correction round 2; v2 remains gated until the bounded screen promotes it and one exploratory construction passes its frozen early checks."}
+}

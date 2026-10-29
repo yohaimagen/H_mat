@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "dataset": "frontera",
+  "sampling": "fixed",
+  "full_runs": "review before opt-in confirmation",
+  "construction_seeds": [11, 23, 37],
+  "validation_seeds": [101, 103],
+  "sweep": {"m": [512], "k": [47], "p": [10]},
+  "selection": {
+    "primary": {"m": 512, "k": 47, "p": 10},
+    "rule": "All three seeds and both validation starts must pass; no best-seed selection. Pilot seed 20261012 is excluded."
+  },
+  "validation": {
+    "power_iterations": 8,
+    "absolute_response_floor": 1e-12,
+    "status": "predeclared before formal confirmation; finite power iterations are estimates, not certified norm bounds"
+  },
+  "acceptance": {
+    "frozen": true,
+    "absolute_response_floor": 1e-12,
+    "global_relative_error_max": 1e-5,
+    "component_response_error_max": 1e-4,
+    "input_response_error_max": 1e-5,
+    "selected_block_output_error_max": 0.001,
+    "leaves_only_improvement_min": 100.0,
+    "reason": "Engineering targets declared before confirmation: 1e-5 global/input allows roughly 100x margin over pilot one-vector errors near 9.3e-8, without interpreting those as norm bounds. Component 1e-4 accommodates the pilot weakest output near 2.5e-6 but still demands 0.01% relative accuracy. Selected-block 1e-3 is a response-relative, nonzero-block check consistent with bounded spectra around 1e-5 at rank 47, not a guarantee of full-block error. Every random/localized/smooth response in both directions must improve on leaves-only by at least 100x. Failures require a separately versioned exploratory revision and fresh confirmation; never relax this record after observing formal seeds."
+  },
+  "reader": {"chunk_rows": 64, "basis_functions_per_element": 10},
+  "expected_data": {
+    "shape": [60420, 40280],
+    "matrix_file_bytes": 19469740824,
+    "coordinate_sha256": "7b315f1fed83de485028da55c3bf27fe50c79f81da875cd467e70d6266810e72",
+    "ordering_source_commit": "c4eb1b4615b0"
+  },
+  "guards": {
+    "rss_limit_bytes": 12884901888,
+    "modeled_array_limit_bytes": 8589934592,
+    "minimum_external_free_bytes": 107374182400,
+    "maximum_rhs_columns": 1024,
+    "maximum_total_passes_per_seed": 300,
+    "maximum_total_read_bytes_per_seed": 6000000000000
+  },
+  "timing": {"repeats": 5, "warmups": 1, "rhs_columns": 1, "seed": 101},
+  "calibration": {
+    "path": "benchmark_results/full_construction_seed20261012.json",
+    "construction_seed": 20261012,
+    "formal_seed": false,
+    "status": "completed feasibility pilot, not C.11 acceptance"
+  },
+  "contract": {
+    "required_success": ["bp3", "frontera"],
+    "bp7": "retained negative evidence; not a mandatory success gate",
+    "authority": "PI decision: larger Frontera 3D fault replaces BP7 as required successful dataset; small-fault BP7 has insufficient meaningful far field",
+    "read_budget_change": "The old bounded-preflight 1 TB ceiling is superseded only for this reviewed formal protocol: at most 300 streamed passes / 6 TB per seed including validation and timing, plus one bounded-memory matrix-hash scan per invocation."
+  }
+}

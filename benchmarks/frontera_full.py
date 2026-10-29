@@ -1,0 +1,663 @@
+#!/usr/bin/env python3
+"""Reviewed, opt-in three-seed Frontera confirmation; no dense copy or saved factors."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import sys
+import time
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any, BinaryIO
+
+import numpy as np
+from benchmarks.c10 import _file_identity, _load_config
+from benchmarks.frontera import (
+    DEFAULT_DATASET,
+    _environment,
+    _peak_rss_bytes,
+    construction_prediction,
+)
+from benchmarks.frontera_screen import (
+    DEFAULT_PLAN,
+    array_hash,
+    block_manifest,
+    evidence_binding,
+    validate_screen,
+    verify,
+    write_once,
+)
+from benchmarks.full import measure_seed
+from numpy.typing import NDArray
+
+from gfcompress.benchmark import isolated_peak_rss
+from gfcompress.build_tree import build_tree
+from gfcompress.compress import compress
+from gfcompress.frontera import NativeDenseGF
+from gfcompress.hmatrix import HMatrix
+from gfcompress.interactions import build_lists
+from gfcompress.study import validate_seed_plan
+
+ROOT = Path(__file__).resolve().parents[1]
+CONFIG = ROOT / "benchmarks/configs/frontera_full_fixed.json"
+EXPLORATORY = ROOT / "benchmarks/configs/frontera_exploratory_v2.json"
+V2_CONFIG = ROOT / "benchmarks/configs/frontera_full_fixed_v2.json"
+EARLY_PROBE_POLICY = "PCG64 SeedSequence([validation_seed, side]); unit selected-box drives"
+
+
+def sha256(path: Path) -> str:
+    """Hash even the matrix in bounded memory; this is a separately charged scan."""
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(8 * 1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def checkpoint(path: Path, record: dict[str, Any]) -> None:
+    """Atomically replace a small JSON record; never serialize numerical factors."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(record, indent=2, sort_keys=True, allow_nan=False) + "\n")
+    temporary.replace(path)
+
+
+def validate_config(config: dict[str, Any]) -> None:
+    validate_seed_plan(config["construction_seeds"], config["validation_seeds"])
+    if len(config["construction_seeds"]) != 3 or len(set(config["validation_seeds"])) != 2:
+        raise ValueError(
+            "formal confirmation requires exactly three seeds and two validation starts"
+        )
+    if config["calibration"]["construction_seed"] in config["construction_seeds"]:
+        raise ValueError("pilot cannot be a formal construction seed")
+    if not config["acceptance"]["frozen"] or config["sampling"] != "fixed":
+        raise ValueError("formal confirmation requires frozen fixed-path acceptance")
+    for name in ("m", "k", "p"):
+        value = config["selection"]["primary"][name]
+        if not isinstance(value, int) or value < (0 if name == "p" else 1):
+            raise ValueError(f"invalid primary {name}")
+    for name in (
+        "global_relative_error_max",
+        "component_response_error_max",
+        "input_response_error_max",
+        "selected_block_output_error_max",
+    ):
+        if not 0 < config["acceptance"][name] < 1:
+            raise ValueError(f"invalid discriminating threshold {name}")
+    if config["acceptance"]["leaves_only_improvement_min"] <= 1:
+        raise ValueError("leaves-only improvement must exceed one")
+    if config["validation"]["power_iterations"] < 1:
+        raise ValueError("power_iterations must be positive")
+    if (
+        config["validation"]["absolute_response_floor"]
+        != config["acceptance"]["absolute_response_floor"]
+    ):
+        raise ValueError("validation and acceptance floors must agree")
+    if config["timing"] != {"repeats": 5, "warmups": 1, "rhs_columns": 1, "seed": 101}:
+        raise ValueError("timing must match the shared full-baseline protocol")
+    if any(value <= 0 for value in config["guards"].values()):
+        raise ValueError("resource guards must be positive")
+    confirmation = config.get("confirmation", {})
+    if not isinstance(confirmation, dict):
+        raise ValueError("confirmation must be an object")
+    if confirmation.get("requires_screen_promotion") and not config.get("configuration_version"):
+        raise ValueError("screen-gated candidates require a versioned configuration")
+
+
+class GuardedNativeDenseGF(NativeDenseGF):
+    """Stream unchanged file data with RSS, width, traffic, and free-space guards."""
+
+    def __init__(self, dataset: Path, config: dict[str, Any]) -> None:
+        self.dataset = dataset
+        self.limits = config["guards"]
+        self.completed_passes = 0
+        self.check_resources()
+        super().__init__(dataset / "gf/gf_mat.bin", dataset / "gf_coords.bin", **config["reader"])
+
+    def check_resources(self) -> None:
+        if _peak_rss_bytes() > self.limits["rss_limit_bytes"]:
+            raise RuntimeError("RSS guard exceeded")
+        if shutil.disk_usage(self.dataset).free < self.limits["minimum_external_free_bytes"]:
+            raise RuntimeError("external free-space guard exceeded")
+
+    def _chunks(self, stream: BinaryIO) -> Iterator[tuple[int, int, NDArray[np.float64]]]:
+        # Chunk-boundary checks also cover memory growth within a streamed pass.
+        for item in super()._chunks(stream):
+            self.check_resources()
+            yield item
+
+    def _product(self, value: NDArray[np.floating], *, transpose: bool) -> NDArray[np.floating]:
+        self.check_resources()
+        width = 1 if value.ndim == 1 else value.shape[1]
+        if width > self.limits["maximum_rhs_columns"]:
+            raise RuntimeError("RHS width guard exceeded")
+        passes = self.completed_passes + 1
+        if (
+            passes > self.limits["maximum_total_passes_per_seed"]
+            or passes * self.header.value_bytes > self.limits["maximum_total_read_bytes_per_seed"]
+        ):
+            raise RuntimeError("streamed-read budget exceeded")
+        result = super().rmatvec(value) if transpose else super().matvec(value)
+        self.completed_passes = passes
+        self.check_resources()
+        return result
+
+    def matvec(self, omega: NDArray[np.floating]) -> NDArray[np.floating]:
+        return self._product(omega, transpose=False)
+
+    def rmatvec(self, psi: NDArray[np.floating]) -> NDArray[np.floating]:
+        return self._product(psi, transpose=True)
+
+
+def preflight(source: GuardedNativeDenseGF, config: dict[str, Any]) -> dict[str, Any]:
+    """Predict before construction; no operator product or matrix materialization."""
+    expected = config["expected_data"]
+    if (
+        list(source.shape) != expected["shape"]
+        or source.mat_path.stat().st_size != expected["matrix_file_bytes"]
+    ):
+        raise ValueError("dataset shape/size differs from frozen configuration")
+    primary = config["selection"]["primary"]
+    root = build_tree(source.mesh, primary["m"])
+    prediction = construction_prediction(
+        source,
+        root,
+        {"forward_seconds": 0.0, "adjoint_seconds": 0.0, "rhs_columns_per_pass": 3},
+        primary,
+    )
+    for name in (
+        "io_floor_seconds_from_width3_products",
+        "deliberately_pessimistic_linear_rhs_upper_seconds",
+        "linear_rhs_upper_method",
+    ):
+        prediction.pop(name)
+    memory = prediction["peak_memory_model"]
+    limits = config["guards"]
+    if memory["modeled_known_live_array_bytes"] > limits["modeled_array_limit_bytes"]:
+        raise RuntimeError("modeled array guard exceeded")
+    if (
+        max(memory["maximum_leaf_probe_columns"], memory["maximum_admissible_probe_columns"])
+        > limits["maximum_rhs_columns"]
+    ):
+        raise RuntimeError("predicted RHS width exceeds guard")
+    if not prediction["combined_columns_below_n_cols"]:
+        raise RuntimeError("construction columns must be below n_cols")
+    if prediction["storage"]["total_bytes_upper_bound"] >= source.header.value_bytes:
+        raise RuntimeError("predicted numerical storage must be below dense")
+    expected = config.get("expected_prediction", {})
+    if expected:
+        if prediction["combined_construction_columns"] != expected["construction_columns"]:
+            raise RuntimeError("candidate construction-column prediction changed")
+        if prediction["storage"]["total_bytes_upper_bound"] > expected["storage_bytes_upper_bound"]:
+            raise RuntimeError("candidate storage prediction exceeds reviewed bound")
+        if memory["modeled_known_live_array_bytes"] > expected["modeled_live_bytes_upper_bound"]:
+            raise RuntimeError("candidate live-memory prediction exceeds reviewed bound")
+    # C.10: 17 direction/component calls, <= one selected block per active level,
+    # and four calls per power iteration. Timing adds 2*(1+5) dense products.
+    levels = len(list(root.iter_levels())) - 2
+    validation_bound = len(config["validation_seeds"]) * (
+        17 + max(levels, 0) + 4 * config["validation"]["power_iterations"]
+    )
+    total_passes = prediction["full_matrix_passes"] + validation_bound + 12
+    if (
+        total_passes > limits["maximum_total_passes_per_seed"]
+        or total_passes * source.header.value_bytes > limits["maximum_total_read_bytes_per_seed"]
+    ):
+        raise RuntimeError("predicted validation/construction/timing traffic exceeds guard")
+    prediction["all_phase_passes_upper_bound"] = total_passes
+    prediction["all_phase_read_bytes_upper_bound"] = total_passes * source.header.value_bytes
+    return prediction
+
+
+def formal_success(report: dict[str, Any], dataset: str) -> bool:
+    """Require every declared construction/start record, not just an aggregate flag."""
+    config = report["config"]
+    runs = report.get("runs", [])
+    if report.get("dataset") != dataset or config.get("dataset") != dataset:
+        return False
+    if len(set(config["construction_seeds"])) < 3 or not config["acceptance"]["frozen"]:
+        return False
+    if report.get("status") != "passed" or report.get("all_pass") is not True:
+        return False
+    if sorted(run["construction_seed"] for run in runs) != sorted(config["construction_seeds"]):
+        return False
+    return all(
+        run["all_pass"]
+        and all(run["gates"].values())
+        and sorted(record["validation_seed"] for record in run["records"])
+        == sorted(config["validation_seeds"])
+        for run in runs
+    )
+
+
+def acceptance_contract(
+    bp3: dict[str, Any], frontera: dict[str, Any], bp7: dict[str, Any]
+) -> dict[str, Any]:
+    passing = {"bp3": formal_success(bp3, "bp3"), "frontera": formal_success(frontera, "frontera")}
+    return {
+        "required_success": passing,
+        "c11_accepted": all(passing.values()),
+        "coloring_unlocked": all(passing.values()),
+        "bp7": {
+            "role": "negative evidence, not a success gate",
+            "status": bp7["status"],
+            "all_pass": bp7["all_pass"],
+        },
+    }
+
+
+def check_identity(dataset: Path, identity: dict[str, Any]) -> None:
+    for name, relative in (("matrix", "gf/gf_mat.bin"), ("coordinates", "gf_coords.bin")):
+        if _file_identity(dataset / relative) != identity["data"][name]["stat"]:
+            raise RuntimeError("data identity changed since hashing")
+    for name, digest in identity["source_sha256"].items():
+        if sha256(ROOT / name) != digest:
+            raise RuntimeError("source identity changed during confirmation")
+
+
+def execute_seed(
+    dataset: Path,
+    config: dict[str, Any],
+    seed: int,
+    path: Path,
+    identity: dict[str, Any],
+    hash_seconds: float,
+) -> dict[str, Any]:
+    """Fresh process per seed; interrupted seeds restart, completed records persist."""
+    record: dict[str, Any] = {"status": "running", "construction_seed": seed, "identity": identity}
+    if path.exists():
+        previous = json.loads(path.read_text())
+        record["previous_attempts"] = [
+            *previous.get("previous_attempts", []),
+            {key: value for key, value in previous.items() if key != "previous_attempts"},
+        ]
+    checkpoint(path, record)
+    try:
+        check_identity(dataset, identity)
+        start = time.perf_counter()
+        source = GuardedNativeDenseGF(dataset, config)
+        record["preflight"] = preflight(source, config)
+        preparation = time.perf_counter() - start + hash_seconds
+        checkpoint(path, record)
+        run = measure_seed(source, source.mesh, config, seed, preparation)
+        source.check_resources()
+        check_identity(dataset, identity)
+        run["storage"]["peak_rss_bytes"] = _peak_rss_bytes()
+        run["streamed_passes_all_phases"] = source.completed_passes
+        run["streamed_bytes_all_phases"] = source.completed_passes * source.header.value_bytes
+        json.dumps(run, allow_nan=False)  # nonfinite diagnostics cannot become a passing checkpoint
+        record.update(status="completed", run=run)
+        checkpoint(path, record)
+        return run
+    except Exception as exc:
+        record.update(status="interrupted", error=f"{type(exc).__name__}: {exc}")
+        checkpoint(path, record)
+        raise
+
+
+def exploratory_manifest(source: NativeDenseGF, config: dict[str, Any]) -> list[dict[str, Any]]:
+    """C.10's largest genuinely truncated block per level, determined before construction."""
+    root = build_tree(source.mesh, config["candidate"]["m"])
+    lists = build_lists(root)
+    result = []
+    for nodes in list(root.iter_levels())[2:]:
+        pairs = [
+            (a, b)
+            for a in nodes
+            for b in lists.interaction[a]
+            if min(a.row_indices.size, b.col_indices.size) > config["candidate"]["k"]
+        ]
+        if not pairs:
+            continue
+        a, b = min(
+            pairs,
+            key=lambda pair: (
+                -min(pair[0].row_indices.size, pair[1].col_indices.size),
+                pair[0].cell_coords,
+                pair[1].cell_coords,
+            ),
+        )
+        x = np.zeros(source.shape[1])
+        x[b.col_indices] = 1.0
+        result.append(
+            {
+                "level": a.level,
+                "alpha_index": a.index_in_level,
+                "beta_index": b.index_in_level,
+                "rows": a.row_indices.tolist(),
+                "cols": b.col_indices.tolist(),
+                "index_sha256": [
+                    array_hash(i.astype("<i8")) for i in (a.row_indices, b.col_indices)
+                ],
+                "probe_sha256": array_hash(x),
+            }
+        )
+    if not result:
+        raise ValueError("exploratory validation requires truncated blocks")
+    return result
+
+
+def exploratory_probes(source: NativeDenseGF, config: dict[str, Any]) -> dict[str, np.ndarray]:
+    return {
+        side: np.random.default_rng(
+            np.random.SeedSequence([config["validation_seed"], index])
+        ).standard_normal(size)
+        for index, (side, size) in enumerate(
+            (("forward", source.shape[1]), ("adjoint", source.shape[0]))
+        )
+    }
+
+
+def early_gates(records: dict[str, Any], config: dict[str, Any]) -> dict[str, bool]:
+    floor = config["absolute_response_floor"]
+    random = records["random"]
+    selected = records["selected_blocks"]
+    finite = all(
+        np.isfinite(r[key]) and r[key] >= 0
+        for r in [*random.values(), *selected]
+        for key in ("error", "reference_norm")
+    )
+    finite = finite and all(
+        np.isfinite(r["leaves_error"]) and r["leaves_error"] >= 0 for r in random.values()
+    )
+    return {
+        "finite": finite,
+        "random_leaves_only": finite
+        and set(random) == {"forward", "adjoint"}
+        and all(
+            r["leaves_error"] / max(r["error"], np.finfo(float).tiny)
+            >= config["early_gates"]["random_leaves_only_improvement_min"]
+            for r in random.values()
+        ),
+        "selected_blocks": finite
+        and bool(selected)
+        and all(
+            r["reference_norm"] > floor
+            and r["error"] / r["reference_norm"]
+            <= config["early_gates"]["selected_block_error_max"]
+            for r in selected
+        ),
+    }
+
+
+def measure_exploratory(
+    source: GuardedNativeDenseGF, config: dict[str, Any], manifest: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """One construction and early checks only: no power iterations or timing passes."""
+    hmat = compress(
+        source,
+        source.mesh,
+        **config["candidate"],
+        seed=config["construction_seed"],
+        sampling="fixed",
+    )
+    leaves = HMatrix(root=hmat.root, mesh=source.mesh, leaves=hmat.leaves)
+    records: dict[str, Any] = {"random": {}, "selected_blocks": []}
+    for side, x in exploratory_probes(source, config).items():
+        name = "matvec" if side == "forward" else "rmatvec"
+        actual = getattr(source, name)(x)
+        records["random"][side] = {
+            "error": float(np.linalg.norm(getattr(hmat, name)(x) - actual)),
+            "leaves_error": float(np.linalg.norm(getattr(leaves, name)(x) - actual)),
+            "reference_norm": float(np.linalg.norm(actual)),
+            "probe_sha256": array_hash(x),
+        }
+    for spec in manifest:
+        x = np.zeros(source.shape[1])
+        x[spec["cols"]] = 1.0
+        actual = source.matvec(x)[spec["rows"]]
+        records["selected_blocks"].append(
+            {
+                "identity": spec,
+                "error": float(np.linalg.norm(hmat.matvec(x)[spec["rows"]] - actual)),
+                "reference_norm": float(np.linalg.norm(actual)),
+            }
+        )
+    gates = early_gates(records, config)
+    return {
+        "construction_seed": config["construction_seed"],
+        "validation_seed": config["validation_seed"],
+        "records": records,
+        "gates": gates,
+        "all_pass": all(gates.values()),
+        "later_diagnostics_run": False,
+        "streamed_passes": source.completed_passes,
+    }
+
+
+def validate_exploratory(
+    report: dict[str, Any],
+    binding: dict[str, Any],
+    source: NativeDenseGF,
+    screen: dict[str, Any],
+    matrix_sha256: str,
+) -> None:
+    verify(report, "exploratory", binding)
+    config = binding["config"]
+    run = report.get("run", {})
+    manifest = exploratory_manifest(source, config)
+    if (
+        report.get("screen_content_sha256") != screen["content_sha256"]
+        or report.get("matrix_sha256") != matrix_sha256
+        or len(matrix_sha256) != 64
+        or any(c not in "0123456789abcdef" for c in matrix_sha256)
+        or report.get("probe_policy") != EARLY_PROBE_POLICY
+        or report.get("manifest") != manifest
+        or run.get("construction_seed") != config["construction_seed"]
+        or run.get("validation_seed") != config["validation_seed"]
+        or run.get("later_diagnostics_run") is not False
+    ):
+        raise ValueError("exploratory identity/seeds mismatch")
+    records = run.get("records", {})
+    if [r.get("identity") for r in records.get("selected_blocks", [])] != manifest:
+        raise ValueError("incomplete exploratory blocks")
+    if set(records.get("random", {})) != {"forward", "adjoint"}:
+        raise ValueError("incomplete exploratory random checks")
+    for side, x in exploratory_probes(source, config).items():
+        if records["random"][side].get("probe_sha256") != array_hash(x):
+            raise ValueError("exploratory probe mismatch")
+    gates = early_gates(records, config)
+    if run.get("gates") != gates or run.get("all_pass") is not True or not all(gates.values()):
+        raise ValueError("exploratory early gates failed")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
+    parser.add_argument("--config", type=Path, default=CONFIG)
+    parser.add_argument("--revision", required=True)
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--screen-report", type=Path)
+    parser.add_argument("--exploratory-report", type=Path)
+    parser.add_argument("--exploratory", action="store_true")
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--run", action="store_true")
+    args = parser.parse_args()
+    if args.exploratory:
+        args.config = V2_CONFIG
+    config = _load_config("frontera", args.config)
+    validate_config(config)
+    stage = (
+        "exploratory_v2"
+        if args.exploratory
+        else ("formal_fixed_v2" if config.get("configuration_version") else "formal_fixed")
+    )
+    output = (args.output_dir or args.dataset / "benchmark_results" / stage).resolve()
+    if not output.is_relative_to(args.dataset.resolve()) or output.is_relative_to(ROOT):
+        raise ValueError("output directory must be inside the external dataset, outside repository")
+    sources = [
+        Path(__file__),
+        ROOT / "benchmarks/full.py",
+        ROOT / "benchmarks/c10.py",
+        ROOT / "benchmarks/frontera.py",
+        ROOT / "BP_COLORING_PLAN.md",
+        *sorted((ROOT / "src/gfcompress").glob("*.py")),
+    ]
+    identity: dict[str, Any] = {
+        "revision_supplied_by_orchestrator": args.revision,
+        "source_sha256": {str(path.relative_to(ROOT)): sha256(path) for path in sources},
+        "config_sha256": sha256(args.config),
+        "environment": _environment(),
+    }
+    report: dict[str, Any] = {
+        "schema_version": 1,
+        "stage": stage,
+        "exploratory_config": json.loads(EXPLORATORY.read_text()) if args.exploratory else None,
+        "dataset": "frontera",
+        "config": config,
+        "identity": identity,
+        "environment": _environment(),
+        "command": [sys.executable, *sys.argv],
+        "status": "not_run",
+        "runs": [],
+        "all_pass": False,
+        "timing_protocol": {
+            **config["timing"],
+            "dense": "streamed endian-converted NativeDenseGF; no native dense copy",
+            "setup": (
+                "reader/preflight plus bounded full-data hashing charged "
+                "to each independently usable seed"
+            ),
+        },
+    }
+    if not args.run:
+        print(json.dumps(report, indent=2))
+        return
+    confirmation = config.get("confirmation", {})
+    screen = None
+    exploration = None
+    if confirmation.get("requires_screen_promotion"):
+        if config != json.loads(V2_CONFIG.read_text()):
+            raise ValueError("v2 requires the exact frozen configuration")
+        if args.screen_report is None:
+            raise ValueError("screen-gated candidate requires --screen-report")
+        screen = json.loads(args.screen_report.read_text())
+        plan = json.loads(DEFAULT_PLAN.read_text())
+        screen_source = NativeDenseGF(
+            args.dataset / "gf/gf_mat.bin", args.dataset / "gf_coords.bin", **plan["reader"]
+        )
+        if (
+            validate_screen(
+                screen,
+                evidence_binding(args.dataset, plan, args.revision),
+                block_manifest(screen_source, plan),
+            )
+            != config["selection"]["primary"]
+        ):
+            raise ValueError("screen report did not promote this candidate")
+        if not args.exploratory:
+            if args.exploratory_report is None:
+                raise ValueError("formal v2 requires --exploratory-report")
+            exploration = json.loads(args.exploratory_report.read_text())
+            validate_exploratory(
+                exploration,
+                evidence_binding(args.dataset, json.loads(EXPLORATORY.read_text()), args.revision),
+                screen_source,
+                screen,
+                exploration.get("matrix_sha256", ""),
+            )
+    for name in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+        if os.environ.get(name) != "1":
+            raise ValueError(f"{name}=1 is required")
+    if output.exists() and any(output.iterdir()) and not args.resume:
+        raise ValueError("output exists; use --resume with identical source/config/data identity")
+    if args.exploratory and (output / "frontera_exploratory.json").exists():
+        raise FileExistsError("exploratory evidence is immutable, including with --resume")
+    source = GuardedNativeDenseGF(args.dataset, config)
+    report["preflight"] = preflight(source, config)
+    start = time.perf_counter()
+    identity["data"] = {
+        name: {"stat": _file_identity(path), "sha256": sha256(path)}
+        for name, path in (("matrix", source.mat_path), ("coordinates", source.coordinate_path))
+    }
+    hash_seconds = time.perf_counter() - start
+    if identity["data"]["coordinates"]["sha256"] != config["expected_data"]["coordinate_sha256"]:
+        raise ValueError("coordinate hash differs from frozen dataset")
+    if args.exploratory:
+        exploratory_config = json.loads(EXPLORATORY.read_text())
+        binding = evidence_binding(args.dataset, exploratory_config, args.revision)
+        manifest = exploratory_manifest(source, exploratory_config)
+        run = measure_exploratory(source, exploratory_config, manifest)
+        check_identity(args.dataset, identity)
+        if evidence_binding(args.dataset, exploratory_config, args.revision) != binding:
+            raise ValueError("exploratory source/dataset changed")
+        assert screen is not None
+        result = {
+            "schema_version": 2,
+            "kind": "exploratory",
+            "probe_policy": EARLY_PROBE_POLICY,
+            "binding": binding,
+            "screen_content_sha256": screen["content_sha256"],
+            "matrix_sha256": identity["data"]["matrix"]["sha256"],
+            "manifest": manifest,
+            "run": run,
+        }
+        write_once(output / "frontera_exploratory.json", result)
+        print(output / "frontera_exploratory.json")
+        return
+    if exploration is not None:
+        assert screen is not None
+        validate_exploratory(
+            exploration,
+            evidence_binding(args.dataset, json.loads(EXPLORATORY.read_text()), args.revision),
+            source,
+            screen,
+            identity["data"]["matrix"]["sha256"],
+        )
+        identity["screen_content_sha256"] = screen["content_sha256"]
+        identity["exploratory_content_sha256"] = exploration["content_sha256"]
+    pilot = args.dataset / config["calibration"]["path"]
+    report["pilot_identity"] = {"stat": _file_identity(pilot), "sha256": sha256(pilot)}
+    report["hashing"] = {
+        "seconds": hash_seconds,
+        "matrix_scans": 1,
+        "bytes": source.mat_path.stat().st_size + source.coordinate_path.stat().st_size,
+    }
+    references = {}
+    for dataset in ("bp3", "bp7"):
+        path = ROOT / f"benchmarks/results/{dataset}_fixed.json"
+        references[dataset] = json.loads(path.read_text())
+        identity[dataset + "_record_sha256"] = sha256(path)
+    aggregate = output / "frontera_fixed.json"
+    if aggregate.exists() and json.loads(aggregate.read_text())["identity"] != identity:
+        raise ValueError("resume identity mismatch; use a new output directory")
+    report["status"] = "running"
+    checkpoint(aggregate, report)
+    for seed in config["construction_seeds"]:
+        path = output / f"seed_{seed}.json"
+        existing = json.loads(path.read_text()) if path.exists() else None
+        if existing and existing["identity"] != identity:
+            raise ValueError("seed checkpoint identity mismatch")
+        if existing and existing["status"] == "completed":
+            run = existing["run"]
+        else:
+            print(f"Frontera seed {seed}: starting", flush=True)
+            try:
+                run, peak = isolated_peak_rss(
+                    execute_seed, args.dataset, config, seed, path, identity, hash_seconds
+                )
+                run["storage"]["peak_rss_bytes"] = peak
+                seed_record = json.loads(path.read_text())
+                seed_record["run"] = run
+                checkpoint(path, seed_record)
+            except Exception as exc:
+                report.update(status="interrupted", error=str(exc))
+                checkpoint(aggregate, report)
+                raise
+        report["runs"].append(run)
+        checkpoint(aggregate, report)
+    report["all_pass"] = all(run["all_pass"] for run in report["runs"])
+    report["status"] = "passed" if report["all_pass"] else "failed_gates"
+    report["acceptance_contract"] = acceptance_contract(
+        references["bp3"], report, references["bp7"]
+    )
+    checkpoint(aggregate, report)
+    print(aggregate, flush=True)
+
+
+if __name__ == "__main__":
+    main()

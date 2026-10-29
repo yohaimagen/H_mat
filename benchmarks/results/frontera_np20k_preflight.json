@@ -1,0 +1,434 @@
+{
+  "schema_version": 3,
+  "status": "completed_preflight",
+  "purpose": "bounded Frontera feasibility evidence; not a C.11 baseline",
+  "environment": {
+    "python": "3.12.9",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "platform": "macOS-26.7.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "logical_cpu_count": 11,
+    "openblas_num_threads": "1",
+    "omp_num_threads": "1",
+    "veclib_maximum_threads": "1"
+  },
+  "provenance": {
+    "revision_label": "task/C.11 base 16646f8; Tandem c4eb1b4615b0 ordering correction",
+    "command": [
+      "/Users/ymagen/work/H_mat/.venv/bin/python",
+      "benchmarks/frontera.py",
+      "--revision",
+      "task/C.11 base 16646f8; Tandem c4eb1b4615b0 ordering correction",
+      "--run"
+    ],
+    "arguments": {
+      "dataset": "/Volumes/Extreme SSD/H_mat/frontera_np20k_3d",
+      "output": "benchmarks/results/frontera_np20k_preflight.json",
+      "chunk_rows": 64,
+      "run": true
+    },
+    "source_sha256": {
+      "/Users/ymagen/.codex/worktrees/c11-frontera/H_mat/benchmarks/frontera.py": "1275444f3320fea269733dd796b4f361b5f27aef39a854bd9abba6b82a0fbe14",
+      "src/gfcompress/frontera.py": "808422cc5b39ab27a0bd177f7a00a1e8fb19d066e2107abd90c8ecde784284a2",
+      "src/gfcompress/benchmark.py": "fe21c9862bc7ce3a0ec82dc1d41bb73e6568a15099ae640669819687eb704d15",
+      "src/gfcompress/build_tree.py": "74f71df24cef87b7503913db7eeef2220e74f5047b7ee9c0b70cc76687e8c19c",
+      "src/gfcompress/interactions.py": "e32e58fb11dc126c9f44f2ddd0d84fbfd2b056b89c92f50d52f5a429b17e125e"
+    },
+    "dirty_state": "not collected: this task prohibited Git commands",
+    "post_measurement_formatting": {
+      "file": "benchmarks/frontera.py",
+      "measured_source_sha256": "590cad9dbe51782e7befacf165be748b5233493288b80c157902d8b8828f6ffc",
+      "change": "split four long string literals for lint; values and behavior unchanged; no new matrix scan"
+    }
+  },
+  "source": {
+    "matrix": {
+      "path": "/Volumes/Extreme SSD/H_mat/frontera_np20k_3d/gf/gf_mat.bin",
+      "size": 19469740824,
+      "mtime_ns": 1787176247000000000
+    },
+    "coordinates": {
+      "path": "/Volumes/Extreme SSD/H_mat/frontera_np20k_3d/gf_coords.bin",
+      "size": 483360,
+      "mtime_ns": 1787236554000000000,
+      "sha256": "7b315f1fed83de485028da55c3bf27fe50c79f81da875cd467e70d6266810e72"
+    },
+    "metadata": {
+      "np20k_summary.json": {
+        "path": "/Volumes/Extreme SSD/H_mat/frontera_np20k_3d/np20k_summary.json",
+        "size": 246,
+        "mtime_ns": 1787228052000000000,
+        "sha256": "112a034534e0811aca2706f1b45796070e44db16bb5fca49565acdef825582c7"
+      },
+      "f400x100_gen.toml": {
+        "path": "/Volumes/Extreme SSD/H_mat/frontera_np20k_3d/f400x100_gen.toml",
+        "size": 1512,
+        "mtime_ns": 1786386971000000000,
+        "sha256": "af3274c31d389dbb29bb82331738aabed9ee6a4f7890c69bcc1b585390d2492e"
+      },
+      "f400x100_bench.toml": {
+        "path": "/Volumes/Extreme SSD/H_mat/frontera_np20k_3d/f400x100_bench.toml",
+        "size": 1274,
+        "mtime_ns": 1787236478000000000,
+        "sha256": "7584bfd6253b1090d53a7cfa9ef53c7ca85f2874a4c38b3a5233d8691cec03a4"
+      }
+    }
+  },
+  "limitations": [
+    "physical block subsamples do not certify all full-block ranks",
+    "no frozen Frontera operator-wide tolerance or validation plan exists",
+    "the linear-RHS wall time is a deliberately pessimistic upper extrapolation"
+  ],
+  "header": {
+    "comm_size": 224,
+    "assembled_columns": 40280,
+    "classid": 1211216,
+    "rows": 60420,
+    "cols": 40280,
+    "format_code": -1,
+    "values_offset": 24
+  },
+  "coordinates": {
+    "shape": [
+      20140,
+      3
+    ],
+    "minimum": [
+      -200.00000000000006,
+      -7.584728526968992e-16,
+      -100.00000000000003
+    ],
+    "maximum": [
+      200.00000000000006,
+      1.2601191250172779e-14,
+      3.2984826991136984e-16
+    ],
+    "unique": 19300,
+    "pca_variance_ratio": [
+      0.9424866376618872,
+      0.057513362338112786,
+      6.593597818796413e-36
+    ],
+    "tree_dimension": 2,
+    "patch_length_quantiles": [
+      0.5662970770633976,
+      0.6896551724137963,
+      0.8935746892376757
+    ]
+  },
+  "ordering": {
+    "status": "resolved_authoritative",
+    "passes_gate": true,
+    "authoritative_writer_mapping_available": true,
+    "raw_order": "component-major within each nbf-element",
+    "public_order": "patch-major",
+    "basis_functions_per_element": 10,
+    "mapping": "i=e*nbf+n; raw row=e*(3*nbf)+alpha*nbf+n; raw col=e*(2*nbf)+beta*nbf+n",
+    "source_evidence": {
+      "host": "hise_jump",
+      "checkout": "/home/ymagen/tandem_h_matrix/tandem",
+      "branch": "ymagen/strumpack-production",
+      "commit": "c4eb1b4615b0",
+      "function": "app/form/StrumpackGFFullOperator.cpp::build_index_maps",
+      "basis": "executable index-map and blocked-assembly code; native-dense and gf_coords features match dataset",
+      "contradicted_comments": "later dump_fault_node_coords comment and downloaded analyze_gf.py patch-major helpers"
+    },
+    "probe_patches": [
+      0,
+      5034,
+      10069,
+      15104,
+      20139
+    ],
+    "median_spearman": -0.8469103686311876,
+    "same_location_rank_median_zero_based": 0.0,
+    "reason": "ordering resolved from executable Tandem source; spatial decay is only a sanity check"
+  },
+  "streaming": {
+    "full_passes": 2,
+    "rhs_columns_per_pass": 3,
+    "bytes_read": 38939481600,
+    "forward_seconds": 20.877839291933924,
+    "adjoint_seconds": 20.895481707993895,
+    "forward_gb_per_second": 0.9325553534422532,
+    "adjoint_gb_per_second": 0.9317679808526044,
+    "forward_linearity_relative": 9.419565153216472e-15,
+    "adjoint_linearity_relative": 1.5104027437879489e-15,
+    "adjoint_identity_relative": 1.1945709433523343e-15,
+    "peak_rss_bytes": 183156736,
+    "maximum_converted_chunk_bytes": 61870080,
+    "persistent_permutation_bytes": 805600
+  },
+  "tree": {
+    "depth": 4,
+    "occupied_boxes_by_level": [
+      1,
+      4,
+      8,
+      24,
+      80
+    ],
+    "leaf_patch_count_max": 356
+  },
+  "physical_block_preflight": {
+    "status": "authoritative_ordering_bounded_subsamples",
+    "logical_ordering": "patch_major",
+    "used_for_gate": false,
+    "records": [
+      {
+        "level": 2,
+        "stratum": "closest",
+        "separation_over_diameter": 0.7071067811865476,
+        "source_block_patch_shape": [
+          2596,
+          2472
+        ],
+        "sample_patch_shape": [
+          64,
+          64
+        ],
+        "shape": [
+          192,
+          128
+        ],
+        "relative_sigma_at_candidate_rank": 3.070024351980174e-05,
+        "rank_semantics": "rank r retains sigma_1..sigma_r; the reported tail criterion uses sigma_(r+1)/sigma_1 <= tolerance, inclusive",
+        "rank_for_relative_tail_at_most_0.01": 4,
+        "rank_for_relative_tail_at_most_0.0001": 29,
+        "rank_for_relative_tail_at_most_1e-06": 118
+      },
+      {
+        "level": 2,
+        "stratum": "farthest",
+        "separation_over_diameter": 1.4142135623730951,
+        "source_block_patch_shape": [
+          2556,
+          2550
+        ],
+        "sample_patch_shape": [
+          64,
+          64
+        ],
+        "shape": [
+          192,
+          128
+        ],
+        "relative_sigma_at_candidate_rank": 1.6336666835072549e-06,
+        "rank_semantics": "rank r retains sigma_1..sigma_r; the reported tail criterion uses sigma_(r+1)/sigma_1 <= tolerance, inclusive",
+        "rank_for_relative_tail_at_most_0.01": 4,
+        "rank_for_relative_tail_at_most_0.0001": 9,
+        "rank_for_relative_tail_at_most_1e-06": 59
+      },
+      {
+        "level": 3,
+        "stratum": "closest",
+        "separation_over_diameter": 0.7071067811865475,
+        "source_block_patch_shape": [
+          1343,
+          1259
+        ],
+        "sample_patch_shape": [
+          64,
+          64
+        ],
+        "shape": [
+          192,
+          128
+        ],
+        "relative_sigma_at_candidate_rank": 1.59519086697757e-05,
+        "rank_semantics": "rank r retains sigma_1..sigma_r; the reported tail criterion uses sigma_(r+1)/sigma_1 <= tolerance, inclusive",
+        "rank_for_relative_tail_at_most_0.01": 7,
+        "rank_for_relative_tail_at_most_0.0001": 26,
+        "rank_for_relative_tail_at_most_1e-06": 99
+      },
+      {
+        "level": 3,
+        "stratum": "farthest",
+        "separation_over_diameter": 2.0,
+        "source_block_patch_shape": [
+          35,
+          35
+        ],
+        "sample_patch_shape": [
+          35,
+          35
+        ],
+        "shape": [
+          105,
+          70
+        ],
+        "relative_sigma_at_candidate_rank": 1.249035763450143e-06,
+        "rank_semantics": "rank r retains sigma_1..sigma_r; the reported tail criterion uses sigma_(r+1)/sigma_1 <= tolerance, inclusive",
+        "rank_for_relative_tail_at_most_0.01": 2,
+        "rank_for_relative_tail_at_most_0.0001": 7,
+        "rank_for_relative_tail_at_most_1e-06": 50
+      },
+      {
+        "level": 4,
+        "stratum": "closest",
+        "separation_over_diameter": 0.7071067811865469,
+        "source_block_patch_shape": [
+          344,
+          346
+        ],
+        "sample_patch_shape": [
+          64,
+          64
+        ],
+        "shape": [
+          192,
+          128
+        ],
+        "relative_sigma_at_candidate_rank": 2.493997780735225e-05,
+        "rank_semantics": "rank r retains sigma_1..sigma_r; the reported tail criterion uses sigma_(r+1)/sigma_1 <= tolerance, inclusive",
+        "rank_for_relative_tail_at_most_0.01": 6,
+        "rank_for_relative_tail_at_most_0.0001": 34,
+        "rank_for_relative_tail_at_most_1e-06": 88
+      },
+      {
+        "level": 4,
+        "stratum": "farthest",
+        "separation_over_diameter": 2.0,
+        "source_block_patch_shape": [
+          305,
+          308
+        ],
+        "sample_patch_shape": [
+          64,
+          64
+        ],
+        "shape": [
+          192,
+          128
+        ],
+        "relative_sigma_at_candidate_rank": 2.035233359775452e-06,
+        "rank_semantics": "rank r retains sigma_1..sigma_r; the reported tail criterion uses sigma_(r+1)/sigma_1 <= tolerance, inclusive",
+        "rank_for_relative_tail_at_most_0.01": 4,
+        "rank_for_relative_tail_at_most_0.0001": 10,
+        "rank_for_relative_tail_at_most_1e-06": 67
+      }
+    ]
+  },
+  "prediction": {
+    "candidate": {
+      "m": 512,
+      "k": 47,
+      "p": 10
+    },
+    "products": {
+      "matvec_calls": 73,
+      "matvec_columns": 10056,
+      "rmatvec_calls": 64,
+      "rmatvec_columns": 3648
+    },
+    "combined_construction_columns": 13704,
+    "combined_columns_below_n_cols": true,
+    "full_matrix_passes": 137,
+    "bytes_read": 2667354489600,
+    "io_floor_seconds_from_width3_products": 2861.3930976227857,
+    "deliberately_pessimistic_linear_rhs_upper_seconds": 95391.42306348309,
+    "linear_rhs_upper_method": "charges one third of the measured width-3 pass time to every scheduled column; this ignores wider-BLAS efficiency and is not a compute-time estimate",
+    "flop_estimate": 66703331980800,
+    "storage": {
+      "factor_blocks": 1476,
+      "factor_entries_upper_bound": 129835316,
+      "factor_left_entries_upper_bound": 77438826,
+      "factor_core_entries_upper_bound": 3063954,
+      "leaf_blocks": 596,
+      "leaf_entries": 265362108,
+      "total_entries_upper_bound": 395197424,
+      "total_bytes_upper_bound": 3161579392
+    },
+    "peak_memory_model": {
+      "maximum_leaf_probe_columns": 712,
+      "maximum_admissible_probe_columns": 57,
+      "maximum_forward_workspace_bytes": 1897349120,
+      "maximum_adjoint_workspace_bytes": 190443840,
+      "persistent_permutation_bytes": 805600,
+      "modeled_known_live_array_bytes": 5084245744,
+      "included_lifetimes": "probe plus full, truncated, and subtraction-result arrays during peeling; raw permuted input/output buffers and persistent index maps; retained three-factor blocks and leaves; finalization overlap",
+      "excludes": "Python/BLAS overhead, allocator fragmentation, and unmodeled LAPACK workspace; not a measured or strict upper-bound RSS"
+    }
+  },
+  "disk": {
+    "free_bytes_before_exit": 2836699021312,
+    "large_outputs_written": false
+  },
+  "full_compression": {
+    "status": "gated_not_run",
+    "reasons": [
+      "no frozen Frontera operator-wide accuracy tolerance or independent validation plan",
+      "physical block subsamples cannot certify the candidate rank for every full block",
+      "predicted construction reads exceed 1000000000000 bytes"
+    ],
+    "does_not_fix_bp7": true,
+    "does_not_complete_c11": true
+  },
+  "timing_history": [
+    {
+      "record_sha256": "94d3baebe9113f389c7295d6b7450ab1881e718e3c327d712529c8eee56aea61",
+      "ordering_status": "unresolved",
+      "streaming": {
+        "full_passes": 2,
+        "rhs_columns_per_pass": 3,
+        "bytes_read": 38939481600,
+        "forward_seconds": 20.647959791996982,
+        "adjoint_seconds": 20.67025254102191,
+        "forward_gb_per_second": 0.9429377525011623,
+        "adjoint_gb_per_second": 0.9419207995335621,
+        "forward_linearity_relative": 9.475584285166882e-15,
+        "adjoint_linearity_relative": 1.5034179078399772e-15,
+        "adjoint_identity_relative": 6.0833411553240946e-15,
+        "peak_rss_bytes": 194953216,
+        "maximum_converted_chunk_bytes": 61870080
+      },
+      "provenance": {
+        "revision_label": "task/C.11 correction-round-1; commit unavailable because Git commands prohibited",
+        "command": [
+          "/Users/ymagen/work/H_mat/.venv/bin/python",
+          "-m",
+          "benchmarks.frontera",
+          "--output",
+          "/tmp/frontera_np20k_preflight.json",
+          "--chunk-rows",
+          "64",
+          "--run"
+        ],
+        "arguments": {
+          "dataset": "/Volumes/Extreme SSD/H_mat/frontera_np20k_3d",
+          "output": "/tmp/frontera_np20k_preflight.json",
+          "chunk_rows": 64,
+          "run": true
+        },
+        "source_sha256": {
+          "/Users/ymagen/.codex/worktrees/c11-frontera/H_mat/benchmarks/frontera.py": "3d42d0d7ac52cfd6e54247b5217f19c28d5843705b36572a56533ecfc0ac7dc8",
+          "src/gfcompress/frontera.py": "7e262f92531aea5fdf7f4c9f43e182c65dc9d0f3bbe646a6283f599e3de869e1",
+          "src/gfcompress/benchmark.py": "fe21c9862bc7ce3a0ec82dc1d41bb73e6568a15099ae640669819687eb704d15",
+          "src/gfcompress/build_tree.py": "74f71df24cef87b7503913db7eeef2220e74f5047b7ee9c0b70cc76687e8c19c",
+          "src/gfcompress/interactions.py": "e32e58fb11dc126c9f44f2ddd0d84fbfd2b056b89c92f50d52f5a429b17e125e"
+        },
+        "dirty_state": "not collected: this task prohibited Git commands",
+        "source_hash_scope": "hashes are for correction-round-3 source; streamed product logic and original measured timings are unchanged, while ordering diagnostics and deterministic memory-lifetime accounting were corrected"
+      },
+      "derived_correction": {
+        "round": 3,
+        "date": "2026-10-15",
+        "original_measured_record_sha256": "89696e68ed460d776fd302ad766d1bf0ff879aee0ac8674a3dcc866d1a5f32d8",
+        "streaming_timings_reused_without_full_matrix_rescan": true,
+        "final_chunk_lifetime_adjustment": "deterministic three-chunk lifetime correction; no dataset scan or new measurement",
+        "original_peak_rss_and_timings_preserved": true,
+        "additional_matrix_io": "45 selected rows (14500800 bytes), only for expanded ordering hypotheses",
+        "corrected_fields": [
+          "ordering hypotheses and gate",
+          "rank labels",
+          "runtime extrapolation label",
+          "known-live array model, including three simultaneous row chunks",
+          "software/timing provenance"
+        ]
+      },
+      "note": "historical measurement retained; current streaming is a fresh corrected-order measurement"
+    }
+  ]
+}
