@@ -398,13 +398,13 @@ def _block_seed(seed: int | None, level: int, side: Side, cell: tuple[int, ...])
 
 @dataclass(frozen=True)
 class PeriodicLeafTestMatrix:
-    """One emitted test matrix for the fixed `3x...x3` leaf periodic pattern.
+    """One streamed identity probe, shared by fixed and colored leaf schedules.
 
     Attributes:
         pattern: The leaf pattern-cell offset `(i_0 mod 3, ..., i_{d-1} mod
-            3)` shared by every box in `active_boxes`, length `d`.
-        active_boxes: The level-`level` nodes whose leaf pattern cell equals
-            `pattern`.
+            3)` shared by fixed active boxes, length `d`; colored probes use
+            `(color,)` as a diagnostic label ignored by realization.
+        active_boxes: The selected level-`level` nodes.
     """
 
     pattern: tuple[int, ...]

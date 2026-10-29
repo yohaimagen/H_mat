@@ -16,7 +16,10 @@ from gfcompress.tree import TreeNode
 
 @dataclass(frozen=True)
 class CanonicalConstraint:
-    """One random box and an unordered zero set (node identity is the key)."""
+    """One active box and an unordered zero set (node identity is the key).
+
+    ``random_box`` is the identity-probe source for neighbor-only leaf graphs.
+    """
 
     random_box: TreeNode
     zero_boxes: frozenset[TreeNode]
@@ -48,7 +51,12 @@ class ConstraintGraph:
 
 
 def build_constraint_graph(
-    root: TreeNode, lists: TreeLists, level: int, side: Side = "col"
+    root: TreeNode,
+    lists: TreeLists,
+    level: int,
+    side: Side = "col",
+    *,
+    neighbors_only: bool = False,
 ) -> ConstraintGraph:
     """Build the admissible graph for one level of the shared geometric tree.
 
@@ -57,6 +65,10 @@ def build_constraint_graph(
     randomize alpha and zero (nei(beta) union int(beta)) minus alpha. Ownership
     remains in original matrix orientation; rectangular dof expansion is left
     to the eventual probe builder, not this graph.
+
+    With ``neighbors_only``, required pairs and zero sets use only nei, as
+    in Sec. 4.1.3 for dense leaves. The active box then carries identity rows,
+    not Gaussian rows; incompatibility and deduplication are unchanged.
 
     Conflicts are enumerated by joining random and zero incidence lists for
     each box, never by scanning all vertex pairs. With expected constant-time
@@ -72,11 +84,16 @@ def build_constraint_graph(
     vertices: dict[CanonicalConstraint, int] = {}
     owners: dict[tuple[TreeNode, TreeNode], int] = {}
     input_count = input_incidences = 0
+    pairs = lists.nei if neighbors_only else lists.interaction
     for alpha in root.nodes_at_level(level):
-        for beta in lists.interaction[alpha]:
+        for beta in pairs[alpha]:
             target, source = (alpha, beta) if side == "col" else (beta, alpha)
-            constraint = build_sampling_constraint(target, source, lists)
-            key = CanonicalConstraint(source, frozenset(constraint.zero_boxes))
+            if neighbors_only:
+                zeros = frozenset(lists.nei[target]) - {source}
+            else:
+                constraint = build_sampling_constraint(target, source, lists)
+                zeros = frozenset(constraint.zero_boxes)
+            key = CanonicalConstraint(source, zeros)
             vertex = vertices.setdefault(key, len(vertices))
             owners[alpha, beta] = vertex
             input_count += 1

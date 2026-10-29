@@ -6,7 +6,7 @@ from time import perf_counter
 from typing import Literal
 
 from gfcompress.constraint_graph import ConstraintGraph
-from gfcompress.fixed_pattern import pattern_cell
+from gfcompress.fixed_pattern import leaf_pattern_cell, pattern_cell
 from gfcompress.tree import TreeNode
 
 
@@ -62,26 +62,27 @@ def dsatur(adjacency: tuple[frozenset[int], ...]) -> tuple[int, ...]:
 
 
 def fixed_pattern_coloring(
-    graph: ConstraintGraph, root: TreeNode, level: int
+    graph: ConstraintGraph, root: TreeNode, level: int, *, leaf: bool = False
 ) -> tuple[tuple[int, ...], int]:
-    """Return vertex labels and actual nonempty period-6 probe count.
+    """Return labels and nonempty fixed probe count (period 3 for leaves, else 6).
 
     Labels match the sorted pattern cells used by the fixed schedule, including
     cells with no owning graph vertex. Thus len(set(labels)) need not equal the
     number of fixed probes. No numerical test matrices are constructed.
     """
+    cell_for = leaf_pattern_cell if leaf else pattern_cell
     nodes = set(root.nodes_at_level(level))
-    cells = sorted({pattern_cell(node, root) for node in nodes})
+    cells = sorted({cell_for(node, root) for node in nodes})
     labels = {cell: i for i, cell in enumerate(cells)}
     if len(graph.constraints) != len(graph.adjacency):
         raise ValueError("constraint and adjacency counts must agree")
     for constraint in graph.constraints:
         if constraint.random_box not in nodes or not constraint.zero_boxes <= nodes:
             raise ValueError("constraint boxes must belong to the requested tree level")
-        cell = pattern_cell(constraint.random_box, root)
-        if any(pattern_cell(box, root) == cell for box in constraint.zero_boxes):
+        cell = cell_for(constraint.random_box, root)
+        if any(cell_for(box, root) == cell for box in constraint.zero_boxes):
             raise ValueError("fixed pattern cannot satisfy the constraint")
-    colors = tuple(labels[pattern_cell(c.random_box, root)] for c in graph.constraints)
+    colors = tuple(labels[cell_for(c.random_box, root)] for c in graph.constraints)
     validate_coloring(graph.adjacency, colors)
     return colors, len(cells)
 
@@ -117,9 +118,9 @@ class ColoringSelection:
 
 
 def select_coloring(
-    graph: ConstraintGraph, root: TreeNode, level: int, width: int
+    graph: ConstraintGraph, root: TreeNode, level: int, width: int, *, leaf: bool = False
 ) -> ColoringSelection:
-    """Compare actual per-side admissible sampling columns at width k+p.
+    """Compare sampling columns at width k+p (or global w_max for leaf=True).
 
     DSatur emits one probe per used color; the existing fixed schedule emits
     one per occupied pattern cell, even cells without required pairs. Width is
@@ -129,7 +130,7 @@ def select_coloring(
     if type(width) is not int or width <= 0:
         raise ValueError("probe width must be a positive integer")
     start = perf_counter()
-    fixed, fixed_probes = fixed_pattern_coloring(graph, root, level)
+    fixed, fixed_probes = fixed_pattern_coloring(graph, root, level, leaf=leaf)
     fixed_seconds = perf_counter() - start
     start = perf_counter()
     candidate = dsatur(graph.adjacency)
