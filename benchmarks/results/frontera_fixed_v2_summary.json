@@ -1,0 +1,731 @@
+{
+  "acceptance_contract": {
+    "bp7": {
+      "all_pass": false,
+      "role": "negative evidence, not a success gate",
+      "status": "failed_gates"
+    },
+    "c11_accepted": true,
+    "coloring_unlocked": true,
+    "required_success": {
+      "bp3": true,
+      "frontera": true
+    }
+  },
+  "aggregate": {
+    "accuracy": {
+      "component_response_error_max": {
+        "max": 3.6009731961691847e-07,
+        "median": 3.567097387442148e-07,
+        "min": 3.4457028587407066e-07
+      },
+      "global_relative_error_max": {
+        "max": 9.909527816570573e-08,
+        "median": 8.15418335579714e-08,
+        "min": 7.613769131457261e-08
+      },
+      "input_response_error_max": {
+        "max": 3.9804351702253715e-07,
+        "median": 3.9786397506797017e-07,
+        "min": 3.964357875557413e-07
+      },
+      "leaves_only_improvement_min": {
+        "max": 620.9347512791252,
+        "median": 615.4559666588237,
+        "min": 612.1413247357924
+      },
+      "selected_block_output_error_max": {
+        "max": 9.535401302183691e-05,
+        "median": 8.829223133195368e-05,
+        "min": 7.329617299897201e-05
+      }
+    },
+    "apply": {
+      "adjoint": {
+        "compressed": {
+          "max": 0.088098308397457,
+          "median": 0.08788029998540878,
+          "min": 0.07696211659349501
+        },
+        "dense": {
+          "max": 20.90701567500364,
+          "median": 20.840990299987606,
+          "min": 20.786891383398324
+        },
+        "setup_break_even_applies": {
+          "max": 143.95729567080738,
+          "median": 142.99119037726436,
+          "min": 142.3429665628138
+        }
+      },
+      "forward": {
+        "compressed": {
+          "max": 0.07598590820562094,
+          "median": 0.07560975002124906,
+          "min": 0.0724371582036838
+        },
+        "dense": {
+          "max": 20.922346616815776,
+          "median": 20.789285349985583,
+          "min": 20.777752833394334
+        },
+        "setup_break_even_applies": {
+          "max": 143.76928753584264,
+          "median": 142.96805162863393,
+          "min": 142.66713459775434
+        }
+      }
+    },
+    "peak_rss_bytes": {
+      "max": 5350817792,
+      "median": 4972150784,
+      "min": 4655185920
+    },
+    "read_volume": {
+      "matrix_hash_scans": 1,
+      "recorded_hashing_bytes": 19470224184,
+      "recorded_total_read_bytes": 14797003491384,
+      "scope": "Formal v2 invocation only; excludes pilot, failed v1, screen, exploration, and uninstrumented metadata/report reads. Hashing reads counted once, not once per seed.",
+      "streamed_matrix_passes": 759,
+      "streamed_matrix_value_bytes": 14777533267200
+    },
+    "timing_seconds": {
+      "construction": {
+        "max": 2973.20689637505,
+        "median": 2935.885199500015,
+        "min": 2931.750497542089
+      },
+      "operator_preparation": {
+        "max": 23.862871876102872,
+        "median": 23.859861667035148,
+        "min": 23.859530417015776
+      },
+      "total_setup": {
+        "max": 2997.0664267920656,
+        "median": 2959.74506116705,
+        "min": 2955.6133694181917
+      }
+    }
+  },
+  "all_pass": true,
+  "command": [
+    "/Users/ymagen/work/H_mat/.venv/bin/python",
+    "/Users/ymagen/.codex/worktrees/c11-frontera/H_mat/benchmarks/frontera_full.py",
+    "--config",
+    "benchmarks/configs/frontera_full_fixed_v2.json",
+    "--screen-report",
+    "/Volumes/Extreme SSD/H_mat/frontera_np20k_3d/benchmark_results/frontera_screen_v1/frontera_screen.json",
+    "--exploratory-report",
+    "/Volumes/Extreme SSD/H_mat/frontera_np20k_3d/benchmark_results/exploratory_v2/frontera_exploratory.json",
+    "--revision",
+    "ec2ec56",
+    "--run"
+  ],
+  "config": {
+    "acceptance": {
+      "absolute_response_floor": 1e-12,
+      "component_response_error_max": 0.0001,
+      "frozen": true,
+      "global_relative_error_max": 1e-05,
+      "input_response_error_max": 1e-05,
+      "leaves_only_improvement_min": 100.0,
+      "reason": "Unchanged C.11 acceptance thresholds; this version changes only the screened operating point and uses fresh confirmatory seeds.",
+      "selected_block_output_error_max": 0.001
+    },
+    "calibration": {
+      "construction_seed": 20261012,
+      "formal_seed": false,
+      "path": "benchmark_results/full_construction_seed20261012.json",
+      "status": "v1 feasibility pilot only; excluded from v2 confirmation"
+    },
+    "configuration_version": "frontera-fixed-v2-exploratory-gated",
+    "confirmation": {
+      "requires_exploratory_pass": true,
+      "requires_screen_promotion": true,
+      "screen_plan": "frontera_screen_v1",
+      "status": "gated pending authenticated screen and exploratory evidence"
+    },
+    "construction_seeds": [
+      41,
+      43,
+      47
+    ],
+    "contract": {
+      "authority": "C.11 correction round 2; v2 remains gated until the bounded screen promotes it and one exploratory construction passes its frozen early checks.",
+      "bp7": "retained negative evidence; not a mandatory success gate",
+      "required_success": [
+        "bp3",
+        "frontera"
+      ]
+    },
+    "dataset": "frontera",
+    "expected_data": {
+      "coordinate_sha256": "7b315f1fed83de485028da55c3bf27fe50c79f81da875cd467e70d6266810e72",
+      "matrix_file_bytes": 19469740824,
+      "ordering_source_commit": "c4eb1b4615b0",
+      "shape": [
+        60420,
+        40280
+      ]
+    },
+    "expected_prediction": {
+      "construction_columns": 22792,
+      "modeled_live_bytes_upper_bound": 6250000000,
+      "storage_bytes_upper_bound": 4250000000
+    },
+    "full_runs": "validated screen promotion and passing one-seed exploration before opt-in confirmation",
+    "guards": {
+      "maximum_rhs_columns": 1024,
+      "maximum_total_passes_per_seed": 300,
+      "maximum_total_read_bytes_per_seed": 6000000000000,
+      "minimum_external_free_bytes": 107374182400,
+      "modeled_array_limit_bytes": 8589934592,
+      "rss_limit_bytes": 12884901888
+    },
+    "reader": {
+      "basis_functions_per_element": 10,
+      "chunk_rows": 64
+    },
+    "sampling": "fixed",
+    "schema_version": 2,
+    "selection": {
+      "primary": {
+        "k": 96,
+        "m": 512,
+        "p": 32
+      },
+      "rule": "Complete content-bound screen promotion and passing exploratory_v2 evidence are both required; these fresh seeds are never reused from failed formal v1 or exploration."
+    },
+    "sweep": {
+      "k": [
+        96
+      ],
+      "m": [
+        512
+      ],
+      "p": [
+        32
+      ]
+    },
+    "timing": {
+      "repeats": 5,
+      "rhs_columns": 1,
+      "seed": 101,
+      "warmups": 1
+    },
+    "validation": {
+      "absolute_response_floor": 1e-12,
+      "power_iterations": 8,
+      "status": "predeclared; starts activate only after screen promotion and exploratory gates pass"
+    },
+    "validation_seeds": [
+      107,
+      109
+    ]
+  },
+  "dataset": "frontera",
+  "environment": {
+    "logical_cpu_count": 11,
+    "machine": "arm64",
+    "numpy": "2.4.6",
+    "omp_num_threads": "1",
+    "openblas_num_threads": "1",
+    "platform": "macOS-26.7.1-arm64-arm-64bit",
+    "processor": "arm",
+    "python": "3.12.9",
+    "scipy": "1.17.1",
+    "veclib_maximum_threads": "1"
+  },
+  "external_report": {
+    "path": "/Volumes/Extreme SSD/H_mat/frontera_np20k_3d/benchmark_results/formal_fixed_v2/frontera_fixed.json",
+    "sha256": "a852e7a26cf9c19bff6387dc8ec2e938c54d8c56830d1a69087a84c5170ba3c7",
+    "size_bytes": 60123
+  },
+  "hashing": {
+    "bytes": 19470224184,
+    "matrix_scans": 1,
+    "seconds": 23.83835454203654
+  },
+  "identity": {
+    "bp3_record_sha256": "62034c8c5dd7d048c8ab14516175191505e154c85e95a8f71d766b29096202b5",
+    "bp7_record_sha256": "6ed35e8abb06f239530300545820fd92eb9e490c8bd41d7d28eee5ee989ebdb1",
+    "config_sha256": "f60f4c965a768bd11b5a72487c1cfe42aca8975acd429ea59643e5ab37573ace",
+    "data": {
+      "coordinates": {
+        "sha256": "7b315f1fed83de485028da55c3bf27fe50c79f81da875cd467e70d6266810e72",
+        "stat": {
+          "mtime_ns": 1787236554000000000,
+          "path": "/Volumes/Extreme SSD/H_mat/frontera_np20k_3d/gf_coords.bin",
+          "size": 483360
+        }
+      },
+      "matrix": {
+        "sha256": "22bf78db33ec339ce404738d90ec85057b189806aff2a80759743cef023c98f4",
+        "stat": {
+          "mtime_ns": 1787176247000000000,
+          "path": "/Volumes/Extreme SSD/H_mat/frontera_np20k_3d/gf/gf_mat.bin",
+          "size": 19469740824
+        }
+      }
+    },
+    "environment": {
+      "logical_cpu_count": 11,
+      "machine": "arm64",
+      "numpy": "2.4.6",
+      "omp_num_threads": "1",
+      "openblas_num_threads": "1",
+      "platform": "macOS-26.7.1-arm64-arm-64bit",
+      "processor": "arm",
+      "python": "3.12.9",
+      "scipy": "1.17.1",
+      "veclib_maximum_threads": "1"
+    },
+    "exploratory_content_sha256": "27202972d86cbaa51b038a1d3d9a19a6939995b1220c6f28ca4e15530efdf713",
+    "revision_supplied_by_orchestrator": "ec2ec56",
+    "screen_content_sha256": "f7955af4de10e68a81ade092ececd6a44e1615ec9d75d605fc7e41473165ccb5",
+    "source_sha256": {
+      "BP_COLORING_PLAN.md": "501ffb87bfd71063801752815834fbca068fc5e7f664498794d4b5c2f81c1f9b",
+      "benchmarks/c10.py": "0c085d6b9467a6d3ea5f156dcd6f7e2756aed4cf14f465516fce28647564a553",
+      "benchmarks/frontera.py": "7213fce7d9c04810948e0d05d7ac9dc1a884a7211a016df649108987e3a9b582",
+      "benchmarks/frontera_full.py": "6e349dc803cb043617a97fd5aee35cf529100da2585cf00747b76141ce3819f7",
+      "benchmarks/full.py": "c9a5618d825c38af7f22a04d5c3860e789152a75a3639a1b084d0dd979e5eca7",
+      "src/gfcompress/__init__.py": "d10e1160f66dbdcc9439dd9b2a2f359e638ca43d200931e1d99a12c9d68fbb15",
+      "src/gfcompress/benchmark.py": "fe21c9862bc7ce3a0ec82dc1d41bb73e6568a15099ae640669819687eb704d15",
+      "src/gfcompress/build_tree.py": "74f71df24cef87b7503913db7eeef2220e74f5047b7ee9c0b70cc76687e8c19c",
+      "src/gfcompress/column_basis.py": "358965b1a2af4ad411d15c60b7f168c1968abd74807ca4fc99c804ec29b5b5cb",
+      "src/gfcompress/compress.py": "1bc92e79a11c8cabdc5051f6c2ea44bef3e67a5880245c27fc41c4da652a7087",
+      "src/gfcompress/error.py": "38b446ee5b028e0c46bf0caac8c5b70575d34666797c742589c01ec5ee013aa0",
+      "src/gfcompress/fixed_pattern.py": "6b12d96c7d0a19479906169992c5210ef5e86988c86b52f57afff652d4cf2b0c",
+      "src/gfcompress/frontera.py": "808422cc5b39ab27a0bd177f7a00a1e8fb19d066e2107abd90c8ecde784284a2",
+      "src/gfcompress/geometry.py": "ac23cca8ec154653e58d386e231691ae0cb319116844cae63fdf9dd529c8ba49",
+      "src/gfcompress/hmatrix.py": "13bbb58709d01ca12fc648b7c4c111050a54c9a0b711e5da138b8b084c6acb71",
+      "src/gfcompress/interactions.py": "e32e58fb11dc126c9f44f2ddd0d84fbfd2b056b89c92f50d52f5a429b17e125e",
+      "src/gfcompress/leaf.py": "3d2ad543be4151ea8c2896153f007abd85940fa9ebb81c16874c1612ea4beba2",
+      "src/gfcompress/mockgf.py": "a03ba13eed0f4611b12c86531254d0dfdb7f47fec739409910d8cbb123f3a8ed",
+      "src/gfcompress/neighbors.py": "12a8a9245b5358e236616fa5520bab242449cfe203d358cdfe7d0b0c5a55149f",
+      "src/gfcompress/operators.py": "83fb1cef8b838001e10e652b16da2054433abb4d48b91d03026e6ec677f1f7dc",
+      "src/gfcompress/peeling.py": "ef77fa3e681e972d14c535ae9d039b37ff8a6cc5d65621e9566a1ca1d1c818da",
+      "src/gfcompress/randomized.py": "1e3c4b4b48322f957ba52ef99b2e68d5396bfa898582474ad3b6db24552406ab",
+      "src/gfcompress/realgf.py": "2bfc5860172b1952ab30d47ca8b57b525fdec074642949f2fbeba7c9218bd882",
+      "src/gfcompress/row_basis.py": "1388444f94593a20fd87ea3c84a8ae2f0f26d4d99a330b5557bfcaf78c7d72e9",
+      "src/gfcompress/sampling.py": "def3091e7b4a97879163d11d9a9769635aad2035f2fae1b25e0ad38ab14457a2",
+      "src/gfcompress/study.py": "d21fde0158861e83bc91791154bf3ade05e3659a6635bd9242ed814168606c8d",
+      "src/gfcompress/tree.py": "438c355e44d03c2b51afb59af4b5e84a1a225a825c06c180efde6f7aa16fc4b4"
+    }
+  },
+  "limitations": [
+    "Eight power iterations and two starts are finite estimates, not certified spectral bounds.",
+    "Selected block drives do not exhaust all blocks.",
+    "Dense timing includes streaming I/O, endian conversion and index permutations; cache state is uncontrolled.",
+    "Setup charges hashing to each independently usable seed, while aggregate read accounting counts the actual single invocation scan once.",
+    "Full report and stage evidence remain external; no matrices or factors copied.",
+    "BP7 and formal Frontera v1 remain failed evidence; thresholds were not relaxed."
+  ],
+  "preflight": {
+    "all_phase_passes_upper_bound": 253,
+    "all_phase_read_bytes_upper_bound": 4925844422400,
+    "bytes_read": 2667354489600,
+    "candidate": {
+      "k": 96,
+      "m": 512,
+      "p": 32
+    },
+    "combined_columns_below_n_cols": true,
+    "combined_construction_columns": 22792,
+    "flop_estimate": 110938583078400,
+    "full_matrix_passes": 137,
+    "peak_memory_model": {
+      "excludes": "Python/BLAS overhead, allocator fragmentation, and unmodeled LAPACK workspace; not a measured or strict upper-bound RSS",
+      "included_lifetimes": "probe plus full, truncated, and subtraction-result arrays during peeling; raw permuted input/output buffers and persistent index maps; retained three-factor blocks and leaves; finalization overlap",
+      "maximum_adjoint_workspace_bytes": 350597120,
+      "maximum_admissible_probe_columns": 128,
+      "maximum_forward_workspace_bytes": 1897349120,
+      "maximum_leaf_probe_columns": 712,
+      "modeled_known_live_array_bytes": 6113501920,
+      "persistent_permutation_bytes": 805600
+    },
+    "products": {
+      "matvec_calls": 73,
+      "matvec_columns": 14600,
+      "rmatvec_calls": 64,
+      "rmatvec_columns": 8192
+    },
+    "storage": {
+      "factor_blocks": 1476,
+      "factor_core_entries_upper_bound": 11028736,
+      "factor_entries_upper_bound": 250527556,
+      "factor_left_entries_upper_bound": 147384768,
+      "leaf_blocks": 596,
+      "leaf_entries": 265362108,
+      "total_bytes_upper_bound": 4127117312,
+      "total_entries_upper_bound": 515889664
+    }
+  },
+  "reviewed_revision": "ec2ec56",
+  "runs": [
+    {
+      "acceptance": {
+        "all_pass": true,
+        "evaluated": true,
+        "observed": {
+          "component_response_error_max": 3.567097387442148e-07,
+          "global_relative_error_max": 9.909527816570573e-08,
+          "input_response_error_max": 3.9786397506797017e-07,
+          "leaves_only_improvement_min": 612.1413247357924,
+          "selected_block_output_error_max": 9.535401302183691e-05
+        },
+        "passes": {
+          "component_response_error_max": true,
+          "global_relative_error_max": true,
+          "input_response_error_max": true,
+          "leaves_only_improvement_min": true,
+          "selected_block_output_error_max": true
+        },
+        "primary_record_count": 2,
+        "thresholds": {
+          "component_response_error_max": 0.0001,
+          "global_relative_error_max": 1e-05,
+          "input_response_error_max": 1e-05,
+          "leaves_only_improvement_min": 100.0,
+          "selected_block_output_error_max": 0.001
+        }
+      },
+      "all_pass": true,
+      "compression": {
+        "dense_to_numerical_factor": 4.717515720570823,
+        "numerical_to_dense_ratio": 0.21197597617735106,
+        "retained_to_dense_ratio": 0.21224935300628142
+      },
+      "construction_seed": 41,
+      "gates": {
+        "construction_columns_below_n_cols": true,
+        "frozen_accuracy": true,
+        "numerical_entries_below_dense": true,
+        "predicted_equals_observed": true
+      },
+      "global_error_by_validation_seed": {
+        "107": 9.909527816570573e-08,
+        "109": 9.839544175770533e-08
+      },
+      "products": {
+        "observed_total": {
+          "matvec_calls": 73,
+          "matvec_columns": 14600,
+          "rmatvec_calls": 64,
+          "rmatvec_columns": 8192
+        },
+        "predicted_admissible": {
+          "matvec_calls": 64,
+          "matvec_columns": 8192,
+          "rmatvec_calls": 64,
+          "rmatvec_columns": 8192
+        },
+        "predicted_leaves": {
+          "matvec_calls": 9,
+          "matvec_columns": 6408,
+          "rmatvec_calls": 0,
+          "rmatvec_columns": 0
+        },
+        "predicted_total": {
+          "matvec_calls": 73,
+          "matvec_columns": 14600,
+          "rmatvec_calls": 64,
+          "rmatvec_columns": 8192
+        },
+        "validation_excluded": {
+          "matvec_calls": 54,
+          "matvec_columns": 54,
+          "rmatvec_calls": 50,
+          "rmatvec_columns": 50
+        }
+      },
+      "storage": {
+        "dense_entries": 2433717600,
+        "dense_reference_bytes": 19469740800,
+        "disk_cache_bytes": 0,
+        "factor_bytes": 2004220448,
+        "leaf_bytes": 2122896864,
+        "mesh_bytes": 483360,
+        "numerical_bytes": 4127117312,
+        "numerical_entries": 515889664,
+        "peak_rss_bytes": 4655185920,
+        "retained_allocation_bytes": 4132439888,
+        "tree_index_bytes": 4839216
+      },
+      "streamed_bytes_all_phases": 4925844422400,
+      "streamed_passes_all_phases": 253,
+      "timing_seconds": {
+        "adjoint": {
+          "compressed": 0.08788029998540878,
+          "dense": 20.90701567500364,
+          "setup_break_even_applies": 143.95729567080738
+        },
+        "construction": 2973.20689637505,
+        "forward": {
+          "compressed": 0.07598590820562094,
+          "dense": 20.922346616815776,
+          "setup_break_even_applies": 143.76928753584264
+        },
+        "operator_preparation": 23.859530417015776,
+        "total_setup": 2997.0664267920656
+      },
+      "tree": {
+        "depth": 4,
+        "dimension": 2,
+        "leaf_count": 80,
+        "oversized_leaves": 0
+      },
+      "validation_seeds": [
+        107,
+        109
+      ]
+    },
+    {
+      "acceptance": {
+        "all_pass": true,
+        "evaluated": true,
+        "observed": {
+          "component_response_error_max": 3.6009731961691847e-07,
+          "global_relative_error_max": 7.613769131457261e-08,
+          "input_response_error_max": 3.964357875557413e-07,
+          "leaves_only_improvement_min": 615.4559666588237,
+          "selected_block_output_error_max": 7.329617299897201e-05
+        },
+        "passes": {
+          "component_response_error_max": true,
+          "global_relative_error_max": true,
+          "input_response_error_max": true,
+          "leaves_only_improvement_min": true,
+          "selected_block_output_error_max": true
+        },
+        "primary_record_count": 2,
+        "thresholds": {
+          "component_response_error_max": 0.0001,
+          "global_relative_error_max": 1e-05,
+          "input_response_error_max": 1e-05,
+          "leaves_only_improvement_min": 100.0,
+          "selected_block_output_error_max": 0.001
+        }
+      },
+      "all_pass": true,
+      "compression": {
+        "dense_to_numerical_factor": 4.717515720570823,
+        "numerical_to_dense_ratio": 0.21197597617735106,
+        "retained_to_dense_ratio": 0.21224935300628142
+      },
+      "construction_seed": 43,
+      "gates": {
+        "construction_columns_below_n_cols": true,
+        "frozen_accuracy": true,
+        "numerical_entries_below_dense": true,
+        "predicted_equals_observed": true
+      },
+      "global_error_by_validation_seed": {
+        "107": 7.613769131457261e-08,
+        "109": 6.753974327310981e-08
+      },
+      "products": {
+        "observed_total": {
+          "matvec_calls": 73,
+          "matvec_columns": 14600,
+          "rmatvec_calls": 64,
+          "rmatvec_columns": 8192
+        },
+        "predicted_admissible": {
+          "matvec_calls": 64,
+          "matvec_columns": 8192,
+          "rmatvec_calls": 64,
+          "rmatvec_columns": 8192
+        },
+        "predicted_leaves": {
+          "matvec_calls": 9,
+          "matvec_columns": 6408,
+          "rmatvec_calls": 0,
+          "rmatvec_columns": 0
+        },
+        "predicted_total": {
+          "matvec_calls": 73,
+          "matvec_columns": 14600,
+          "rmatvec_calls": 64,
+          "rmatvec_columns": 8192
+        },
+        "validation_excluded": {
+          "matvec_calls": 54,
+          "matvec_columns": 54,
+          "rmatvec_calls": 50,
+          "rmatvec_columns": 50
+        }
+      },
+      "storage": {
+        "dense_entries": 2433717600,
+        "dense_reference_bytes": 19469740800,
+        "disk_cache_bytes": 0,
+        "factor_bytes": 2004220448,
+        "leaf_bytes": 2122896864,
+        "mesh_bytes": 483360,
+        "numerical_bytes": 4127117312,
+        "numerical_entries": 515889664,
+        "peak_rss_bytes": 5350817792,
+        "retained_allocation_bytes": 4132439888,
+        "tree_index_bytes": 4839216
+      },
+      "streamed_bytes_all_phases": 4925844422400,
+      "streamed_passes_all_phases": 253,
+      "timing_seconds": {
+        "adjoint": {
+          "compressed": 0.07696211659349501,
+          "dense": 20.840990299987606,
+          "setup_break_even_applies": 142.3429665628138
+        },
+        "construction": 2931.750497542089,
+        "forward": {
+          "compressed": 0.0724371582036838,
+          "dense": 20.789285349985583,
+          "setup_break_even_applies": 142.66713459775434
+        },
+        "operator_preparation": 23.862871876102872,
+        "total_setup": 2955.6133694181917
+      },
+      "tree": {
+        "depth": 4,
+        "dimension": 2,
+        "leaf_count": 80,
+        "oversized_leaves": 0
+      },
+      "validation_seeds": [
+        107,
+        109
+      ]
+    },
+    {
+      "acceptance": {
+        "all_pass": true,
+        "evaluated": true,
+        "observed": {
+          "component_response_error_max": 3.4457028587407066e-07,
+          "global_relative_error_max": 8.15418335579714e-08,
+          "input_response_error_max": 3.9804351702253715e-07,
+          "leaves_only_improvement_min": 620.9347512791252,
+          "selected_block_output_error_max": 8.829223133195368e-05
+        },
+        "passes": {
+          "component_response_error_max": true,
+          "global_relative_error_max": true,
+          "input_response_error_max": true,
+          "leaves_only_improvement_min": true,
+          "selected_block_output_error_max": true
+        },
+        "primary_record_count": 2,
+        "thresholds": {
+          "component_response_error_max": 0.0001,
+          "global_relative_error_max": 1e-05,
+          "input_response_error_max": 1e-05,
+          "leaves_only_improvement_min": 100.0,
+          "selected_block_output_error_max": 0.001
+        }
+      },
+      "all_pass": true,
+      "compression": {
+        "dense_to_numerical_factor": 4.717515720570823,
+        "numerical_to_dense_ratio": 0.21197597617735106,
+        "retained_to_dense_ratio": 0.21224935300628142
+      },
+      "construction_seed": 47,
+      "gates": {
+        "construction_columns_below_n_cols": true,
+        "frozen_accuracy": true,
+        "numerical_entries_below_dense": true,
+        "predicted_equals_observed": true
+      },
+      "global_error_by_validation_seed": {
+        "107": 7.901840727204088e-08,
+        "109": 8.15418335579714e-08
+      },
+      "products": {
+        "observed_total": {
+          "matvec_calls": 73,
+          "matvec_columns": 14600,
+          "rmatvec_calls": 64,
+          "rmatvec_columns": 8192
+        },
+        "predicted_admissible": {
+          "matvec_calls": 64,
+          "matvec_columns": 8192,
+          "rmatvec_calls": 64,
+          "rmatvec_columns": 8192
+        },
+        "predicted_leaves": {
+          "matvec_calls": 9,
+          "matvec_columns": 6408,
+          "rmatvec_calls": 0,
+          "rmatvec_columns": 0
+        },
+        "predicted_total": {
+          "matvec_calls": 73,
+          "matvec_columns": 14600,
+          "rmatvec_calls": 64,
+          "rmatvec_columns": 8192
+        },
+        "validation_excluded": {
+          "matvec_calls": 54,
+          "matvec_columns": 54,
+          "rmatvec_calls": 50,
+          "rmatvec_columns": 50
+        }
+      },
+      "storage": {
+        "dense_entries": 2433717600,
+        "dense_reference_bytes": 19469740800,
+        "disk_cache_bytes": 0,
+        "factor_bytes": 2004220448,
+        "leaf_bytes": 2122896864,
+        "mesh_bytes": 483360,
+        "numerical_bytes": 4127117312,
+        "numerical_entries": 515889664,
+        "peak_rss_bytes": 4972150784,
+        "retained_allocation_bytes": 4132439888,
+        "tree_index_bytes": 4839216
+      },
+      "streamed_bytes_all_phases": 4925844422400,
+      "streamed_passes_all_phases": 253,
+      "timing_seconds": {
+        "adjoint": {
+          "compressed": 0.088098308397457,
+          "dense": 20.786891383398324,
+          "setup_break_even_applies": 142.99119037726436
+        },
+        "construction": 2935.885199500015,
+        "forward": {
+          "compressed": 0.07560975002124906,
+          "dense": 20.777752833394334,
+          "setup_break_even_applies": 142.96805162863393
+        },
+        "operator_preparation": 23.859861667035148,
+        "total_setup": 2959.74506116705
+      },
+      "tree": {
+        "depth": 4,
+        "dimension": 2,
+        "leaf_count": 80,
+        "oversized_leaves": 0
+      },
+      "validation_seeds": [
+        107,
+        109
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "stage": "formal_fixed_v2",
+  "status": "passed",
+  "summary_kind": "C.11 accepted formal Frontera fixed v2, compact extraction",
+  "timing_protocol": {
+    "dense": "streamed endian-converted NativeDenseGF; no native dense copy",
+    "repeats": 5,
+    "rhs_columns": 1,
+    "seed": 101,
+    "setup": "reader/preflight plus bounded full-data hashing charged to each independently usable seed",
+    "warmups": 1
+  },
+  "workflow_qualification": "Scientific gate passed; coloring eligible only after human merge. No coloring result exists."
+}

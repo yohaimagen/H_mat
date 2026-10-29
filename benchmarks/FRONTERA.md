@@ -1,4 +1,14 @@
-# Frontera native-dense feasibility preflight
+# Frontera fixed baseline and historical preflight
+
+**The C.11 scientific gate has passed for BP3 and Frontera formal v2. Coloring
+is eligible only after human merge; no coloring result exists yet.** All three
+fresh Frontera seeds (41, 43, 47) pass the unchanged frozen checks after the
+versioned screen/exploratory correction path. The failed formal v1 results and
+BP7 negative evidence remain preserved. The current result is documented in
+[Accepted formal v2 result](#accepted-formal-v2-result), with a mechanically
+derived [tracked summary](results/frontera_fixed_v2_summary.json).
+
+## Historical native-dense feasibility preflight
 
 The original preflight below is bounded evidence for the `frontera_np20k_3d` checkpoint, not a C.11
 baseline and not a BP7 correction. The checkpoint is a complete PETSc native
@@ -86,6 +96,9 @@ The machine-readable record is
 [`results/frontera_np20k_preflight.json`](results/frontera_np20k_preflight.json).
 
 ## Formal C.11 confirmation
+
+This section preserves the original v1 protocol and its rationale; the later
+versioned v2 result and fresh seeds are recorded below.
 
 The PI revised the acceptance contract on 2026-10-22: BP3 and the larger
 Frontera 3D GF must succeed; BP7 remains negative evidence, with all failed
@@ -281,5 +294,65 @@ Exploration additionally hashes the full matrix once, and formal execution
 independently verifies that digest. The screen does not scan the matrix for a
 hash. Hashes provide reproducible content/provenance checks, not a cryptographic
 signature from an independent authority: trusted orchestrator execution and an
-immutable dataset during each stage remain assumptions. No new Frontera
-accuracy or timing result is claimed here; C.11 and coloring remain gated.
+immutable dataset during each stage remain assumptions. At this implementation
+checkpoint no new Frontera accuracy or timing result was claimed; subsequent
+execution completed the gates and formal v2 confirmation below.
+
+## Accepted formal v2 result
+
+The accepted external record is
+`/Volumes/Extreme SSD/H_mat/frontera_np20k_3d/benchmark_results/formal_fixed_v2/frontera_fixed.json`.
+It is 60,123 bytes with SHA-256
+`a852e7a26cf9c19bff6387dc8ec2e938c54d8c56830d1a69087a84c5170ba3c7` and supplied
+reviewed revision `ec2ec56`. The compact
+[frontera_fixed_v2_summary.json](results/frontera_fixed_v2_summary.json) preserves
+the report's configuration, source and data provenance, per-seed acceptance and
+costs, and aggregate ranges/medians without copying the raw report or factors.
+Its predecessor evidence is bound by canonical content hashes:
+
+- Screen: `f7955af4de10e68a81ade092ececd6a44e1615ec9d75d605fc7e41473165ccb5`.
+- Exploratory: `27202972d86cbaa51b038a1d3d9a19a6939995b1220c6f28ca4e15530efdf713`.
+
+Formal v2 uses `(m,k,p)=(512,96,32)`, construction seeds **41/43/47**, and
+independent starts **107/109**. All three seeds report `all_pass: true`.
+Across the six seed/start records, the worst global estimate is `9.90953e-8`,
+component response error `3.60097e-7`, input response error `3.98044e-7`, and
+selected-block error `9.53540e-5`; minimum leaves-only improvement is `612.141`.
+The unchanged limits are `1e-5`, `1e-4`, `1e-5`, `1e-3`, and `100`, respectively.
+The pilot and exploratory seed remain outside formal confirmation. Failed v1
+seeds 11/23/37 retain their original failed status and thresholds.
+
+Numerical storage is 4,127,117,312 bytes, or 21.1976% of the 19,469,740,800-byte
+dense value block (4.7175× compression). Retained allocations are
+4,132,439,888 bytes; peak RSS ranges from 4,655,185,920 to 5,350,817,792 bytes.
+Every seed exactly matches its predicted 137 construction passes and 22,792
+combined construction columns, below `n_cols=40,280`. Forward counts are
+73 calls / 14,600 columns; transpose counts are 64 calls / 8,192 columns.
+
+Construction takes 2931.750–2973.207 seconds per seed. Preparation, including
+the hashing charge, is 23.8595–23.8629 seconds; total setup is
+2955.613–2997.066 seconds. Forward apply takes 0.07244–0.07599 seconds versus
+20.77775–20.92235 for streamed dense, and adjoint apply takes
+0.07696–0.08810 versus 20.78689–20.90702 seconds. Setup break-even is
+142.667–143.769 forward applies and 142.343–143.957 adjoint applies. The
+comparison includes dense I/O, conversion, and permutations; it is not a claim
+about resident dense BLAS. Cache state is uncontrolled, and each mean uses five
+single-vector repeats after one warmup. Exact per-seed values are in the summary.
+
+Formal v2 recorded **14,797,003,491,384 total read bytes**: three seeds ×
+253 passes × 19,469,740,800 value bytes = 14,777,533,267,200 streamed bytes,
+plus 19,470,224,184 hashing bytes. Hashing comprises one full matrix-file scan
+(including its 24-byte header) and 483,360 coordinate bytes. It is counted once
+in total traffic, although its time is charged to each independently usable
+seed's setup. Earlier stages and uninstrumented metadata/report reads are
+excluded. This substantial traffic remains part of the cost of the baseline.
+
+The exact command, single-thread environment, matrix digest/stat identity,
+coordinate digest/stat identity, and compressor/helper hashes are retained in
+the summary. Reproduction uses the versioned formal command above with
+`--revision ec2ec56` and the recorded screen/exploratory paths; it requires the
+external dataset and reviewed runner/configuration, not just the summary file.
+The `coloring_unlocked` flag in the source report denotes scientific eligibility:
+human merge remains required before coloring work, and **no coloring result
+exists yet**. The finite power estimates and selected unit drives retain the
+limitations of the frozen protocol.

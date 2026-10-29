@@ -4,10 +4,14 @@
 BP3 and Frontera 3D baselines. BP7 remains complete negative evidence and is
 not a mandatory success gate: the small-fault geometry has insufficient
 meaningful far field. Its failed results below remain failed, with no relaxed
-thresholds or discarded seeds. BP3 passes; Frontera formal v1 failed,
-so C.11 is not accepted and coloring remains closed. The one-seed
-Frontera pilot is calibration only. See [the formal protocol](FRONTERA.md#formal-c11-confirmation)
-and [frozen configuration](configs/frontera_full_fixed.json).
+thresholds or discarded seeds. **BP3 and Frontera formal v2 now pass the C.11
+scientific gate. Coloring is eligible only after human merge; no coloring
+result exists yet.** Frontera formal v1 remains failed and the one-seed pilot
+remains calibration only. The versioned correction used fresh formal seeds
+41/43/47 and validation starts 107/109 without relaxing the accuracy thresholds.
+See the [accepted compact summary](results/frontera_fixed_v2_summary.json),
+[formal v2 result](FRONTERA.md#accepted-formal-v2-result), and
+[v2 configuration](configs/frontera_full_fixed_v2.json).
 
 The external formal Frontera v1 record is retained as failed evidence: its
 leaves-only improvement missed 100 on every seed (76.84--79.94), and seed 11
@@ -25,8 +29,72 @@ error. Complete content-bound screen and exploratory reports are required;
 bare promotion flags cannot unlock formal seeds. The two full physical L4
 blocks require 668,970,240 matrix-value bytes, reused across candidates with
 paired maximum-width probes. See the [revised protocol](FRONTERA.md#correction-round-2-exploratory-gate-and-evidence-validation).
-No external matrix run occurred during this implementation round; all new
-screen, exploratory, and formal v2 numerical outcomes remain unmeasured.
+At that implementation checkpoint no external matrix run had occurred. The
+subsequent content-bound screen and exploratory gates unlocked the now-completed
+formal v2 confirmation recorded below; the earlier failed records are unchanged.
+
+## Accepted Frontera formal v2
+
+The external `formal_fixed_v2/frontera_fixed.json` reports `status: passed` and
+`all_pass: true` for all three seeds, at reviewed revision `ec2ec56`. The compact
+summary was mechanically extracted from that report and binds its exact SHA-256
+`a852e7a26cf9c19bff6387dc8ec2e938c54d8c56830d1a69087a84c5170ba3c7`, the screen and
+exploratory content hashes, matrix/coordinate identities, exact configuration,
+source hashes, environment, and command. No matrix or factor was copied or rerun
+to prepare this documentation.
+
+The operator is 60,420 × 40,280, with 20,140 patches and `(dof_row,dof_col)=(3,2)`.
+The accepted fixed configuration is `(m,k,p)=(512,96,32)`, with tree dimension 2,
+depth 4, 80 leaves, and no oversized leaves. Each row below is the worst error
+or minimum improvement across the two independent validation starts for that seed.
+
+| Construction seed | Global error | Component error | Input error | Selected-block error | Leaves-only improvement | All gates |
+|---|---:|---:|---:|---:|---:|---|
+| 41 | 9.90953e-8 | 3.56710e-7 | 3.97864e-7 | 9.53540e-5 | 612.141 | pass |
+| 43 | 7.61377e-8 | 3.60097e-7 | 3.96436e-7 | 7.32962e-5 | 615.456 | pass |
+| 47 | 8.15418e-8 | 3.44570e-7 | 3.98044e-7 | 8.82922e-5 | 620.935 | pass |
+| Frozen limit | ≤1e-5 | ≤1e-4 | ≤1e-5 | ≤1e-3 | ≥100 | required |
+
+Every seed stores 515,889,664 numerical entries versus 2,433,717,600 dense:
+4,127,117,312 numerical bytes (21.1976% of dense; 4.7175× smaller), or
+4,132,439,888 bytes including retained tree/index/mesh allocations. Lifetime
+peak RSS spans 4,655,185,920–5,350,817,792 bytes. No matrix cache was created.
+Predicted and observed construction work agree exactly for every seed:
+73 forward calls / 14,600 columns and 64 transpose calls / 8,192 columns,
+including leaf extraction. The combined 22,792 columns are below 40,280;
+validation is excluded from that gate.
+
+| Timing, seconds | Range across seeds | Median |
+|---|---:|---:|
+| Construction | 2931.750–2973.207 | 2935.885 |
+| Preparation, including charged hashing | 23.8595–23.8629 | 23.8599 |
+| Total setup | 2955.613–2997.066 | 2959.745 |
+| Forward compressed apply | 0.07244–0.07599 | 0.07561 |
+| Forward streamed dense apply | 20.77775–20.92235 | 20.78929 |
+| Adjoint compressed apply | 0.07696–0.08810 | 0.08788 |
+| Adjoint streamed dense apply | 20.78689–20.90702 | 20.84099 |
+
+Both directions are faster than the **streamed dense reference**, which includes
+disk reads, endian conversion, and permutations. This is not an in-memory dense
+BLAS comparison. There is one warmup and five timed single-vector products per
+direction; filesystem cache state is uncontrolled. Including setup, break-even
+ranges are 142.667–143.769 forward applies and 142.343–143.957 adjoint applies.
+
+The exact recorded formal v2 read volume is **14,797,003,491,384 bytes**:
+759 streamed passes read 14,777,533,267,200 matrix-value bytes, plus
+19,470,224,184 recorded hashing bytes (one 19,469,740,824-byte matrix-file scan
+and 483,360 coordinate bytes). Each seed uses 253 streamed passes and
+4,925,844,422,400 value bytes: 137 construction passes, 104 validation passes,
+and 12 dense-timing passes. Aggregate read accounting charges the actual hash
+scan once, while each independently usable seed's setup charges its hashing
+time. These totals exclude prior pilot/v1/screen/exploratory work and
+uninstrumented metadata/report reads; they are not total campaign traffic.
+
+Eight power iterations and two starts are finite error estimates, not certified
+spectral bounds; selected block drives are not exhaustive. The successful v2
+confirmation does not change the failed Frontera v1 or BP7 outcomes.
+
+## Historical BP3/BP7 evidence
 
 The remainder records the historical BP3/BP7 experiments under the original
 two-success contract, including the full negative evidence and unsuccessful
