@@ -30,7 +30,7 @@ must remain untouched.
 | --- | --- | --- | --- | --- |
 | C.12 | `f8f4018` | APPROVED, no fixes | 22 focused; 487 passed/14 skipped; Ruff/Black/mypy pass | proceed C.13 |
 | C.13 | `35abe07` | APPROVED, no fixes | 32 focused; 519 passed/14 skipped; Ruff/Black/mypy pass | proceed C.14 |
-| C.14 | pending | pending | pending | gated on C.13 approval |
+| C.14 | `08c37a8` | APPROVED, no fixes | 15 focused; 532 passed/14 skipped; Ruff/Black/mypy pass | proceed C.15 |
 | C.15 | pending | pending | pending | gated on C.14 approval |
 | C.16 | pending | pending | pending | gated on C.15 approval |
 
@@ -51,3 +51,12 @@ findings. The review confirmed deterministic Algorithm 2.3 priorities,
 independent oracle agreement, proper graph/color validation, actual fixed-probe
 accounting, common-width column comparison, and fixed selection on cheaper or
 tied schedules. Colored numerical probes remain C.14 scope.
+
+### C.14 review record
+
+Sol approved `08c37a8c9cbd43d47c77154c634a5cf5b2023859` with no
+findings. The review confirmed zero-box isolation, pair-specific sketches for
+both rectangular sides and repeated unseeded boxes, streaming lifetime,
+direct peeled MockGF samples, exact fixed fallback, and schedule/operator-count
+agreement. The irregular synthetic path selected 1,624 admissible columns
+versus 2,184 fixed with comparable three-seed quality. Dense leaves remain C.15.
