@@ -28,10 +28,18 @@ must remain untouched.
 
 | Task | Implementation revision(s) | Sol review | Validation | Next action |
 | --- | --- | --- | --- | --- |
-| C.12 | pending | pending | pending | implement C.12 |
+| C.12 | `f8f4018` | APPROVED, no fixes | 22 focused; 487 passed/14 skipped; Ruff/Black/mypy pass | proceed C.13 |
 | C.13 | pending | pending | pending | gated on C.12 approval |
 | C.14 | pending | pending | pending | gated on C.13 approval |
 | C.15 | pending | pending | pending | gated on C.14 approval |
 | C.16 | pending | pending | pending | gated on C.15 approval |
 
 Final GPT-6 Astra batch review is gated on per-task approval for C.12-C.16.
+
+### C.12 review record
+
+Sol approved `f8f4018713810c28f291f20d69e29b37f1ef3b09` with no
+findings. The review confirmed Eq. 4.4/Definition 4.1 semantics, incidence-based
+conflict enumeration, complete owner retention, row-side role swapping,
+deterministic ordering, honest complexity, and independence of the brute-force
+test oracle. C.13 remains the first task that may color these graphs.
