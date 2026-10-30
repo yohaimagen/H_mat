@@ -126,13 +126,14 @@ Side = Literal["col", "row"]
 
 @dataclass(frozen=True)
 class PeriodicTestMatrix:
-    """A lightweight description of one fixed `6x...x6` probe.
+    """A lightweight Gaussian probe description, shared with colored groups.
 
     Attributes:
         pattern: The pattern-cell offset `(i_0 mod 6, ..., i_{d-1} mod 6)`
-            shared by every box in `active_boxes`, length `d`.
-        active_boxes: The level-`level` nodes whose pattern cell equals
-            `pattern`; their `col_indices` (resp. `row_indices`) rows of
+            shared by every box in a fixed probe, length `d`. Colored probes
+            use `(color,)` as a diagnostic label; realization ignores it.
+        active_boxes: The selected level-`level` nodes; their
+            `col_indices` (resp. `row_indices`) rows of
             `omega` hold independent Gaussian blocks, every other row is zero.
         The dense probe is deliberately not retained. Call :meth:`realize`
         immediately before its one matvec/rmatvec. ``omega`` and ``blocks``
@@ -397,13 +398,13 @@ def _block_seed(seed: int | None, level: int, side: Side, cell: tuple[int, ...])
 
 @dataclass(frozen=True)
 class PeriodicLeafTestMatrix:
-    """One emitted test matrix for the fixed `3x...x3` leaf periodic pattern.
+    """One streamed identity probe, shared by fixed and colored leaf schedules.
 
     Attributes:
         pattern: The leaf pattern-cell offset `(i_0 mod 3, ..., i_{d-1} mod
-            3)` shared by every box in `active_boxes`, length `d`.
-        active_boxes: The level-`level` nodes whose leaf pattern cell equals
-            `pattern`.
+            3)` shared by fixed active boxes, length `d`; colored probes use
+            `(color,)` as a diagnostic label ignored by realization.
+        active_boxes: The selected level-`level` nodes.
     """
 
     pattern: tuple[int, ...]

@@ -1,5 +1,49 @@
 # Benchmark reports
 
+## C.16 paired bounded regression
+
+**Acceptance is blocked**, not completed: BP3 passes; BP7's unchanged primary
+fails paired/near-field checks and the colored leaves-only gate. See
+[RESULTS.md](RESULTS.md#c16-public-coloring-bounded-regression). The C.15 rank-4
+negative test remains. No thresholds, seeds, primary parameters, or paired
+formula were tuned after the C.16 outcomes.
+
+Run datasets **serially**, using the frozen C.10 primary settings, three
+construction seeds and two validation starts. The runner reads a representative
+192-patch reference; it never compresses the full matrix:
+
+```sh
+PYTHONPATH=src OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
+  .venv/bin/python -m benchmarks.coloring --dataset bp3 \
+  --data-root /path/to/real_gfs --revision COMMITTED_BASE --run \
+  --output /tmp/c16_bp3_coloring.json
+# After BP3 completes, repeat with --dataset bp7 and a different output path.
+```
+
+Omitting `--run` produces `not_run`; unavailable data produces `blocked`.
+The supplied revision identifies the base; actual source/config SHA-256 hashes
+bind the working implementation. Reports retain all seeds, raw paired errors
+and limits, worst near-field block identities, permutation/adjoint/coverage
+checks, and per-pass predicted/observed products. They make no RSS or speedup
+claim. Tracked JSON files are byte-identical copies of the reported `/tmp`
+outputs; no matrices or factors are retained.
+
+The predeclared comparison is
+`colored_absolute <= 1.1 * max(fixed_absolute, absolute_response_floor)` for
+response errors, with C.10's floor of 1.0. Global errors require
+`colored_global <= 1.1 * fixed_global + 64 * float64_eps`. All absolute C.10
+gates remain independent and unchanged, as does the 5% near-field criterion.
+Structural checks require complete/disjoint coverage, adjoint discrepancy below
+`1e-12`, and permuted global errors within the dataset's gate.
+
+The existing synthetic and subset benchmark CLIs also accept
+`--sampling fixed|coloring` (default `fixed`) through the shared public pipeline.
+`products.budget` describes the selected schedule; `products.fixed_budget`
+retains the counterfactual fixed budget. `sampling_report.passes` records
+requested/selected strategy, fallback reason, graph sizes/build time, coloring
+time, and fixed/selected probe/column counts. Fixed requests skip graphs and
+report null sizes, not fabricated measurements. Validation products stay separate.
+
 The Frontera native-dense feasibility measurement is documented in
 [`FRONTERA.md`](FRONTERA.md). It streams the 19.47 GB checkpoint without a
 native full-matrix copy and stops at a documented preflight gate. Physical

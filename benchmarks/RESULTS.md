@@ -1,12 +1,65 @@
 # C.11 full fixed-pattern baselines
 
+## C.16 public coloring bounded regression
+
+**C.16 acceptance is blocked pending review/adjudication.** Public/benchmark
+wiring is implemented, but that is not scientific acceptance. Paired reports:
+[BP3](results/c16_bp3_coloring.json), [BP7](results/c16_bp7_coloring.json).
+Both use unchanged C.10 192-patch selections, construction seeds 11/23/37,
+validation starts 101/103, and primary settings BP3 `m8/k4/p2`, BP7 `m8/k6/p2`.
+No full-matrix run, C.17 experiment, threshold relaxation, seed filtering, or
+outcome-driven parameter tuning occurred.
+
+| Dataset | Fixed / selected construction columns | Worst fixed / colored global error | Outcome |
+|---|---:|---:|---|
+| BP3 | 285 / 285 | 2.89549e-10 / 2.89549e-10 | All gates pass; fixed fallback throughout |
+| BP7 | 1498 / 1354 | 1.31989e-5 / 1.39586e-5 | Blocked |
+
+Counts combine forward/adjoint admissible and leaf sampling, excluding validation.
+Every pass's predicted products equal observed products and cost no more than
+fixed. BP7 saves 144 columns (about 9.6%); savings alone are not acceptance.
+
+The validated 80-patch irregular 2D MockGF public-path case (`m4/k4/p10`,
+geometry seed 0, construction seeds 11/23/37) uses **2211 fixed / 1642 colored**
+columns. Fixed global errors span 4.84195e-5–7.83976e-5; colored errors span
+5.35616e-5–8.14631e-5. These pass the existing synthetic global/near-field
+checks and provide strict reduction on a suitable synthetic geometry; they
+are not a substitute for the BP-derived gates or a full-data claim.
+
+BP7's colored leaves-only improvement minimum is **985.081 < 1000** (fixed:
+1017.512). Four of six paired comparisons fail the predeclared slack. Other
+absolute C.10 checks pass: colored component error 0.0535517 < 0.08, input
+error 2.00225e-6 < 3e-6, selected-block error 0.293829 < 0.4. Worst near-field
+errors are **0.0572282 fixed / 0.112765 colored**, above the retained 0.05
+criterion for some seeds. Reports retain offending block cells, patch indices,
+absolute errors, reference norms, and every paired error limit. Coverage,
+adjoint, permutation, and schedule-count checks independently pass.
+
+For review: the inherited BP7 primary passes its originally recorded fixed
+C.10 gates, but not the additional retained near-field criterion on this
+subset. Coloring changes approximate-residual errors further and fails paired
+quality/improvement gates. Exact-factor isolation, streaming ownership, and
+public/counting tests pass; these do not prove arbitrary operating points are
+adequate. Neither an implementation defect nor infeasibility is inferred solely
+from these failures. A separately versioned, predeclared correction protocol
+requires adjudication; this run does not silently choose a replacement.
+
+The C.15 rank-4 negative test remains: colored 5.250% versus fixed 3.036% on
+identical approximate factors. Positive synthetic public tests retain validated
+2D rank-4/3D rank-6 cases and the same 5% leaf threshold. Reports bind base
+`c2dcffa` and actual source hashes and include exact commands/source identities.
+See [reproduction instructions](README.md#c16-paired-bounded-regression).
+
+## Historical C.11 acceptance record
+
 **Revised contract, PI decision 2026-10-22:** C.11 requires successful full
 BP3 and Frontera 3D baselines. BP7 remains complete negative evidence and is
 not a mandatory success gate: the small-fault geometry has insufficient
 meaningful far field. Its failed results below remain failed, with no relaxed
 thresholds or discarded seeds. **BP3 and Frontera formal v2 now pass the C.11
-scientific gate. Coloring is eligible only after human merge; no coloring
-result exists yet.** Frontera formal v1 remains failed and the one-seed pilot
+scientific gate. At that checkpoint coloring was eligible only after human
+merge and no coloring result existed.** The later bounded C.16 results above
+do not constitute a paired full coloring baseline. Frontera formal v1 remains failed and the one-seed pilot
 remains calibration only. The versioned correction used fresh formal seeds
 41/43/47 and validation starts 107/109 without relaxing the accuracy thresholds.
 See the [accepted compact summary](results/frontera_fixed_v2_summary.json),

@@ -67,8 +67,7 @@ def _deepest_level(root: object) -> int:
 
 
 # ---------------------------------------------------------------------------
-# sampling="coloring" is Stage 7, not yet implemented -- rejected, not silently
-# ignored.
+# Unknown strategies are rejected rather than silently ignored.
 # ---------------------------------------------------------------------------
 
 
@@ -76,10 +75,10 @@ def test_compress_rejects_unsupported_sampling() -> None:
     mesh = _grid_mesh(8, 8)
     op = MockGF(mesh)
     try:
-        compress(op, mesh, m=4, k=2, p=2, seed=0, sampling="coloring")
-        raise AssertionError("expected ValueError for sampling='coloring'")
+        compress(op, mesh, m=4, k=2, p=2, seed=0, sampling="unknown")
+        raise AssertionError("expected ValueError for sampling='unknown'")
     except ValueError as exc:
-        assert "coloring" in str(exc)
+        assert "unknown" in str(exc)
 
 
 def test_public_oversampling_defaults_are_consistently_positive() -> None:

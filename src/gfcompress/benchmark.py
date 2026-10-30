@@ -25,7 +25,13 @@ import numpy as np
 from numpy.typing import NDArray
 
 from gfcompress.build_tree import build_tree
-from gfcompress.compress import CountingOperator, ProductCounts, compress_level
+from gfcompress.compress import (
+    CountingOperator,
+    ProductCounts,
+    _compress_with_tree,
+    _validate_inputs,
+    compress_level,
+)
 from gfcompress.error import relative_error
 from gfcompress.fixed_pattern import build_admissible_schedule, build_leaf_schedule
 from gfcompress.geometry import FaultMesh
@@ -305,8 +311,10 @@ def benchmark_operator(
     loading_seconds: float = 0.0,
     lists: Any | None = None,
     dense_reference: MatVecOperator | None = None,
+    sampling: str = "fixed",
 ) -> dict[str, Any]:
     """Run the shared C.8 measurement core for any black-box operator."""
+    _validate_inputs(reference, mesh, m, k, p, seed, sampling)
     operator = CountingOperator(reference)
     geometry_start = time.perf_counter()
     root = build_tree(mesh, m)
@@ -341,18 +349,28 @@ def benchmark_operator(
     setattr(row_basis_module, "orth", timed(original_row_orth))  # noqa: B010
     setattr(row_basis_module, "core_matrix_solve", timed(original_core))  # noqa: B010
     try:
-        factors: Factors = []
-        for level in range(2, _deepest_level(root) + 1):
-            factors += compress_level(operator, root, lists, mesh, level, factors, k, p, seed)
-        admissible_observed = operator.snapshot()
-        leaves = extract_leaves(operator, root, lists, mesh, _deepest_level(root), factors)
+        hmat = _compress_with_tree(operator, root, lists, mesh, k, p, seed, sampling)
     finally:
         setattr(column_basis_module, "orth", original_column_orth)  # noqa: B010
         setattr(row_basis_module, "orth", original_row_orth)  # noqa: B010
         setattr(row_basis_module, "core_matrix_solve", original_core)  # noqa: B010
     # Match ``compress()``: peeling needs U B V* through leaf extraction, but
     # benchmarked storage and application use finalized U_tilde V*.
-    hmat = HMatrix(root=root, mesh=mesh, factors=finalize_factors(factors), leaves=leaves)
+    passes = hmat.sampling_report["passes"]
+    admissible_observed = ProductCounts(0, 0, 0, 0)
+    admissible_predicted = ProductCounts(0, 0, 0, 0)
+    for entry in passes[:-1]:
+        admissible_observed = _add_counts(admissible_observed, ProductCounts(**entry["observed"]))
+        admissible_predicted = _add_counts(
+            admissible_predicted, ProductCounts(**entry["predicted"])
+        )
+    leaf_predicted = ProductCounts(**passes[-1]["predicted"])
+    selected_budget = PredictedProducts(
+        admissible_predicted,
+        leaf_predicted,
+        validation_counts,
+        _add_counts(_add_counts(admissible_predicted, leaf_predicted), validation_counts),
+    )
     sampling_seconds = time.perf_counter() - setup_start
     construction_total_observed = operator.reset()
     leaves_observed = _subtract_counts(construction_total_observed, admissible_observed)
@@ -376,7 +394,8 @@ def benchmark_operator(
         "dataset": dataset,
         "environment": environment(),
         "seeds": {"compression": seed, "apply": seed, "validation": validation_seed},
-        "parameters": {"m": m, "k": k, "p": p, "sampling": "fixed"},
+        "parameters": {"m": m, "k": k, "p": p, "sampling": sampling},
+        "sampling_report": hmat.sampling_report,
         "timing_protocol": {
             "rhs_columns": 1,
             "repeats": repeats,
@@ -389,7 +408,8 @@ def benchmark_operator(
             ),
         },
         "products": {
-            "budget": asdict(predicted),
+            "budget": asdict(selected_budget),
+            "fixed_budget": asdict(predicted),
             "construction_observed": asdict(admissible_observed),
             "leaves_observed": asdict(leaves_observed),
             "construction_total_observed": asdict(construction_total_observed),
@@ -422,7 +442,14 @@ def benchmark_operator(
 
 
 def synthetic_report(
-    *, n_side: int = 8, m: int = 2, k: int = 2, p: int = 2, seed: int = 0, repeats: int = 3
+    *,
+    n_side: int = 8,
+    m: int = 2,
+    k: int = 2,
+    p: int = 2,
+    seed: int = 0,
+    repeats: int = 3,
+    sampling: str = "fixed",
 ) -> dict[str, Any]:
     """Run the compact MockGF report used by ``benchmarks/synthetic.py``."""
     from gfcompress.mockgf import MockGF
@@ -441,6 +468,7 @@ def synthetic_report(
         p=p,
         seed=seed,
         repeats=repeats,
+        sampling=sampling,
         loading_seconds=time.perf_counter() - start,
     )
 
