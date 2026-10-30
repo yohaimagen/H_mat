@@ -1,5 +1,8 @@
 """Internal admissible schedules; no public compressor or leaf-path changes."""
 
+from dataclasses import replace
+from time import perf_counter
+
 from gfcompress.coloring import ColoringSelection, select_coloring
 from gfcompress.constraint_graph import build_constraint_graph
 from gfcompress.fixed_pattern import (
@@ -35,8 +38,16 @@ def build_colored_admissible_schedule(
     """
     if type(k) is not int or k <= 0 or type(p) is not int or p < 0:
         raise ValueError("k must be positive and p nonnegative integers")
+    start = perf_counter()
     graph = build_constraint_graph(root, lists, level, side)
+    graph_seconds = perf_counter() - start
     selection = select_coloring(graph, root, level, k + p)
+    selection = replace(
+        selection,
+        graph_build_seconds=graph_seconds,
+        graph_incidences=graph.incidences,
+        graph_conflict_visits=graph.conflict_visits,
+    )
     if selection.strategy == "fixed":
         return build_admissible_schedule(root, lists, level, mesh, k, p, seed, side), selection
 

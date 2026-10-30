@@ -1,5 +1,28 @@
 # Tiered multi-agent pipeline for the GF compression plan
 
+## Compression sampling modes
+
+Fixed sampling remains the default. Coloring uses deterministic DSatur with
+fixed fallback on equal or greater column cost; both paths share geometry,
+ranks, sketch streams, reconstruction, and peeling.
+
+```python
+from gfcompress.compress import compress
+
+fixed = compress(operator, mesh, m=8, k=6, p=2, seed=11)
+colored = compress(operator, mesh, m=8, k=6, p=2, seed=11, sampling="coloring")
+for stage in colored.sampling_report["passes"]:
+    print(stage["level"], stage["side"], stage["strategy"],
+          stage["selected_columns"], stage["fixed_columns"])
+```
+
+These parameters illustrate the API, not a universally validated operating
+point. **C.16 scientific acceptance is blocked:** bounded BP3 passes, but BP7's
+frozen primary fails quality gates. Fewer columns do not guarantee equal
+accuracy under approximate peeling. See [results](benchmarks/RESULTS.md#c16-public-coloring-bounded-regression)
+and [reproduction](benchmarks/README.md#c16-paired-bounded-regression).
+No paired full-matrix coloring experiment has been run.
+
 ## Layout (drop into your repo root)
 ```
 your-repo/

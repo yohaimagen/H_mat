@@ -1,5 +1,8 @@
 """Internal colored identity probes for neighbor-only dense-leaf extraction."""
 
+from dataclasses import replace
+from time import perf_counter
+
 from gfcompress.coloring import ColoringSelection, select_coloring
 from gfcompress.constraint_graph import build_constraint_graph
 from gfcompress.fixed_pattern import LeafProbeSchedule, PeriodicLeafTestMatrix, build_leaf_schedule
@@ -24,8 +27,16 @@ def build_colored_leaf_schedule(
     if not nodes or any(not node.is_leaf for node in nodes):
         raise ValueError("expected a nonempty leaf level")
     width = max(len(node.col_indices) for node in nodes)
+    start = perf_counter()
     graph = build_constraint_graph(root, lists, level, neighbors_only=True)
+    graph_seconds = perf_counter() - start
     selection = select_coloring(graph, root, level, width, leaf=True)
+    selection = replace(
+        selection,
+        graph_build_seconds=graph_seconds,
+        graph_incidences=graph.incidences,
+        graph_conflict_visits=graph.conflict_visits,
+    )
     if selection.strategy == "fixed":
         return build_leaf_schedule(root, lists, level, mesh), selection
 

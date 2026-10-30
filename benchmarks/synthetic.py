@@ -20,8 +20,9 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("benchmarks/results/synthetic.json"))
     parser.add_argument("--n-side", type=int, default=8)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--sampling", choices=("fixed", "coloring"), default="fixed")
     args = parser.parse_args()
-    run = partial(synthetic_report, n_side=args.n_side, seed=args.seed)
+    run = partial(synthetic_report, n_side=args.n_side, seed=args.seed, sampling=args.sampling)
     report, compressed_peak = isolated_peak_rss(run)
     _, dense_peak = isolated_peak_rss(synthetic_dense_only, args.n_side)
     storage = report["storage"]

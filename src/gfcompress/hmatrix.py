@@ -22,6 +22,7 @@ way (`2N x N` in 2D, `3N x 2N` in 3D) -- the two are never interchangeable.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -44,12 +45,16 @@ class HMatrix(MatVecOperator):
             every level `2, ..., L`.
         leaves: Flat list of `DenseLeaf`s, one per inadmissible neighbor pair
             at the leaf level `L`.
+        sampling_report: Scalar per-pass selection and product accounting from
+            ``compress``. Empty for manually assembled containers; no probes
+            or operator samples are retained here.
     """
 
     root: TreeNode
     mesh: FaultMesh
     factors: Factors = field(default_factory=list)
     leaves: list[DenseLeaf] = field(default_factory=list)
+    sampling_report: dict[str, Any] = field(default_factory=dict)
 
     @property
     def shape(self) -> tuple[int, int]:

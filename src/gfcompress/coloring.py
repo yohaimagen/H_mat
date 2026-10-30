@@ -107,6 +107,9 @@ class ColoringSelection:
     width: int
     dsatur_seconds: float
     fixed_seconds: float
+    graph_build_seconds: float = 0.0
+    graph_incidences: int = 0
+    graph_conflict_visits: int = 0
 
     @property
     def dsatur_columns(self) -> int:

@@ -20,7 +20,9 @@ def _identity(array: np.ndarray) -> str:
     return hashlib.sha256(array.tobytes()).hexdigest()
 
 
-def report(data_root: Path, dataset: str, regions: int, max_patches: int) -> dict[str, Any]:
+def report(
+    data_root: Path, dataset: str, regions: int, max_patches: int, sampling: str = "fixed"
+) -> dict[str, Any]:
     directory = data_root / f"gf_{dataset}"
     matrix = directory / "gf_mat.bin"
     csvs = sorted(directory.glob("*_fbf_coords.csv"))
@@ -28,7 +30,7 @@ def report(data_root: Path, dataset: str, regions: int, max_patches: int) -> dic
         "schema_version": 1,
         "provenance": provenance(),
         "dataset": {"identity": dataset, "data_root": str(data_root)},
-        "parameters": {"regions": regions, "max_patches": max_patches, "sampling": "fixed"},
+        "parameters": {"regions": regions, "max_patches": max_patches, "sampling": sampling},
     }
     if not matrix.is_file() or len(csvs) != 1:
         return {
@@ -53,6 +55,7 @@ def report(data_root: Path, dataset: str, regions: int, max_patches: int) -> dic
         m=12,
         k=4,
         p=2,
+        sampling=sampling,
         loading_seconds=time.perf_counter() - load_start,
         dense_reference=DenseOperator(dense),
     )
@@ -127,19 +130,20 @@ def main() -> None:
     parser.add_argument("--dataset", choices=("bp3", "bp7"), required=True)
     parser.add_argument("--regions", type=int, default=4)
     parser.add_argument("--max-patches", type=int, default=192)
+    parser.add_argument("--sampling", choices=("fixed", "coloring"), default="fixed")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     output = args.output or Path(f"benchmarks/results/{args.dataset}_subset.json")
     if _available(args.data_root, args.dataset):
         measured, compressed_peak = isolated_peak_rss(
-            report, args.data_root, args.dataset, args.regions, args.max_patches
+            report, args.data_root, args.dataset, args.regions, args.max_patches, args.sampling
         )
         _, dense_peak = isolated_peak_rss(
             dense_only, args.data_root, args.dataset, args.regions, args.max_patches
         )
         value = with_rss(measured, compressed_peak, dense_peak)
     else:
-        value = report(args.data_root, args.dataset, args.regions, args.max_patches)
+        value = report(args.data_root, args.dataset, args.regions, args.max_patches, args.sampling)
     write_report(output, value)
     print(output)
 

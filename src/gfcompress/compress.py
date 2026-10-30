@@ -14,9 +14,9 @@ Algorithm 4.1's three per-level passes (row bases) should not also export the
 level driver that combines all three passes plus the outer loop.
 `gfcompress.row_basis` keeps `RowBasis`/`row_bases`/`core_matrices`.
 
-`sampling` accepts only `"fixed"` (the periodic test-matrix path of Tasks
-4.2-4.3); `"coloring"` (Stage 7's graph-coloring optimization) is out of scope
-here and rejected.
+`sampling` accepts `"fixed"` (default) or `"coloring"`, which selects DSatur
+only when its scheduled column count beats fixed. Both share the same ranks,
+per-box random streams, reconstruction, and peeling equations.
 
 `CountingOperator` wraps any `MatVecOperator` and counts the **columns**
 (not just calls) issued through `matvec`/`rmatvec` -- Sec. 4.1's matvec-count
@@ -26,13 +26,18 @@ leaf-probe-wide) block of columns, not a single vector.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
 from gfcompress.build_tree import build_tree
+from gfcompress.colored_leaf import build_colored_leaf_schedule
+from gfcompress.colored_probes import build_colored_admissible_schedule
+from gfcompress.coloring import ColoringSelection
 from gfcompress.column_basis import column_bases
+from gfcompress.fixed_pattern import Side, build_admissible_schedule, build_leaf_schedule
 from gfcompress.geometry import FaultMesh
 from gfcompress.hmatrix import HMatrix
 from gfcompress.interactions import TreeLists, build_lists
@@ -42,9 +47,8 @@ from gfcompress.peeling import BlockFactor, Factors, finalize_factors
 from gfcompress.row_basis import core_matrices, row_bases
 from gfcompress.tree import TreeNode
 
-#: Sampling strategies accepted by `compress`. Only `"fixed"` (Tasks 4.2-4.3's
-#: periodic test matrices) is implemented; `"coloring"` is Stage 7.
-SUPPORTED_SAMPLING = ("fixed",)
+#: Sampling strategies accepted by `compress`.
+SUPPORTED_SAMPLING = ("fixed", "coloring")
 
 
 def compress_level(
@@ -130,36 +134,118 @@ def compress(
         p: Oversampling parameter. Defaults to `10`; pass `p=0` to disable
             oversampling explicitly.
         seed: Optional base seed forwarded to every level's test matrices.
-        sampling: Test-matrix strategy. Only `"fixed"` (the default) is
-            implemented; `"coloring"` (Stage 7) is not yet supported.
+        sampling: `"fixed"` (default), or `"coloring"` with cost-based fixed
+            fallback. Cost savings do not guarantee accuracy under approximate
+            peeling; validate the chosen operating point.
 
     Returns:
-        The compressed `HMatrix`.
+        The compressed `HMatrix`, with per-pass counts and selection metrics
+        in ``sampling_report``. Fixed-only calls do not construct graphs;
+        their graph vertex/edge counts are reported as None.
 
     Raises:
         ValueError: If an option, mesh, or operator shape is invalid.
     """
     _validate_inputs(operator, mesh, m, k, p, seed, sampling)
 
-    if sampling not in SUPPORTED_SAMPLING:
-        raise ValueError(
-            f"sampling={sampling!r} not supported; only {SUPPORTED_SAMPLING!r} "
-            "is implemented ('coloring' is Stage 7, out of scope here)"
-        )
-
     root = build_tree(mesh, m)
     lists = build_lists(root)
-    leaf_level = _deepest_level(root)
+    return _compress_with_tree(operator, root, lists, mesh, int(k), int(p), seed, sampling)
 
+
+def _compress_with_tree(
+    operator: MatVecOperator,
+    root: TreeNode,
+    lists: TreeLists,
+    mesh: FaultMesh,
+    k: int,
+    p: int,
+    seed: int | None,
+    sampling: str,
+) -> HMatrix:
+    """Shared public/benchmark pipeline; retain scalar accounting, never probes."""
+    counted = CountingOperator(operator)
+    passes: list[dict[str, Any]] = []
+
+    def record(
+        level: int, side: str, calls: int, width: int, selection: ColoringSelection | None
+    ) -> None:
+        observed = counted.reset()
+        expected = (
+            ProductCounts(calls, calls * width, 0, 0)
+            if side != "row"
+            else ProductCounts(0, 0, calls, calls * width)
+        )
+        if observed != expected:
+            raise RuntimeError(
+                "sampling schedule prediction differs from observed operator products"
+            )
+        details = {} if selection is None else asdict(selection)
+        details.pop("colors", None)
+        passes.append(
+            {
+                **details,
+                "level": level,
+                "side": side,
+                "requested": sampling,
+                "strategy": "fixed" if selection is None else selection.strategy,
+                "reason": "requested_fixed" if selection is None else selection.reason,
+                "vertices": None if selection is None else selection.vertices,
+                "edges": None if selection is None else selection.edges,
+                "graph_build_seconds": 0.0 if selection is None else selection.graph_build_seconds,
+                "dsatur_seconds": 0.0 if selection is None else selection.dsatur_seconds,
+                "fixed_seconds": 0.0 if selection is None else selection.fixed_seconds,
+                "selected_probes": calls,
+                "selected_columns": calls * width,
+                "fixed_probes": calls if selection is None else selection.fixed_probes,
+                "fixed_columns": calls * width if selection is None else selection.fixed_columns,
+                "width": width,
+                "predicted": asdict(expected),
+                "observed": asdict(observed),
+            }
+        )
+
+    leaf_level = _deepest_level(root)
     factors: Factors = []
     for level in range(2, leaf_level + 1):
-        level_factors = compress_level(operator, root, lists, mesh, level, factors, k, p, seed=seed)
-        factors = factors + level_factors
-
-    leaves = extract_leaves(operator, root, lists, mesh, leaf_level, factors)
+        side: Side = "col"
+        selection = None
+        if sampling == "coloring":
+            schedule, selection = build_colored_admissible_schedule(
+                root, lists, level, mesh, k, p, seed, side
+            )
+        else:
+            schedule = build_admissible_schedule(root, lists, level, mesh, k, p, seed, side)
+        cb = column_bases(counted, root, lists, mesh, level, factors, k, p, seed, schedule)
+        record(level, side, len(schedule.probes), k + p, selection)
+        side = "row"
+        selection = None
+        if sampling == "coloring":
+            schedule, selection = build_colored_admissible_schedule(
+                root, lists, level, mesh, k, p, seed, side
+            )
+        else:
+            schedule = build_admissible_schedule(root, lists, level, mesh, k, p, seed, side)
+        rb = row_bases(counted, root, lists, mesh, level, factors, k, p, seed, schedule)
+        record(level, side, len(schedule.probes), k + p, selection)
+        factors += core_matrices(cb, rb)
+        del cb, rb, schedule
+    selection = None
+    if sampling == "coloring":
+        leaf_schedule, selection = build_colored_leaf_schedule(root, lists, leaf_level, mesh)
+    else:
+        leaf_schedule = build_leaf_schedule(root, lists, leaf_level, mesh)
+    leaves = extract_leaves(counted, root, lists, mesh, leaf_level, factors, leaf_schedule)
+    record(leaf_level, "leaf", len(leaf_schedule.probes), leaf_schedule.probes[0].w_max, selection)
     # Retain the cheaper two-factor representation only after all peeling is
     # complete; finer levels need the original cores above.
-    return HMatrix(root=root, mesh=mesh, factors=finalize_factors(factors), leaves=leaves)
+    return HMatrix(
+        root=root,
+        mesh=mesh,
+        factors=finalize_factors(factors),
+        leaves=leaves,
+        sampling_report={"requested": sampling, "passes": passes},
+    )
 
 
 def _validate_inputs(
@@ -189,6 +275,8 @@ def _validate_inputs(
         raise ValueError(f"seed must be an integer or None, got {seed!r}")
     if not isinstance(sampling, str):
         raise ValueError(f"sampling must be a string, got {sampling!r}")
+    if sampling not in SUPPORTED_SAMPLING:
+        raise ValueError(f"sampling={sampling!r} not supported; expected {SUPPORTED_SAMPLING!r}")
     for name in ("matvec", "rmatvec"):
         if not callable(getattr(operator, name, None)):
             raise ValueError(f"operator must provide callable {name}")
